@@ -123,10 +123,31 @@ public static partial class FfmpegCommandBuilder
     /// x264) then derives its rate control frame rate from that time base. "-r F" can't be used: FFmpeg 8 rejects -r
     /// together with passthrough.
     /// </summary>
-    private static void AddFrameTiming(List<string> a, CaptureConfig cfg)
+    private static void AddFrameTiming(List<string> a, CaptureConfig cfg, bool constantRate = false)
     {
         a.AddRange(new[] { "-fps_mode", "passthrough" });
-        if (cfg.PicksFramesPerSlot) a.AddRange(new[] { "-enc_time_base:v", $"1/{Inv(cfg.Fps)}" });
+        if (cfg.PicksFramesPerSlot && !constantRate) a.AddRange(new[] { "-enc_time_base:v", $"1/{Inv(cfg.Fps)}" });
+    }
+
+    /// <summary>
+    /// Keyframe once a second by time. -g counts frames, and a per-slot stream only has the frames the screen really
+    /// had: a 30 fps game recorded at 120 fps would get a keyframe (and a segment cut) only every 4 s, so saves could miss
+    /// the newest seconds. prev_forced_t (not n_forced) so a long still is followed by one keyframe, not a run of them.
+    /// Forced frames become IDRs only with the encoder's forced-IDR switch.
+    /// </summary>
+    private static void AddKeyframeTiming(List<string> a, CaptureConfig cfg)
+    {
+        a.AddRange(new[] { "-force_key_frames:v", "expr:isnan(prev_forced_t)+gte(t,prev_forced_t+1)" });
+        switch (cfg.EncoderName)
+        {
+            case "h264_nvenc": case "hevc_nvenc": case "av1_nvenc": case "libx264": case "libx265":
+                a.AddRange(new[] { "-forced-idr", "1" });
+                break;
+            case "h264_amf": case "hevc_amf": case "av1_amf": case "h264_qsv": case "hevc_qsv": case "av1_qsv":
+                a.AddRange(new[] { "-forced_idr", "1" });
+                break;
+            // libsvtav1 turns a forced I frame into a key frame by itself.
+        }
     }
 
     /// <summary>gfxcapture's frame-rate cap: 25% above the target and the monitor refresh, at most 1000.</summary>
@@ -134,8 +155,12 @@ public static partial class FfmpegCommandBuilder
         Math.Min(1000, (int)Math.Ceiling(Math.Max(cfg.Fps, cfg.Monitor.RefreshHz) * 1.25));
 
     /// <summary>Source + anchor + scaling/format conversion for the encoder.</summary>
-    public static string VideoGraph(CaptureConfig cfg, bool anchor, bool uniqueFramesProbe)
+    public static string VideoGraph(CaptureConfig cfg, bool anchor, bool uniqueFramesProbe, bool constantRate = false)
     {
+        // constantRate ("Test my PC" pass 1): fps=F instead of the per-slot picking, so the encoder gets F frames a second
+        // and a slow encoder shows up as speed below 1 (per-slot frames are stamped on arrival, so speed would stay ~1).
+        // The test card never stops moving, so fps=F has no still-screen burst there.
+        bool perSlot = cfg.PicksFramesPerSlot && !constantRate;
         var f = new List<string>();
         int cursor = cfg.CaptureCursor ? 1 : 0;
 
@@ -173,7 +198,7 @@ public static partial class FfmpegCommandBuilder
         }
 
         if (anchor) f.Add(AnchorFilter);
-        if (cfg.PicksFramesPerSlot)
+        if (perSlot)
         {
             // At most one picture per 1/F slot, put exactly on the slot. ddagrab stamps frames with the QPC clock when
             // they arrive, gfxcapture with the compositor's time. A slot without a new picture stays empty (the player
@@ -181,9 +206,9 @@ public static partial class FfmpegCommandBuilder
             f.Add(SlotSelectFilter(cfg.Fps));
             f.Add(SlotSnapFilter(cfg.Fps));
         }
-        else if (!uniqueFramesProbe)
+        else if (!uniqueFramesProbe || constantRate)
         {
-            // Classic timing: constant frame rate by repeating/dropping to the nearest slot.
+            // Classic timing (and the encoder test): constant frame rate by repeating/dropping to the nearest slot.
             f.Add($"fps={Inv(cfg.Fps)}");
         }
 
@@ -235,7 +260,7 @@ public static partial class FfmpegCommandBuilder
         }
         // Last, after any scaler (vpp_qsv sets its own rate from its input): drop the source's nominal frame rate (666
         // for ddagrab), or the encoder would budget its bitrate for 666 frames per second. See AddFrameTiming.
-        if (cfg.PicksFramesPerSlot && cfg.StripFrameRateTag) f.Add("setpts=PTS:strip_fps=1");
+        if (perSlot && cfg.StripFrameRateTag) f.Add("setpts=PTS:strip_fps=1");
         return string.Join(",", f);
     }
 
@@ -248,6 +273,8 @@ public static partial class FfmpegCommandBuilder
         var enc = cfg.EncoderName;
 
         a.AddRange(new[] { "-c:v", enc, "-b:v", br, "-maxrate", max, "-bufsize", buf, "-g", gop, "-bf", "0" });
+        // -g is only a cap now: keyframes come once a second by time (AddKeyframeTiming).
+        AddKeyframeTiming(a, cfg);
 
         if (!cfg.MinimalEncoderFlags)
         {
@@ -412,14 +439,14 @@ public static partial class FfmpegCommandBuilder
     {
         var a = new List<string> { "-hide_banner", "-nostdin", "-nostats", "-loglevel", "level+info", "-progress", "pipe:1", "-stats_period", "1" };
         AddHwDevice(a, cfg);
-        a.AddRange(new[] { "-filter_complex", VideoGraph(cfg, anchor: false, uniqueFramesProbe: false) + "[v]", "-map", "[v]" });
-        AddFrameTiming(a, cfg);
+        a.AddRange(new[] { "-filter_complex", VideoGraph(cfg, anchor: false, uniqueFramesProbe: false, constantRate: true) + "[v]", "-map", "[v]" });
+        AddFrameTiming(a, cfg, constantRate: true);
         AddEncoder(a, cfg);
         a.AddRange(new[] { "-t", Inv(seconds), "-an", "-f", "null", "-" });
         return a;
     }
 
-    /// <summary>"Test my PC" pass 2 (classic timing only; a per-slot graph already counts different frames in pass 1): no duplicated frames, timestamps passed through, so frame count = real captured frames.</summary>
+    /// <summary>"Test my PC" pass 2 (per-slot: the real capture graph, which never repeats a frame; classic: no repeats): no duplicated frames, timestamps passed through, so frame count = real captured frames.</summary>
     public static IReadOnlyList<string> BuildUniqueFramesTestArgs(CaptureConfig cfg, int seconds)
     {
         var a = new List<string> { "-hide_banner", "-nostdin", "-nostats", "-loglevel", "level+info", "-progress", "pipe:1", "-stats_period", "1" };

@@ -115,6 +115,8 @@ CaptureConfig Config(VideoCodec codec, int bufferSeconds, bool audio = true) => 
     Check("classic timing is the 1.0.1 graph", classicGraph.Contains("framerate=60:") && classicGraph.Contains("dup_frames=1") &&
         classicGraph.Contains(",fps=60") && !classicGraph.Contains("select=") && !classic.PausesOnStillScreen && !classic.PicksFramesPerSlot,
         classicGraph);
+    Check("keyframes once a second by time, forced as IDR", cmd.Contains("-force_key_frames:v expr:isnan(prev_forced_t)+gte(t,prev_forced_t+1)") &&
+        cmd.Contains("-forced-idr 1"), "");
     Check("concatf list quoting", FfmpegCommandBuilder.ConcatfList(new[] { @"C:\it's\seg.ts" }) == "'C:/it'\\''s/seg.ts'\n");
 }
 
@@ -147,6 +149,13 @@ CaptureConfig Config(VideoCodec codec, int bufferSeconds, bool audio = true) => 
         QualityMath.FormatClipLength(TimeSpan.FromSeconds(432.2)) == "7 min 12 sec" && QualityMath.FormatClipLength(TimeSpan.FromSeconds(900)) == "15 min" &&
         QualityMath.FormatClipLength(TimeSpan.FromSeconds(3600)) == "1 hour");
     Check("controller shortcuts survive settings save/load", back.PadSaveReplay.SameAs(PadChord.Of(PadButtons.View, PadButtons.A)) && back.ControllerShortcuts);
+    var classicPath = Path.Combine(root, "settings-classic.json");
+    new AppSettings { CaptureMethod = CaptureMethod.DesktopDuplicationClassic }.Save(classicPath);
+    var classicJson = File.ReadAllText(classicPath);
+    var classicBack = AppSettings.Load(classicPath);
+    Check("classic timing is saved so 1.0.1 can still read the settings file",
+        !classicJson.Contains("DesktopDuplicationClassic") && classicJson.Contains("\"ClassicCaptureTiming\": true") &&
+        classicBack.CaptureMethod == CaptureMethod.DesktopDuplicationClassic, classicJson.Split('\n').FirstOrDefault(l => l.Contains("CaptureMethod"))?.Trim() ?? "");
 }
 
 // ---------------------------------------------------------------- drift correction (simulated, faster than real time)
@@ -416,19 +425,25 @@ if (!quick && OperatingSystem.IsLinux())
         Check("a still screen is not a fault", e5.State == EngineState.Running && e5.GetStats().SinceNewVideo > TimeSpan.FromSeconds(10),
             $"{e5.State} since={e5.GetStats().SinceNewVideo.TotalSeconds:0}s");
         Signal("CONT"); // motion again
+        double stillSeconds = swStill.Elapsed.TotalSeconds + 1; // STOP was 1 s before swStill started
         await Task.Delay(TimeSpan.FromSeconds(7));
         var afterStill = await e5.SaveLastAsync(TimeSpan.FromSeconds(30), Path.Combine(clips, "after-still.mp4"));
         if (afterStill.Success)
         {
             var pts = Probe.VideoPacketTimes(afterStill.Path!);
             double end = pts.Count > 0 ? pts[^1] : 0;
-            double maxGap = 0;
-            for (int i = 1; i < pts.Count; i++) maxGap = Math.Max(maxGap, pts[i] - pts[i - 1]);
-            int lastFive = pts.Count(t => t > end - 5);
+            double maxGap = 0, gapEnd = 0;
+            for (int i = 1; i < pts.Count; i++)
+                if (pts[i] - pts[i - 1] > maxGap) { maxGap = pts[i] - pts[i - 1]; gapEnd = pts[i]; }
+            int afterGap = pts.Count(t => t >= gapEnd && t < gapEnd + 5);
+            int lastFive = Math.Min(afterGap, pts.Count(t => t > end - 5));
             Check("after a still the picture holds (one long frame), with no burst of repeats",
-                maxGap >= 10 && maxGap <= 16, $"longest frame {maxGap:0.00}s, {pts.Count} frames");
+                Math.Abs(maxGap - stillSeconds) < 1.5, $"longest frame {maxGap:0.00}s, still lasted {stillSeconds:0.00}s, {pts.Count} frames");
+            double vDur = Probe.StreamDuration(afterStill.Path!, "v:0"), aDur = Probe.StreamDuration(afterStill.Path!, "a:0");
+            Check("picture and sound stay together across a long still (saves keep the timestamps)",
+                vDur > 20 && Math.Abs(vDur - aDur) < 0.5, $"video {vDur:0.00}s, audio {aDur:0.00}s");
             Check("motion right after the still is recorded live (no slideshow while catching up)",
-                lastFive >= 270, $"{lastFive} frames in the last 5 s (60 fps = 300)");
+                lastFive >= 270, $"{afterGap} frames in the 5 s after the still, {pts.Count(t => t > end - 5)} in the last 5 s (60 fps = 300)");
             Check("sound keeps running through the still", Probe.AudioGaps(afterStill.Path!) == 0 && Probe.DecodeErrors(afterStill.Path!).Length == 0,
                 $"{Probe.AudioGaps(afterStill.Path!)} audio gaps");
         }
@@ -445,6 +460,30 @@ if (!quick && OperatingSystem.IsLinux())
         try { Signal("CONT"); } catch { }
         try { if (e5.State != EngineState.Off) await e5.StopAsync(); } catch { }
         try { Signal("KILL"); } catch { }
+    }
+}
+
+// ---------------------------------------------------------------- a game slower than the recording rate
+// Per-slot frames + -g F alone would make a GOP (and a segment) last F/(real fps) seconds: 20 fps at 60 = 3 s.
+if (!quick)
+{
+    var slowCfg = Config(VideoCodec.H264, 30, audio: false).With(b =>
+        b.TestVideoSource = "testsrc2=size=1280x720:rate=20,realtime,settb=1/1000000,setpts=RTCTIME,setpts=PTS-STARTPTS");
+    var e6 = new ReplayEngine(env);
+    try
+    {
+        await e6.StartAsync(slowCfg);
+        await Task.Delay(TimeSpan.FromSeconds(11));
+        var slowSession = Directory.GetDirectories(Path.Combine(root, "buffer")).Single();
+        var durations = File.ReadAllLines(Path.Combine(slowSession, "run_000", FfmpegCommandBuilder.SegmentListName))
+            .Select(l => l.Split(',')).Where(p => p.Length >= 3)
+            .Select(p => double.Parse(p[2], CultureInfo.InvariantCulture) - double.Parse(p[1], CultureInfo.InvariantCulture)).ToList();
+        Check("a 20 fps game recorded at 60 fps still gets 2 s segments (keyframes by time)",
+            durations.Count >= 3 && durations.Skip(1).All(d => d < 2.6), string.Join(" ", durations.Select(d => d.ToString("0.00", CultureInfo.InvariantCulture))));
+    }
+    finally
+    {
+        try { await e6.StopAsync(); } catch { }
     }
 }
 
@@ -661,6 +700,10 @@ static class Probe
     public static string Streams(string file) => Run("ffprobe", "-v", "error", "-show_entries", "stream=codec_name", "-of", "csv=p=0", file).Replace("\n", " ").Trim();
     public static string CodecTag(string file) => Run("ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_tag_string", "-of", "csv=p=0", file).Trim();
     public static string DecodeErrors(string file) => Run("ffmpeg", "-v", "error", "-i", file, "-f", "null", "-").Trim();
+
+    public static double StreamDuration(string file, string stream) =>
+        Num(Run("ffprobe", "-v", "error", "-select_streams", stream, "-show_entries", "stream=duration", "-of", "csv=p=0", file)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "");
 
     public static bool SupportsStripFps() => Run("ffmpeg", "-hide_banner", "-h", "filter=setpts").Contains("strip_fps");
 

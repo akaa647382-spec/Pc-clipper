@@ -75,8 +75,8 @@ it and take the focus from your game; a combo with it saved by an earlier versio
 - **Smooth clips**: PC Clipper takes every picture Windows shows the moment it appears (since 1.0.2; before, the capture
   woke on Windows' coarse 15.6 ms timer, which made clips stutter several times a second). When nothing at all moves on
   screen, nothing new comes in: the clip holds the still picture (the sound keeps going) and the "saved" counter waits.
-  A clip saved *while* the screen is completely still ends where it stopped changing. If the new capture gives you
-  trouble, *Settings → Capture method → Desktop Duplication - classic timing* is the 1.0.1 way.
+  A clip saved *while* the screen is completely still ends up to about 2 seconds before it stopped changing. If the new
+  capture gives you trouble, *Settings → Capture method → Desktop Duplication - classic timing* is the 1.0.1 way.
 - **Resolution**: PC Clipper never records bigger than your monitor. Picking 4K or 5K on a smaller screen records at the
   screen's own size, because upscaling adds no detail, only file size and a load that makes clips stutter.
 - **Interruptions**: a UAC prompt, the lock screen, or a game switching resolution/fullscreen briefly stops screen capture.

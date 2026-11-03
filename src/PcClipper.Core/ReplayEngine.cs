@@ -105,6 +105,12 @@ public sealed class ReplayEngine : IDisposable
             IDisposable? pin = null;
             if (pins is not null) segs = run.Store.SelectLastAndPin(want - covered, out pin);
             else segs = run.Store.SelectLast(want - covered);
+            // A run that never finished a segment (started on a still screen and ended) holds nothing: look past it.
+            if (!newest && segs.Count == 0 && run.Store.NewestFinishedIndex < 0)
+            {
+                pin?.Dispose();
+                continue;
+            }
             if (!newest && (segs.Count == 0 || segs[^1].Index != run.Store.NewestFinishedIndex))
             {
                 pin?.Dispose(); // this run's end is gone: what is left of it is older than a gap
@@ -1070,8 +1076,8 @@ public sealed class ReplayEngine : IDisposable
         var limit = TimeSpan.FromSeconds(run.Config.SegmentSeconds * 2 + 3);
         while (waited.Elapsed < limit && !run.ExitedTask.IsCompleted)
         {
-            // A still screen finishes no segment until something changes: don't hold the save up for nothing (it
-            // then ends where the screen stopped changing).
+            // A still screen finishes no segment until something changes: don't hold the save up for nothing. The
+            // clip then ends at the last finished segment, up to about a segment before the screen went still.
             if (IsVideoStalled(run)) return;
             await Task.Delay(100, ct).ConfigureAwait(false);
             run.Store.Refresh();
@@ -1081,13 +1087,16 @@ public sealed class ReplayEngine : IDisposable
 
     internal sealed record SavePart(Run Run, IReadOnlyList<SegmentInfo> Segments);
 
-    /// <summary>Time since this run last finished a segment (or started).</summary>
+    /// <summary>Time since ffmpeg last encoded a video frame (from its once-a-second progress report), or since start.</summary>
     private static TimeSpan SinceNewVideo(Run run) =>
-        TimeSpan.FromMilliseconds(Math.Max(0, Environment.TickCount64 - Math.Max(run.Store.LastNewSegmentMs, run.LastNewSegmentMs)));
+        TimeSpan.FromMilliseconds(Math.Max(0, Environment.TickCount64 - run.LastFrameAdvanceMs));
 
-    /// <summary>A capture that pauses on still screens has gone quiet: no segment for over a segment and a second.</summary>
+    /// <summary>
+    /// A capture that pauses on still screens has gone quiet: no new frame for 2.5 s (progress comes every second). Judged
+    /// by frames, not finished segments: with a slow game a segment can legitimately take longer.
+    /// </summary>
     private static bool IsVideoStalled(Run run) =>
-        run.Config.PausesOnStillScreen && SinceNewVideo(run) > TimeSpan.FromSeconds(run.Config.SegmentSeconds + 1);
+        run.Config.PausesOnStillScreen && SinceNewVideo(run) > TimeSpan.FromSeconds(2.5);
 
     private async Task<SaveResult> ConcatAsync(Session s, IReadOnlyList<SavePart> parts, string outputMp4, bool bufferLive, CancellationToken ct)
     {
@@ -1465,7 +1474,19 @@ public sealed class ReplayEngine : IDisposable
                 return double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : 0;
             }
             Progress = new ProgressInfo(Num("fps"), Num("speed"), (long)Num("drop_frames"), (long)Num("dup_frames"));
+            long frames = (long)Num("frame");
+            if (frames > _framesSeen)
+            {
+                _framesSeen = frames;
+                Interlocked.Exchange(ref _lastFrameAdvanceMs, Environment.TickCount64);
+            }
         }
+
+        private long _framesSeen = -1;
+        private long _lastFrameAdvanceMs = Environment.TickCount64;
+
+        /// <summary>When ffmpeg's encoded-frame count last went up (or the run started), Environment.TickCount64.</summary>
+        public long LastFrameAdvanceMs => Interlocked.Read(ref _lastFrameAdvanceMs);
 
         public void DisposeAudio()
         {

@@ -375,18 +375,26 @@ Never: `-thread_queue_size` on inputs (removed in FFmpeg master), `-find_stream_
   emitted the whole pause as repeats in one burst when the next picture came; while the encoder worked through them the
   capture wasn't read, so the first seconds after the pause came out frozen (review of the first 1.0.2 draft reproduced
   ~8 s of slideshow after a 20 s still). Now a slot without a new picture stays empty: the stream is variable-rate only
-  where nothing changed, and a player keeps showing the last picture. The encoder gets `-enc_time_base:v 1/F` and the
+  where nothing changed, and a player keeps showing the last picture. Keyframes come once a second by time
+  (`-force_key_frames expr:isnan(prev_forced_t)+gte(t,prev_forced_t+1)` + each encoder's forced-IDR switch; `-g F` is
+  only a cap), since a GOP of F frames would last F/(real fps) seconds. Saves use `-copyts -start_at_zero`: without
+  it ffmpeg treats a > 10 s jump in MPEG-TS as a discontinuity and closes it up in the video only (after a long still
+  the picture ran ahead of the sound). The encoder gets `-enc_time_base:v 1/F` and the
   frame-rate tag is cleared last (`setpts=PTS:strip_fps=1`, FFmpeg 7.1+; after vpp_qsv, which derives its rate from its
   input), so NVENC/AMF/QSV/x264 take F from the time base (checked in their n8.1 sources) instead of ddagrab's 666.
   `-r F` is not possible: FFmpeg 8 rejects -r with -fps_mode passthrough.
 - **Still screens** (`CaptureConfig.PausesOnStillScreen`, both real methods): start accepted after 8 s without a
-  segment, 10-minute audio queue, watchdog 10 minutes instead of 15 s, a save waits for the current segment only while
-  segments keep coming (else it ends where the screen stopped changing), 'q' gets 2 s instead of 10 before the kill
-  (ddagrab can't see it until a picture arrives), and the "PC is struggling" hint ignores the speed dip. Mouse movement
-  does produce frames. Harness: a FIFO source frozen with SIGSTOP checks the hold, live motion afterwards, continuous
+  segment, 10-minute audio queue, watchdog 10 minutes instead of 15 s. "Stalled" = ffmpeg's encoded-frame count (from
+  -progress) hasn't moved for 2.5 s: then a save doesn't wait for the current segment (the clip ends at the last
+  finished one, up to ~2 s before the screen went still), 'q' gets 2 s instead of 10 before the kill (ddagrab can't
+  see it until a picture arrives), and the "PC is struggling" hint ignores the speed dip. Mouse movement does produce
+  frames. With per-slot frames, speed stays ~1 even when the encoder is overloaded (frames are stamped on arrival; a
+  slow encoder just means fewer of them), so that hint mostly can't fire any more; "Test my PC" judges the encoder on a
+  constant-rate pass (fps=F; its test card never stops moving) and counts different frames on the real graph. Harness: a FIFO source frozen with SIGSTOP checks the hold, live motion afterwards, continuous
   sound, save and stop times.
 - **Classic timing** (Settings > Capture method > "Desktop Duplication - classic timing (1.0.1)",
-  `CaptureMethod.DesktopDuplicationClassic` → `TimerPacedCapture`): the 1.0.1 graph, kept as a fallback.
+  `CaptureMethod.DesktopDuplicationClassic` → `TimerPacedCapture`): the 1.0.1 graph, kept as a fallback. Saved as
+  `"CaptureMethod": "DesktopDuplication"` + `"ClassicCaptureTiming": true`, so 1.0.1 can still read the settings file.
 - Not measured on hardware: the 1.0.2 capture change rests on FFmpeg's source, the pinned binaries and the Linux
   harness (whose FFmpeg 6.1 lacks strip_fps; it runs the per-slot graph without it).
 - Windows Graphics Capture (gfxcapture, FFmpeg 8.1+): event driven (FrameArrived, compositor SystemRelativeTime pts),

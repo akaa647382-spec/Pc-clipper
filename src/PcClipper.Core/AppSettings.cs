@@ -42,7 +42,38 @@ public sealed class AppSettings
     public EncoderVendor Encoder { get; set; } = EncoderVendor.Auto;
     public VideoCodec Codec { get; set; } = VideoCodec.Auto;
     public bool CaptureCursor { get; set; } = true;
-    public CaptureMethod CaptureMethod { get; set; } = CaptureMethod.Auto;
+    /// <summary>
+    /// What the user picked, including <see cref="CaptureMethod.DesktopDuplicationClassic"/>. Not saved as such: the file
+    /// keeps CaptureMethod to the three values 1.0.1 knows (an unknown name would make 1.0.1 throw the whole settings
+    /// file away) plus <see cref="ClassicCaptureTiming"/>, which older versions ignore.
+    /// </summary>
+    [JsonIgnore]
+    public CaptureMethod CaptureMethod
+    {
+        get => _classicTiming && _method == CaptureMethod.DesktopDuplication ? CaptureMethod.DesktopDuplicationClassic : _method;
+        set
+        {
+            _classicTiming = value == CaptureMethod.DesktopDuplicationClassic;
+            _method = _classicTiming ? CaptureMethod.DesktopDuplication : value;
+        }
+    }
+    private CaptureMethod _method = CaptureMethod.Auto;
+    private bool _classicTiming;
+
+    /// <summary>Saved form of <see cref="CaptureMethod"/> (never DesktopDuplicationClassic).</summary>
+    [JsonPropertyName("CaptureMethod")]
+    public CaptureMethod SavedCaptureMethod
+    {
+        get => _method;
+        set => _method = value == CaptureMethod.DesktopDuplicationClassic ? CaptureMethod.DesktopDuplication : value;
+    }
+
+    /// <summary>Desktop Duplication with the 1.0.1 timing (see <see cref="CaptureMethod.DesktopDuplicationClassic"/>).</summary>
+    public bool ClassicCaptureTiming
+    {
+        get => _classicTiming;
+        set => _classicTiming = value;
+    }
 
     // ---- Replay ----
     /// <summary>How much gameplay is kept on disk, 1..60 minutes.</summary>
