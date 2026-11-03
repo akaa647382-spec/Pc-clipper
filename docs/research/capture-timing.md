@@ -21,10 +21,19 @@ n8.1/n8.1.1/master, mingw-w64 winpthreads v11–v14 source, and disassembly of t
   GetTickCount64 deadline; looks like code injection to antivirus/anti-cheat); `GlobalTimerResolutionRequests` registry
   value (Windows 11 only, admin + reboot, same gyan flaw); `framerate=666:dup_frames=1` (can catch up and sleep again;
   gyan's 1–1.5 ms sleeps stall to the next tick); changing the frame rate alone.
-- **Chosen**: `framerate=666:dup_frames=0` + `fps=F`. The slot clock advances ≤3 ms per delivered frame, so with presents
-  spaced >3 ms (<333 Hz) it never sleeps; each present is acquired on arrival with a precise timestamp. Cost: no frames
-  on a completely still screen (handled like WGC: `CaptureConfig.PausesOnStillScreen`), every present copied, a burst
-  of repeats after a long still period.
+- **Chosen**: `framerate=666:dup_frames=0`, then one frame per 1/F slot (`select` + `setpts` snap, no fps filter). The
+  slot clock advances ≤3 ms per delivered frame, so with presents spaced >3 ms (<333 Hz) it never sleeps (presents only;
+  pointer-only updates also produce frames and their rate is unmeasured); each present is acquired on arrival with a
+  precise timestamp. Cost: no frames on a completely still screen (`CaptureConfig.PausesOnStillScreen`), every present
+  copied.
+- First draft kept `fps=F` after the event-driven source. The review showed (vf_fps.c: it reads no input while it holds
+  two frames and emits clones as fast as the encoder takes them; the encoder queue holds 2 frames) that after a still of
+  P seconds it emits P*F repeats in one burst, during which ddagrab isn't polled: live motion afterwards came out as a
+  slideshow for about P*r/(1-r) s (r = F / encoder fps); a FIFO repro gave ~8 s after a 20 s still. Per-slot select
+  never repeats, so there is no backlog; the stream is variable-rate where nothing changed. Encoder frame rate:
+  `-enc_time_base:v 1/F` + `setpts=PTS:strip_fps=1` (NVENC/AMF/QSV/x264 fall back to the time base when the frame rate is
+  unset: nvenc.c 1873-1878, amfenc_h264.c 210-213, qsvenc.c 751-756, libx264.c 1313-1318); `-r F` is fatal with
+  passthrough (ffmpeg_mux_init.c 783-789).
 
 ## gfxcapture (Windows Graphics Capture) in 8.1
 

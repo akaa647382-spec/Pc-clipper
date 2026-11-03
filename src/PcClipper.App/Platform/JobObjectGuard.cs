@@ -120,33 +120,33 @@ public sealed class JobObjectGuard : IProcessGuard
         ProcessTuning.DisablePowerThrottling(handle, "ffmpeg");
     }
 
-    private int _gpuPriorityLogged;
     private int _backgroundWarned;
 
     /// <summary>
     /// D3DKMT GPU scheduling priority HIGH for the capture ffmpeg (what OBS uses with hardware-accelerated GPU scheduling;
-    /// REALTIME needs admin and has caused NVIDIA driver freezes, so it is never requested). Reads it back first, so a
-    /// second call only re-applies when needed. Logs the outcome once per session. Never throws.
+    /// REALTIME needs admin and has caused NVIDIA driver freezes, so it is never requested). Reads it back first and only
+    /// sets it when needed. The <paramref name="verify"/> call (once capture runs) logs what Windows reports afterwards;
+    /// the early call stays quiet, since ffmpeg may not have opened its GPU yet. Never throws.
     /// </summary>
-    public void RaiseCaptureGpuPriority(Process process)
+    public void RaiseCaptureGpuPriority(Process process, bool verify)
     {
         try
         {
             if (process.HasExited) return;
             var h = process.SafeHandle;
-            if (D3DKMTGetProcessSchedulingPriorityClass(h, out int current) >= 0 && current >= D3DKMT_SCHEDULINGPRIORITYCLASS_HIGH)
-                return;
-            int status = D3DKMTSetProcessSchedulingPriorityClass(h, D3DKMT_SCHEDULINGPRIORITYCLASS_HIGH);
-            if (Interlocked.Exchange(ref _gpuPriorityLogged, 1) == 0)
-                PlatformLog.Info(status >= 0
-                    ? "Capture GPU priority set to high."
-                    : $"Capture GPU priority not raised (NTSTATUS 0x{status:X8}); capture may lag while a game uses the whole GPU.");
+            int status = 0;
+            if (D3DKMTGetProcessSchedulingPriorityClass(h, out int current) < 0 || current < D3DKMT_SCHEDULINGPRIORITYCLASS_HIGH)
+                status = D3DKMTSetProcessSchedulingPriorityClass(h, D3DKMT_SCHEDULINGPRIORITYCLASS_HIGH);
+            if (!verify) return;
+            bool read = D3DKMTGetProcessSchedulingPriorityClass(h, out int now) >= 0;
+            PlatformLog.Info(read && now >= D3DKMT_SCHEDULINGPRIORITYCLASS_HIGH
+                ? "Capture GPU priority: high."
+                : $"Capture GPU priority not raised (class {(read ? now : -1)}, NTSTATUS 0x{status:X8}); capture may lag while a game uses the whole GPU.");
         }
-        catch (Exception ex) when (ex is EntryPointNotFoundException or DllNotFoundException or InvalidOperationException
-                                       or System.ComponentModel.Win32Exception or NotSupportedException)
+        catch (Exception ex)
         {
-            if (Interlocked.Exchange(ref _gpuPriorityLogged, 1) == 0)
-                PlatformLog.Info("Capture GPU priority unavailable: " + ex.Message);
+            // Missing export (Wine, very old Windows), exited process...: capture works without it.
+            if (verify) PlatformLog.Info("Capture GPU priority unavailable: " + ex.Message);
         }
     }
 
@@ -166,8 +166,7 @@ public sealed class JobObjectGuard : IProcessGuard
                 PlatformLog.Info($"Save priority: disk {(status >= 0 ? "low" : $"unchanged (NTSTATUS 0x{status:X8})")}, " +
                                  $"memory {(memOk ? "low" : $"unchanged (Windows error {Marshal.GetLastWin32Error()})")}.");
         }
-        catch (Exception ex) when (ex is EntryPointNotFoundException or DllNotFoundException or InvalidOperationException
-                                       or System.ComponentModel.Win32Exception or NotSupportedException)
+        catch (Exception ex)
         {
             if (Interlocked.Exchange(ref _backgroundWarned, 1) == 0)
                 PlatformLog.Info("Save priority unavailable: " + ex.Message);

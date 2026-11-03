@@ -77,17 +77,47 @@ public sealed class ReplayEngine : IDisposable
         }
     }
 
-    /// <summary>Seconds a save asking for <paramref name="want"/> would select now (without pinning): the newest contiguous
-    /// segments of each compatible run, newest run first, until <paramref name="want"/> is covered.</summary>
+    /// <summary>Seconds a save asking for <paramref name="want"/> would select now (<see cref="PickFootage"/>, unpinned).</summary>
     private static double CoverableSeconds(Session s, double want)
     {
-        double covered = 0;
+        PickFootage(s, want, null, out double covered);
+        return covered;
+    }
+
+    /// <summary>
+    /// The footage a save of <paramref name="want"/> seconds takes, oldest part first: the newest contiguous segments of
+    /// the compatible runs, newest run first. It steps into an older run only when the newer run's selection reaches back
+    /// to that run's first segment, and takes an older run's footage only when it ends at that run's last finished
+    /// segment, so it never joins across a gap (expired footage, or an old block kept only for an unsaved recording).
+    /// With <paramref name="pins"/>, each kept selection is pinned atomically and its pin added there.
+    /// <see cref="Buffered"/> and <see cref="SaveLastAsync(TimeSpan, Func{TimeSpan, string}, TimeSpan, CancellationToken)"/>
+    /// both use this, so a length the UI unlocks is exactly what a save gets.
+    /// </summary>
+    private static List<SavePart> PickFootage(Session s, double want, List<IDisposable>? pins, out double covered)
+    {
+        var parts = new List<SavePart>();
+        covered = 0;
+        bool newest = true;
         foreach (var run in s.CompatibleRunsNewestFirst())
         {
             if (covered >= want - SegmentStore.SelectionSlackSeconds) break;
-            foreach (var seg in run.Store.SelectLast(want - covered)) covered += seg.Duration;
+            IReadOnlyList<SegmentInfo> segs;
+            IDisposable? pin = null;
+            if (pins is not null) segs = run.Store.SelectLastAndPin(want - covered, out pin);
+            else segs = run.Store.SelectLast(want - covered);
+            if (!newest && (segs.Count == 0 || segs[^1].Index != run.Store.NewestFinishedIndex))
+            {
+                pin?.Dispose(); // this run's end is gone: what is left of it is older than a gap
+                break;
+            }
+            if (pin is not null) pins!.Add(pin);
+            newest = false;
+            if (segs.Count == 0) continue; // a run that just started (resume): the previous run continues it
+            parts.Insert(0, new SavePart(run, segs));
+            covered += segs.Sum(x => x.Duration);
+            if (segs[0].Index != 0) break; // stopped at a gap or the expiry inside this run: nothing older is adjacent
         }
-        return covered;
+        return parts;
     }
 
     public bool IsRecording { get { lock (_gate) return _recording is not null; } }
@@ -258,7 +288,7 @@ public sealed class ReplayEngine : IDisposable
             _env.ProcessGuard.Attach(p);
             // OBS skips Intel GPUs for this (no reason given); do the same.
             bool gpuPriority = cfg.Monitor.GpuVendorId != MonitorInfo.VendorIntel;
-            if (gpuPriority) _env.ProcessGuard.RaiseCaptureGpuPriority(p);
+            if (gpuPriority) _env.ProcessGuard.RaiseCaptureGpuPriority(p, verify: false);
             p.BeginErrorReadLine();
             p.BeginOutputReadLine();
 
@@ -295,8 +325,8 @@ public sealed class ReplayEngine : IDisposable
                 await Task.Delay(200, ct).ConfigureAwait(false);
             }
             run.LastNewSegmentMs = Environment.TickCount64;
-            // Once ffmpeg surely has its GPU device open: check the priority stuck (re-applied if not).
-            if (gpuPriority) _env.ProcessGuard.RaiseCaptureGpuPriority(p);
+            // Once ffmpeg surely has its GPU device open: check the priority stuck (re-applied if not), and log it.
+            if (gpuPriority) _env.ProcessGuard.RaiseCaptureGpuPriority(p, verify: true);
             return run;
         }
         catch
@@ -465,7 +495,10 @@ public sealed class ReplayEngine : IDisposable
                 catch { /* stdin already closed */ }
                 run.Sink?.Dispose();
 
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                // On a still screen an event-driven capture can't see 'q' until the next picture arrives (ddagrab waits
+                // for one inside ffmpeg); nothing new would be written anyway, so don't make Turn OFF wait 10 s.
+                try { run.Store.Refresh(); } catch { /* best effort: only decides the grace period */ }
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(IsVideoStalled(run) ? 2 : 10));
                 try { await p.WaitForExitAsync(cts.Token).ConfigureAwait(false); }
                 catch (OperationCanceledException)
                 {
@@ -625,18 +658,8 @@ public sealed class ReplayEngine : IDisposable
             // a long recording copy can hold the save slot for minutes.
             await WaitForCurrentSegmentAsync(s, ct).ConfigureAwait(false);
             double want = Math.Min(length.TotalSeconds, s.BufferSeconds);
-            var parts = new List<SavePart>();
-            double covered = 0;
-            // Same walk as CoverableSeconds (which Buffered reports), plus pinning.
-            foreach (var run in s.CompatibleRunsNewestFirst())
-            {
-                if (covered >= want - SegmentStore.SelectionSlackSeconds) break;
-                var segs = run.Store.SelectLastAndPin(want - covered, out var pin);
-                pins.Add(pin);
-                if (segs.Count == 0) continue;
-                parts.Insert(0, new SavePart(run, segs));
-                covered += segs.Sum(x => x.Duration);
-            }
+            // The same walk Buffered reports, plus pinning.
+            var parts = PickFootage(s, want, pins, out double covered);
             if (parts.Count == 0)
                 return SaveResult.NotEnough(TimeSpan.Zero, s.Current?.Config.PausesOnStillScreen == true
                     ? "Nothing recorded yet. The picture only records once something on screen changes."
@@ -1047,6 +1070,9 @@ public sealed class ReplayEngine : IDisposable
         var limit = TimeSpan.FromSeconds(run.Config.SegmentSeconds * 2 + 3);
         while (waited.Elapsed < limit && !run.ExitedTask.IsCompleted)
         {
+            // A still screen finishes no segment until something changes: don't hold the save up for nothing (it
+            // then ends where the screen stopped changing).
+            if (IsVideoStalled(run)) return;
             await Task.Delay(100, ct).ConfigureAwait(false);
             run.Store.Refresh();
             if (run.Store.CurrentWritingIndex > writing) return;
@@ -1054,6 +1080,14 @@ public sealed class ReplayEngine : IDisposable
     }
 
     internal sealed record SavePart(Run Run, IReadOnlyList<SegmentInfo> Segments);
+
+    /// <summary>Time since this run last finished a segment (or started).</summary>
+    private static TimeSpan SinceNewVideo(Run run) =>
+        TimeSpan.FromMilliseconds(Math.Max(0, Environment.TickCount64 - Math.Max(run.Store.LastNewSegmentMs, run.LastNewSegmentMs)));
+
+    /// <summary>A capture that pauses on still screens has gone quiet: no segment for over a segment and a second.</summary>
+    private static bool IsVideoStalled(Run run) =>
+        run.Config.PausesOnStillScreen && SinceNewVideo(run) > TimeSpan.FromSeconds(run.Config.SegmentSeconds + 1);
 
     private async Task<SaveResult> ConcatAsync(Session s, IReadOnlyList<SavePart> parts, string outputMp4, bool bufferLive, CancellationToken ct)
     {
@@ -1220,7 +1254,7 @@ public sealed class ReplayEngine : IDisposable
             s.CachedBytes = s.RunsSnapshot().Sum(r => r.Store.BytesOnDisk());
             s.BytesCheckedUtc = DateTime.UtcNow;
         }
-        return new EngineStats(p.Fps, p.Speed, p.Dropped, p.Duplicated, Buffered, s.CachedBytes, run.Uptime.Elapsed);
+        return new EngineStats(p.Fps, p.Speed, p.Dropped, p.Duplicated, Buffered, s.CachedBytes, run.Uptime.Elapsed, SinceNewVideo(run));
     }
 
     private static Exception StartFailure(Run run, string what)

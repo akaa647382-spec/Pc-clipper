@@ -50,10 +50,14 @@ public enum EngineState
 /// <summary>How the screen is grabbed.</summary>
 public enum CaptureMethod
 {
-    /// <summary>Desktop Duplication (Windows Graphics Capture is only used when picked explicitly).</summary>
+    /// <summary>Desktop Duplication (Windows Graphics Capture only for rotated monitors or when picked explicitly).</summary>
     Auto,
-    /// <summary>DXGI Desktop Duplication (ffmpeg ddagrab): reliable, keeps recording on static screens.</summary>
+    /// <summary>DXGI Desktop Duplication (ffmpeg ddagrab), event driven: each presented picture when it arrives; a still
+    /// screen sends nothing.</summary>
     DesktopDuplication,
-    /// <summary>Windows.Graphics.Capture (ffmpeg gfxcapture, FFmpeg 8.1+): event driven, better above 60 fps.</summary>
+    /// <summary>Windows.Graphics.Capture (ffmpeg gfxcapture, FFmpeg 8.1+): event driven too; yellow border on Windows 10.</summary>
     WindowsGraphicsCapture,
+    /// <summary>Desktop Duplication timed the 1.0.1 way (ddagrab's own timer, repeats on still screens). A fallback: motion
+    /// is less even because ffmpeg.exe's timer wakes on the 15.6 ms Windows tick.</summary>
+    DesktopDuplicationClassic,
 }

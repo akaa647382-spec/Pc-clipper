@@ -101,7 +101,8 @@ updating both sides. Implementers may ADD public members if needed.
 - `StopAsync()`: stop pump (close sink), write "q\n" to ffmpeg stdin, wait up to 5 s, then Kill(entireProcessTree).
   If a recording is in progress, finish it first (StopAsync must not lose a recording: the App calls
   StopRecordingAsync before StopAsync). Delete the session folder after any in-flight save finishes. State Off.
-- `Buffered` = min(sum of completed segment durations, BufferSeconds).
+- `Buffered` = what a save of the whole buffer would select now (the same walk as Saving step 3: newest-first, never
+  across a gap, also not between runs), capped at BufferSeconds; see Saving step 7.
 - `GetStats()` from the parsed progress line + store.
 - Every ffmpeg command line is logged (Info) exactly as passed.
 
@@ -321,13 +322,16 @@ Capture (WorkingDirectory = run folder; names relative because '%' in a path bre
 -hide_banner -nostats -loglevel level+info -progress pipe:1 -stats_period 1
 -init_hw_device d3d11va=dda:{adapter} -filter_hw_device dda
 [-nofind_stream_info -f f32le -ar 48000 -ac 2 -i \\.\pipe\pcclipper-audio-...]
--filter_complex "ddagrab=output_idx={O}:framerate=666:draw_mouse={0|1}:dup_frames=0,<anchor setpts>,fps={F},<conversion>[v]"
-   (event-driven: see Capture method below; WGC: gfxcapture=hmonitor={H}:max_framerate={ceil(max(F,refresh)*1.25)}:
-    capture_cursor={0|1}:display_border=0:capture_border=0,<anchor>,fps={F},...)
+-filter_complex "ddagrab=output_idx={O}:framerate=666:draw_mouse={0|1}:dup_frames=0,<anchor setpts>,
+   select='isnan(prev_selected_t)+gt(round(t*F),round(prev_selected_t*F))',setpts='round(T*F)/(F*TB)',<conversion>,
+   setpts=PTS:strip_fps=1[v]"
+   (event-driven + one frame per slot: see Capture method below; WGC: gfxcapture=hmonitor={H}:
+    max_framerate={ceil(max(F,refresh)*1.25)}:capture_cursor={0|1}:display_border=0:capture_border=0,<anchor>,<same>;
+    classic timing (fallback): ddagrab=...:framerate={F}:dup_frames=1,<anchor>,fps={F},<conversion>, no strip/enc_time_base)
    conversion: NVENC/AMF native = none (they take D3D11 BGRA); scaled = scale_d3d11=width=W:height=H:format=nv12,setparams=...
                QSV = hwmap=derive_device=qsv,format=qsv,vpp_qsv=w=W:h=H:format=nv12:out_color_matrix=bt709:out_range=tv
                CPU = scale_d3d11=...:format=nv12,hwdownload,format=nv12,setparams=...
--map [v] [-map 0:a] -fps_mode passthrough
+-map [v] [-map 0:a] -fps_mode passthrough -enc_time_base:v 1/{F}
    (NOT "-fps_mode cfr -r F": measured on the harness, the CLI's CFR shifts wall-clock-stamped video ~2 frames late
     because it only corrects drift beyond 1.1 frames; the fps filter rounds each frame to the nearest slot instead)
 -c:v {enc} -b:v T -maxrate 1.5T -bufsize 2T -g {F} -bf 0 + per-encoder tuning (falls back to these basics only if the probe
@@ -363,13 +367,28 @@ Never: `-thread_queue_size` on inputs (removed in FFmpeg master), `-find_stream_
   ~4 hitches/s at 60 fps on 60 Hz, ~33/s on 144 Hz; ~64 different frames/s at 120 fps). That is the likely cause of
   "the saved video lags" reports. At framerate=666 the slot clock (+≤2 slots of 1.5 ms per call) falls behind real time
   at once, so av_usleep is never reached; AcquireNextFrame waits (1 ms timeout, re-polled while dup_frames=0) and each
-  presented picture is stamped with the QPC clock on arrival; fps=F then picks the right picture per slot. 667+ would
-  make the timeout 0 (busy poll). Above ~333 Hz of presents the sleep path can come back (not handled). Cost: every
-  present is copied (e.g. 144/s on a 144 Hz monitor), and a completely still screen sends nothing (mouse movement does
-  produce frames): `CaptureConfig.PausesOnStillScreen` gives it the old WGC treatment (start accepted after 8 s without
-  a segment, 10-minute audio queue, watchdog 10 minutes instead of 15 s). After a still period fps=F emits the missing
-  slots as repeats at once; the encoder catches up quickly but the first moments after a long pause can be skipped.
-  Not measured on hardware: the 1.0.2 change rests on reading FFmpeg's source and the pinned binaries.
+  presented picture is stamped with the QPC clock on arrival. 667+ would make the timeout 0 (busy poll). Above ~333 Hz
+  of presents (or pointer updates, unmeasured) the sleep path can come back (not handled). Every present is copied
+  (e.g. 144/s on a 144 Hz monitor).
+- **One frame per slot, no repeats** (`SlotSelectFilter`/`SlotSnapFilter`): `select` keeps the first frame whose rounded
+  1/F slot is new, `setpts` puts it exactly on its slot. Not fps=F: on a still screen nothing arrives, and fps=F then
+  emitted the whole pause as repeats in one burst when the next picture came; while the encoder worked through them the
+  capture wasn't read, so the first seconds after the pause came out frozen (review of the first 1.0.2 draft reproduced
+  ~8 s of slideshow after a 20 s still). Now a slot without a new picture stays empty: the stream is variable-rate only
+  where nothing changed, and a player keeps showing the last picture. The encoder gets `-enc_time_base:v 1/F` and the
+  frame-rate tag is cleared last (`setpts=PTS:strip_fps=1`, FFmpeg 7.1+; after vpp_qsv, which derives its rate from its
+  input), so NVENC/AMF/QSV/x264 take F from the time base (checked in their n8.1 sources) instead of ddagrab's 666.
+  `-r F` is not possible: FFmpeg 8 rejects -r with -fps_mode passthrough.
+- **Still screens** (`CaptureConfig.PausesOnStillScreen`, both real methods): start accepted after 8 s without a
+  segment, 10-minute audio queue, watchdog 10 minutes instead of 15 s, a save waits for the current segment only while
+  segments keep coming (else it ends where the screen stopped changing), 'q' gets 2 s instead of 10 before the kill
+  (ddagrab can't see it until a picture arrives), and the "PC is struggling" hint ignores the speed dip. Mouse movement
+  does produce frames. Harness: a FIFO source frozen with SIGSTOP checks the hold, live motion afterwards, continuous
+  sound, save and stop times.
+- **Classic timing** (Settings > Capture method > "Desktop Duplication - classic timing (1.0.1)",
+  `CaptureMethod.DesktopDuplicationClassic` → `TimerPacedCapture`): the 1.0.1 graph, kept as a fallback.
+- Not measured on hardware: the 1.0.2 capture change rests on FFmpeg's source, the pinned binaries and the Linux
+  harness (whose FFmpeg 6.1 lacks strip_fps; it runs the per-slot graph without it).
 - Windows Graphics Capture (gfxcapture, FFmpeg 8.1+): event driven (FrameArrived, compositor SystemRelativeTime pts),
   survives UAC; also pauses on still screens; on Windows 10 shows a yellow border; its max_framerate is only a cap
   (MinUpdateInterval, Windows 11 24H2+), given 25% headroom. Auto = WGC only for rotated monitors. User can force either

@@ -62,19 +62,23 @@ public interface IProcessGuard
 
     /// <summary>
     /// The long-running capture process: ask Windows to run its GPU work (screen copy, colour conversion) ahead of
-    /// normal apps, so a game using 100% of the graphics card doesn't starve the capture. Best effort, never throws;
-    /// safe to call again (it re-checks).
+    /// normal apps, so a game using 100% of the graphics card doesn't starve the capture. Best effort, never throws.
+    /// Called right after start and again with <paramref name="verify"/> once capture runs (re-applies if needed and
+    /// logs what Windows reports).
     /// </summary>
-    void RaiseCaptureGpuPriority(Process process) { }
+    void RaiseCaptureGpuPriority(Process process, bool verify);
 
     /// <summary>A save (pure stream copy of gigabytes): low disk and memory priority so the game's own disk reads win.
     /// Best effort, never throws.</summary>
-    void LowerToBackground(Process process) { }
+    void LowerToBackground(Process process);
 }
 
+// No default bodies on purpose: a wrapper that forgot to forward a member would silently do nothing (1.0.2 review).
 public sealed class NullProcessGuard : IProcessGuard
 {
     public void Attach(Process process) { }
+    public void RaiseCaptureGpuPriority(Process process, bool verify) { }
+    public void LowerToBackground(Process process) { }
 }
 
 /// <summary>Platform services the engine needs. The Windows app and the Linux harness supply different ones.</summary>

@@ -41,8 +41,13 @@ const string TestSource =
     "testsrc2=size=1280x720:rate=60,realtime,settb=1/1000000,setpts=RTCTIME," +
     "drawbox=x=0:y=0:w=iw:h=ih:color=white:t=fill:enable='lt(mod(t,5),0.1)',setpts=PTS-STARTPTS";
 
+// setpts strip_fps is FFmpeg 7.1+; the app requires 8.1, this box may have an older ffmpeg.
+bool stripFps = Probe.SupportsStripFps();
+Console.WriteLine($"ffmpeg setpts strip_fps: {(stripFps ? "yes" : "no (older ffmpeg; per-slot graphs run without it)")}");
+
 CaptureConfig Config(VideoCodec codec, int bufferSeconds, bool audio = true) => new()
 {
+    StripFrameRateTag = stripFps,
     FfmpegPath = "ffmpeg",
     BufferRoot = Path.Combine(root, "buffer"),
     Monitor = monitor,
@@ -95,13 +100,20 @@ CaptureConfig Config(VideoCodec codec, int bufferSeconds, bool audio = true) => 
         BitrateKbps = 200000, BufferSeconds = 3600, DesktopAudio = true,
     };
     var cmd = string.Join(" ", FfmpegCommandBuilder.BuildCaptureArgs(nv, @"\\.\pipe\x"));
-    Check("NVENC 5K command line", cmd.Contains("d3d11va=dda:1") && cmd.Contains("ddagrab=output_idx=0:framerate=666:") && cmd.Contains(",fps=120,") &&
+    Check("NVENC 5K command line", cmd.Contains("d3d11va=dda:1") && cmd.Contains("ddagrab=output_idx=0:framerate=666:") && cmd.Contains("round(t*120)") &&
         cmd.Contains("scale_d3d11=width=5120:height=2880:format=nv12") && cmd.Contains("split_encode_mode") &&
         cmd.Contains("-nofind_stream_info") && cmd.Contains("atrim=start_sample=12000") && cmd.Contains("setts=ts=TS-0.25/TB") &&
         !cmd.Contains("thread_queue_size") && cmd.Contains(FfmpegCommandBuilder.AnchorFilter), cmd.Length > 160 ? cmd[..160] + "..." : cmd);
     var ddaGraph = FfmpegCommandBuilder.VideoGraph(nv.With(b => b.Fps = 60), anchor: true, uniqueFramesProbe: false);
-    Check("Desktop Duplication is event-driven (no timer pacing) and keeps the constant-rate filter",
-        ddaGraph.Contains("framerate=666:") && ddaGraph.Contains("dup_frames=0") && ddaGraph.Contains(",fps=60") && nv.PausesOnStillScreen, ddaGraph);
+    Check("Desktop Duplication is event-driven and picks one frame per slot (no fps filter, no repeats)",
+        ddaGraph.Contains("framerate=666:") && ddaGraph.Contains("dup_frames=0") && !ddaGraph.Contains(",fps=") &&
+        ddaGraph.Contains("round(t*60)") && ddaGraph.Contains("round(T*60)") && ddaGraph.EndsWith("setpts=PTS:strip_fps=1") &&
+        nv.PausesOnStillScreen && cmd.Contains("-enc_time_base:v 1/120"), ddaGraph);
+    var classic = nv.With(b => { b.Fps = 60; b.TimerPacedCapture = true; b.PausesOnStillScreen = false; });
+    var classicGraph = FfmpegCommandBuilder.VideoGraph(classic, anchor: true, uniqueFramesProbe: false);
+    Check("classic timing is the 1.0.1 graph", classicGraph.Contains("framerate=60:") && classicGraph.Contains("dup_frames=1") &&
+        classicGraph.Contains(",fps=60") && !classicGraph.Contains("select=") && !classic.PausesOnStillScreen && !classic.PicksFramesPerSlot,
+        classicGraph);
     Check("concatf list quoting", FfmpegCommandBuilder.ConcatfList(new[] { @"C:\it's\seg.ts" }) == "'C:/it'\\''s/seg.ts'\n");
 }
 
@@ -362,6 +374,77 @@ await engine.StopAsync();
 Check("turning the buffer off auto-saves a running recording", autoSaved.Count == 1 && autoSaved[0].Success && File.Exists(autoSaved[0].Path),
     autoSaved.FirstOrDefault()?.Path ?? "none");
 
+// ---------------------------------------------------------------- still screen
+// Real capture sends nothing while the screen is still. Emulate it: a writer feeds a FIFO at 60 fps, frames are stamped
+// on arrival (like ddagrab), and the writer is frozen with SIGSTOP. Up to 1.0.1's fps=F, the pause came out as a burst of
+// repeats afterwards and the first seconds of motion after it were lost; the per-slot graph must not do that.
+if (!quick && OperatingSystem.IsLinux())
+{
+    var fifo = Path.Combine(root, "still.fifo");
+    Process.Start("mkfifo", fifo)!.WaitForExit();
+    var writerPsi = new ProcessStartInfo("ffmpeg") { UseShellExecute = false, RedirectStandardError = true };
+    foreach (var a in new[] { "-hide_banner", "-loglevel", "error", "-re", "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=60",
+                 "-c:v", "rawvideo", "-pix_fmt", "yuv420p", "-f", "nut", "-y", fifo })
+        writerPsi.ArgumentList.Add(a);
+    using var writer = Process.Start(writerPsi)!;
+    writer.ErrorDataReceived += (_, _) => { };
+    writer.BeginErrorReadLine();
+    void Signal(string sig) => Process.Start("kill", $"-{sig} {writer.Id}")!.WaitForExit();
+
+    var stillCfg = Config(VideoCodec.H264, 60).With(b =>
+    {
+        b.TestVideoSource = $"movie={fifo}:f=nut,settb=1/1000000,setpts=RTCTIME,setpts=PTS-STARTPTS";
+        b.Width = 640;
+        b.Height = 360;
+        b.PausesOnStillScreen = true;
+    });
+    var e5 = new ReplayEngine(env);
+    try
+    {
+        await e5.StartAsync(stillCfg);
+        await Task.Delay(TimeSpan.FromSeconds(8));
+        Signal("STOP"); // the screen goes still
+        await Task.Delay(TimeSpan.FromSeconds(1));
+        var swStill = Stopwatch.StartNew();
+        var duringStill = await e5.SaveLastAsync(TimeSpan.FromSeconds(10), Path.Combine(clips, "during-still.mp4"));
+        Check("a save on a still screen doesn't wait for a segment that can't finish",
+            duringStill.Success && swStill.Elapsed < TimeSpan.FromSeconds(5), $"{duringStill.ErrorMessage} took {swStill.Elapsed.TotalSeconds:0.0}s");
+        await Task.Delay(TimeSpan.FromSeconds(13));
+        Check("a still screen is not a fault", e5.State == EngineState.Running && e5.GetStats().SinceNewVideo > TimeSpan.FromSeconds(10),
+            $"{e5.State} since={e5.GetStats().SinceNewVideo.TotalSeconds:0}s");
+        Signal("CONT"); // motion again
+        await Task.Delay(TimeSpan.FromSeconds(7));
+        var afterStill = await e5.SaveLastAsync(TimeSpan.FromSeconds(30), Path.Combine(clips, "after-still.mp4"));
+        if (afterStill.Success)
+        {
+            var pts = Probe.VideoPacketTimes(afterStill.Path!);
+            double end = pts.Count > 0 ? pts[^1] : 0;
+            double maxGap = 0;
+            for (int i = 1; i < pts.Count; i++) maxGap = Math.Max(maxGap, pts[i] - pts[i - 1]);
+            int lastFive = pts.Count(t => t > end - 5);
+            Check("after a still the picture holds (one long frame), with no burst of repeats",
+                maxGap >= 10 && maxGap <= 16, $"longest frame {maxGap:0.00}s, {pts.Count} frames");
+            Check("motion right after the still is recorded live (no slideshow while catching up)",
+                lastFive >= 270, $"{lastFive} frames in the last 5 s (60 fps = 300)");
+            Check("sound keeps running through the still", Probe.AudioGaps(afterStill.Path!) == 0 && Probe.DecodeErrors(afterStill.Path!).Length == 0,
+                $"{Probe.AudioGaps(afterStill.Path!)} audio gaps");
+        }
+        else Check("save after a still", false, afterStill.ErrorMessage ?? "");
+        Signal("STOP");
+        await Task.Delay(TimeSpan.FromSeconds(4));
+        var swStop = Stopwatch.StartNew();
+        await e5.StopAsync();
+        Check("turning off on a still screen doesn't hang for 10 s", swStop.Elapsed < TimeSpan.FromSeconds(6) && e5.State == EngineState.Off,
+            $"took {swStop.Elapsed.TotalSeconds:0.0}s");
+    }
+    finally
+    {
+        try { Signal("CONT"); } catch { }
+        try { if (e5.State != EngineState.Off) await e5.StopAsync(); } catch { }
+        try { writer.Kill(); } catch { }
+    }
+}
+
 // ---------------------------------------------------------------- other codecs
 foreach (var codec in new[] { VideoCodec.Hevc, VideoCodec.Av1 })
 {
@@ -575,6 +658,13 @@ static class Probe
     public static string Streams(string file) => Run("ffprobe", "-v", "error", "-show_entries", "stream=codec_name", "-of", "csv=p=0", file).Replace("\n", " ").Trim();
     public static string CodecTag(string file) => Run("ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_tag_string", "-of", "csv=p=0", file).Trim();
     public static string DecodeErrors(string file) => Run("ffmpeg", "-v", "error", "-i", file, "-f", "null", "-").Trim();
+
+    public static bool SupportsStripFps() => Run("ffmpeg", "-hide_banner", "-h", "filter=setpts").Contains("strip_fps");
+
+    /// <summary>Video packet presentation times in seconds, sorted.</summary>
+    public static List<double> VideoPacketTimes(string file) =>
+        Run("ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "packet=pts_time", "-of", "csv=p=0", file)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(Num).Where(t => t >= 0).OrderBy(t => t).ToList();
 
     /// <summary>Audio packets whose start doesn't follow the previous packet's end (holes or overlaps > 2 ms).</summary>
     public static int AudioGaps(string file)

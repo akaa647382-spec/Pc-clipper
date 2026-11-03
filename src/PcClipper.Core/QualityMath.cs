@@ -209,14 +209,14 @@ public static class QualityMath
         var list = new List<string>();
         var (w, h) = TargetSize(s.Resolution, monitor.Width, monitor.Height);
         if (PresetHeight(s.Resolution) > monitor.Height)
-            list.Add($"Your monitor is {monitor.Width}x{monitor.Height}, so PC Clipper records at {w}x{h}. Recording bigger than your " +
-                     "screen adds no detail - only bigger files and a heavier load that can make clips stutter.");
+            list.Add($"Your monitor is {monitor.Width}x{monitor.Height}, so PC Clipper records at {resolved?.Width ?? w}x{resolved?.Height ?? h}. " +
+                     "Recording bigger than your screen adds no detail - only bigger files and a heavier load that can make clips stutter.");
         if (monitor.RefreshHz > 0 && s.Fps > monitor.RefreshHz + 1)
             list.Add($"Your monitor runs at {monitor.RefreshHz} Hz, so PC Clipper records at {EffectiveFps(s.Fps, monitor)} fps (more would only repeat frames).");
         if (monitor.RotationDegrees != 0 && (resolved is null || resolved.Method == CaptureMethod.DesktopDuplication))
             list.Add("This monitor is rotated. Desktop Duplication may record it sideways; use Capture method > Windows Graphics Capture (FFmpeg 8.1+).");
         else if (monitor.RotationDegrees != 0 && s.CaptureMethod == CaptureMethod.Auto)
-            list.Add("This monitor is rotated, so PC Clipper uses Windows Graphics Capture for it (it only records while something on screen changes).");
+            list.Add("This monitor is rotated, so PC Clipper uses Windows Graphics Capture for it (Desktop Duplication would record it sideways).");
         if (monitor.IsHdr)
             list.Add("Windows HDR is on for this monitor, so clips will look washed out. Turn HDR off in Windows display settings for accurate colours.");
         if (resolved is not null)
@@ -306,6 +306,8 @@ public static class QualityMath
             BitrateKbps = BitrateKbps(s.Quality, s.CustomBitrateMbps, w, h, fps, codec),
             CaptureCursor = s.CaptureCursor,
             Method = ResolveMethod(s.CaptureMethod, fps, monitor, caps),
+            TimerPacedCapture = s.CaptureMethod == CaptureMethod.DesktopDuplicationClassic &&
+                                ResolveMethod(s.CaptureMethod, fps, monitor, caps) == CaptureMethod.DesktopDuplication,
             MinimalEncoderFlags = caps.MinimalFlagEncoders.Contains(EncoderName(vendor, codec)),
             BufferSeconds = s.BufferMinutes * 60,
             DesktopAudio = s.RecordDesktopAudio,

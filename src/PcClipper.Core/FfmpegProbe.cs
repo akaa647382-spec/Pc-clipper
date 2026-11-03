@@ -120,10 +120,11 @@ public static partial class FfmpegProbe
     private static partial Regex MajorRegex();
 
     /// <summary>
-    /// "Test my PC". Pass 1 runs the real capture + encoder (constant frame rate) and checks the encoder keeps up. Pass 2
-    /// runs the capture without duplicated frames and counts how many DIFFERENT frames per second actually arrived (keep
-    /// something moving on screen meanwhile - the app shows an animated test card). Both are judged on the steady-state
-    /// window only: ffmpeg's own totals include start-up and shut-down time, which would make any PC look "too heavy".
+    /// "Test my PC". Pass 1 runs the real capture + encoder and checks the encoder keeps up. The per-slot graph never
+    /// repeats frames, so its frame rate already is the number of DIFFERENT frames per second that arrived (keep something
+    /// moving on screen meanwhile - the app shows an animated test card). Classic timing repeats frames, so it needs pass
+    /// 2 without repeats to count them. Both are judged on the steady-state window only: ffmpeg's own totals include
+    /// start-up and shut-down time, which would make any PC look "too heavy".
     /// </summary>
     public static async Task<BenchmarkResult> BenchmarkAsync(CaptureConfig cfg, int seconds, ILog log, CancellationToken ct = default)
     {
@@ -140,11 +141,17 @@ public static partial class FfmpegProbe
             return new BenchmarkResult(false, 0, 0, 0, $"The test could not run {what}. {msg}");
         }
         var (fps, speed) = SteadyState(blocks1);
-        bool encoderOk = speed >= 0.97 && fps >= cfg.Fps * 0.95;
+        // Per-slot: fewer frames than slots is a capture limit (judged below), not the encoder, as long as speed holds.
+        bool encoderOk = speed >= 0.97 && (cfg.PicksFramesPerSlot || fps >= cfg.Fps * 0.95);
 
-        var r2 = await FfmpegRunner.RunAsync(cfg.FfmpegPath, FfmpegCommandBuilder.BuildUniqueFramesTestArgs(cfg, seconds),
-            TimeSpan.FromSeconds(seconds + 25), log, null, ct).ConfigureAwait(false);
-        var (unique, _) = SteadyState(ProgressBlocks(r2.StdOut));
+        // A per-slot graph never repeats frames, so pass 1's frame rate already is the number of different frames.
+        double unique = fps;
+        if (!cfg.PicksFramesPerSlot)
+        {
+            var r2 = await FfmpegRunner.RunAsync(cfg.FfmpegPath, FfmpegCommandBuilder.BuildUniqueFramesTestArgs(cfg, seconds),
+                TimeSpan.FromSeconds(seconds + 25), log, null, ct).ConfigureAwait(false);
+            (unique, _) = SteadyState(ProgressBlocks(r2.StdOut));
+        }
         bool captureOk = unique >= cfg.Fps * 0.9;
 
         string message;

@@ -64,6 +64,8 @@ internal sealed class TrayController : IDisposable
             _toggleReplay, _saveMenu, _record, _retryRecording, _screenshot, new ToolStripSeparator(), openClips, show, new ToolStripSeparator(), exit,
         });
         _menu.Opening += (_, _) => UpdateMenu();
+        // The save lengths unlock as time passes: refresh them again when the submenu opens.
+        _saveMenu.DropDownOpening += (_, _) => UpdateMenu();
 
         _icon = new NotifyIcon
         {

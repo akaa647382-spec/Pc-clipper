@@ -76,8 +76,19 @@ public sealed class CaptureConfig
     public required string EncoderName { get; init; }
     public required int BitrateKbps { get; init; }
     public bool CaptureCursor { get; init; } = true;
-    /// <summary>Resolved: DesktopDuplication or WindowsGraphicsCapture (never Auto).</summary>
+    /// <summary>Resolved: DesktopDuplication or WindowsGraphicsCapture (never Auto or DesktopDuplicationClassic).</summary>
     public CaptureMethod Method { get; init; } = CaptureMethod.DesktopDuplication;
+    /// <summary>
+    /// Desktop Duplication the 1.0.1 way (Settings > Capture method > classic timing): ddagrab paced by its own timer with
+    /// repeated frames on a still screen, then fps=F. Steady frames, but ffmpeg.exe's 15.6 ms Sleep makes motion uneven.
+    /// Kept as a fallback in case the event-driven capture misbehaves on some PC.
+    /// </summary>
+    public bool TimerPacedCapture { get; init; }
+    /// <summary>
+    /// Clear the frame-rate tag after the per-slot frame picking (setpts strip_fps, FFmpeg 7.1+), so the encoder takes
+    /// its frame rate from -enc_time_base 1/F instead of ddagrab's nominal 666. Off only for the harness's older ffmpeg.
+    /// </summary>
+    public bool StripFrameRateTag { get; init; } = true;
     /// <summary>Use only basic encoder flags (set when the tuned ones were rejected during probing).</summary>
     public bool MinimalEncoderFlags { get; init; }
     /// <summary>
@@ -117,10 +128,19 @@ public sealed class CaptureConfig
     /// True when no video comes while nothing on screen changes. Both real capture methods are event-driven (they take
     /// each picture Windows presents instead of polling on a timer, see FfmpegCommandBuilder.VideoGraph), so a completely
     /// still screen produces no frames: segments wait, ffmpeg stops reading audio for a while (the audio queue holds it),
-    /// and the first frame after the still repeats the last picture for the whole pause. The harness's test source runs
-    /// continuously.
+    /// and in the clip the last picture simply lasts for the whole pause (no repeated frames). Defaults to true for real
+    /// capture (not classic timing); the harness sets it for its pausing test source.
     /// </summary>
-    public bool PausesOnStillScreen => TestVideoSource is null;
+    public bool PausesOnStillScreen
+    {
+        get => _pausesOnStillScreen ?? (TestVideoSource is null && !TimerPacedCapture);
+        init => _pausesOnStillScreen = value;
+    }
+    private readonly bool? _pausesOnStillScreen;
+
+    /// <summary>True when the graph picks one picture per frame slot (no repeats; the stream is variable-rate where a slot
+    /// has no new picture) rather than ffmpeg's fps filter.</summary>
+    public bool PicksFramesPerSlot => !(TimerPacedCapture && Method == CaptureMethod.DesktopDuplication && TestVideoSource is null);
 
     /// <summary>Codec, size and rate: runs with equal signatures can be stream-copied together.</summary>
     public string Signature => $"{EncoderName}|{Width}x{Height}|{Fps}|{(AudioEnabled ? "a" : "-")}";
@@ -164,7 +184,8 @@ public sealed record EngineStats(
     long DuplicatedFrames,
     TimeSpan Buffered,
     long BufferBytesOnDisk,
-    TimeSpan Uptime);
+    TimeSpan Uptime,
+    TimeSpan SinceNewVideo = default);
 
 /// <summary>"Test my PC" outcome. UniqueFps is how many different frames per second the capture really delivered.</summary>
 public sealed record BenchmarkResult(bool Ok, double AchievedFps, double Speed, double UniqueFps, string Message);
@@ -188,6 +209,9 @@ public sealed class CaptureConfigBuilder
         DesktopAudio = src.DesktopAudio;
         Microphone = src.Microphone;
         TestVideoSource = src.TestVideoSource;
+        TimerPacedCapture = src.TimerPacedCapture;
+        StripFrameRateTag = src.StripFrameRateTag;
+        PausesOnStillScreen = src.PausesOnStillScreen;
     }
     public CaptureMethod Method { get; set; }
     public bool MinimalEncoderFlags { get; set; }
@@ -201,6 +225,9 @@ public sealed class CaptureConfigBuilder
     public bool DesktopAudio { get; set; }
     public bool Microphone { get; set; }
     public string? TestVideoSource { get; set; }
+    public bool TimerPacedCapture { get; set; }
+    public bool StripFrameRateTag { get; set; }
+    public bool PausesOnStillScreen { get; set; }
 
     public CaptureConfig Build() => new()
     {
@@ -211,5 +238,6 @@ public sealed class CaptureConfigBuilder
         DesktopVolume = _src.DesktopVolume, Microphone = Microphone, MicrophoneDeviceId = _src.MicrophoneDeviceId,
         MicrophoneVolume = _src.MicrophoneVolume, AudioBitrateKbps = _src.AudioBitrateKbps,
         AudioSyncOffsetMs = _src.AudioSyncOffsetMs, AudioLatencyMs = _src.AudioLatencyMs, TestVideoSource = TestVideoSource,
+        TimerPacedCapture = TimerPacedCapture, StripFrameRateTag = StripFrameRateTag, PausesOnStillScreen = PausesOnStillScreen,
     };
 }

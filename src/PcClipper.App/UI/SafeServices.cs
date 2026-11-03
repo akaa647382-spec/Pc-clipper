@@ -86,6 +86,33 @@ internal sealed class SafeProcessGuard : IProcessGuard
                 _log.Warn($"Could not attach ffmpeg to the job object (it may outlive PC Clipper if it crashes): {ex.Message}");
         }
     }
+
+    public void RaiseCaptureGpuPriority(Process process, bool verify)
+    {
+        try
+        {
+            _inner ??= JobObjectGuard.Instance;
+            _inner.RaiseCaptureGpuPriority(process, verify);
+        }
+        catch (Exception ex)
+        {
+            // Best effort: never let it stop capture from starting.
+            if (verify) _log.Info("Capture GPU priority not changed: " + ex.Message);
+        }
+    }
+
+    public void LowerToBackground(Process process)
+    {
+        try
+        {
+            _inner ??= JobObjectGuard.Instance;
+            _inner.LowerToBackground(process);
+        }
+        catch (Exception ex)
+        {
+            _log.Info("Save priority not lowered: " + ex.Message);
+        }
+    }
 }
 
 /// <summary>Monitor enumeration with a Screen.AllScreens fallback, so there is always at least one monitor.</summary>
@@ -317,6 +344,7 @@ internal static class Fmt
     {
         CaptureMethod.DesktopDuplication => "Desktop Duplication",
         CaptureMethod.WindowsGraphicsCapture => "Windows Graphics Capture",
+        CaptureMethod.DesktopDuplicationClassic => "Desktop Duplication - classic timing",
         _ => "Auto",
     };
 

@@ -1520,8 +1520,9 @@ internal sealed partial class AppController : ApplicationContext
 
     /// <summary>
     /// Resolves the settings for this PC on the monitor as it is now (fresh MonitorInfo/HMONITOR after a mode switch).
-    /// The capture method is exactly what the user picked: Auto is Desktop Duplication, and there is no automatic switch
-    /// to Windows Graphics Capture (it pauses on still screens and draws a yellow border on Windows 10).
+    /// The capture method is exactly what the user picked: Auto is Desktop Duplication (Windows Graphics Capture only for
+    /// a rotated monitor), and there is no automatic switch to Windows Graphics Capture (yellow border on Windows 10,
+    /// newer in FFmpeg).
     /// </summary>
     private CaptureConfig BuildConfig(FfmpegCapabilities caps, AppSettings settings) =>
         QualityMath.Resolve(settings, PickMonitor(settings.MonitorDeviceName), caps);
@@ -1716,8 +1717,8 @@ internal sealed partial class AppController : ApplicationContext
 
     /// <summary>
     /// Counts a failed run or start for the backoff. (There is deliberately no automatic switch to Windows Graphics
-    /// Capture: it would pause the buffer on still screens and draw a yellow border on Windows 10 for the rest of the
-    /// session. The method is always the one the user picked; Auto = Desktop Duplication.)
+    /// Capture: it would draw a yellow border on Windows 10 for the rest of the session. The method is always the one
+    /// the user picked; Auto = Desktop Duplication.)
     /// </summary>
     private void RegisterFailure(string reason, TimeSpan uptime)
     {
@@ -2030,7 +2031,10 @@ internal sealed partial class AppController : ApplicationContext
                 ? QualityMath.FormatSaveLength(effective)
                 : QualityMath.FormatClipLength(got)) + ").mp4");
 
-        _savesInFlight[seconds] = _savesInFlight.GetValueOrDefault(seconds) + 1;
+        // Keyed by length for the Home buttons' "Saving..." label; a shortcut save gets its own key, so the locked
+        // "15 min" button doesn't say "Saving..." while the hotkey saves the 7 min recorded so far.
+        int inFlightKey = fromShortcut ? -seconds : seconds;
+        _savesInFlight[inFlightKey] = _savesInFlight.GetValueOrDefault(inFlightKey) + 1;
         // Exit, Windows shutdown and Turn OFF wait for this (ending the process would kill the copy and lose the clip).
         var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _saveTasks.Add(done.Task);
@@ -2042,7 +2046,9 @@ internal sealed partial class AppController : ApplicationContext
             if (r.Success && r.Path is not null)
             {
                 string text = $"Saved last {QualityMath.FormatDuration(r.Duration)}";
-                if (r.ShorterThanRequested) text += $" - all that was recorded so far (you asked for {QualityMath.FormatSaveLength(effective)})";
+                if (r.ShorterThanRequested)
+                    text += $" - all that was recorded so far (you asked for {QualityMath.FormatSaveLength(seconds)}" +
+                            (seconds > buffer ? $"; your buffer keeps {QualityMath.FormatSaveLength(buffer)})" : ")");
                 else if (seconds > buffer) text += $" (your whole {QualityMath.FormatSaveLength(buffer)} buffer)";
                 Notify(text, ToastKind.Success, SoundKind.Saved);
                 MergeRecent(RecentItem.FromFile(r.Path, RecentKind.Clip, r.Duration));
@@ -2058,7 +2064,7 @@ internal sealed partial class AppController : ApplicationContext
         }
         finally
         {
-            if (--_savesInFlight[seconds] <= 0) _savesInFlight.Remove(seconds);
+            if (--_savesInFlight[inFlightKey] <= 0) _savesInFlight.Remove(inFlightKey);
             _saveTasks.Remove(done.Task);
             done.TrySetResult();
             RaiseChanged();
@@ -2070,6 +2076,8 @@ internal sealed partial class AppController : ApplicationContext
     {
         string text;
         if (available <= TimeSpan.Zero && engineMessage is not null) text = engineMessage; // "Nothing recorded yet..."
+        else if (available <= TimeSpan.Zero && _engine.State == EngineState.Running && _engine.ActiveConfig is { PausesOnStillScreen: true })
+            text = "Nothing recorded yet. The picture only records once something on screen changes.";
         else if (_engine.State != EngineState.Running) // capture interrupted or stopped: nothing is being added right now
             text = $"Only {Fmt.MinSec(available)} was recorded before the capture stopped" +
                    (fromShortcut ? $" - clips start at {QualityMath.FormatSaveLength(MinClipSeconds)}." : $", so \"{QualityMath.FormatSaveLength(effective)}\" can't be saved.");

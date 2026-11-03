@@ -774,6 +774,7 @@ internal sealed class SettingsView : UserControl, IMessageFilter
             CaptureMethod.DesktopDuplication => "Desktop Duplication (recommended)",
             CaptureMethod.WindowsGraphicsCapture when !wgcPossible => "Windows Graphics Capture - not available",
             CaptureMethod.WindowsGraphicsCapture => "Windows Graphics Capture",
+            CaptureMethod.DesktopDuplicationClassic => "Desktop Duplication - classic timing (1.0.1)",
             _ => Fmt.MethodLabel(m),
         });
         const string ddaHint =
@@ -781,6 +782,9 @@ internal sealed class SettingsView : UserControl, IMessageFilter
             "120 fps. While nothing at all moves on screen it records nothing new; the clip just holds the still picture.";
         string hint = _pending.CaptureMethod switch
         {
+            CaptureMethod.DesktopDuplicationClassic =>
+                "The way PC Clipper 1.0.1 captured: keeps recording a still screen, but motion is less even (FFmpeg wakes " +
+                "on Windows' 15.6 ms timer). Only use it if the recommended setting gives you trouble.",
             CaptureMethod.WindowsGraphicsCapture =>
                 "Try it if Desktop Duplication gives you trouble (some laptops with two graphics chips). Best on Windows 11; " +
                 "Windows 10 shows a yellow border around the screen. A still screen pauses it the same way." +

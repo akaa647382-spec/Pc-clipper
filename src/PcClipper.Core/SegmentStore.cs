@@ -208,6 +208,12 @@ public sealed partial class SegmentStore
         }
     }
 
+    /// <summary>Highest segment index ffmpeg has finished in this run (still on disk or not), or -1.</summary>
+    public int NewestFinishedIndex
+    {
+        get { lock (_gate) return _known.Count == 0 ? -1 : _maxKnownIndex; }
+    }
+
     /// <summary>Index ffmpeg is writing now (highest completed + 1, or 0).</summary>
     public int CurrentWritingIndex
     {

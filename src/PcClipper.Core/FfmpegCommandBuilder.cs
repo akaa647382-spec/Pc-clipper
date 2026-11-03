@@ -63,9 +63,9 @@ public static partial class FfmpegCommandBuilder
 
         a.AddRange(new[] { "-filter_complex", VideoGraph(cfg, anchor: true, uniqueFramesProbe: false) + "[v]", "-map", "[v]" });
         if (audioInputPath is not null) a.AddRange(new[] { "-map", "0:a" });
-        // The graph's fps filter already made the frame rate constant; the CLI's own CFR mode would shift the picture
-        // ~2 frames late (it only corrects jittery wall-clock timestamps once they drift more than 1.1 frames).
-        a.AddRange(new[] { "-fps_mode", "passthrough" });
+        // The graph already put every frame on the 1/F grid; the CLI's own CFR mode would shift the picture ~2 frames
+        // late (it only corrects jittery wall-clock timestamps once they drift more than 1.1 frames).
+        AddFrameTiming(a, cfg);
 
         AddEncoder(a, cfg);
 
@@ -104,6 +104,31 @@ public static partial class FfmpegCommandBuilder
     /// </summary>
     public const int DdaEventFramerate = 666;
 
+    /// <summary>
+    /// Keep at most one picture per 1/F slot: the first frame whose rounded slot number is new. Unlike fps=F it never
+    /// repeats a frame to fill an empty slot. That matters after a still screen: fps=F would emit the whole pause as
+    /// repeats in one burst, and while the encoder worked through them nobody read the capture, so the first seconds
+    /// after the pause came out frozen (measured with a pausing test source: a 20 s still gave ~8 s of slideshow).
+    /// Metadata only, so it works on GPU frames.
+    /// </summary>
+    public static string SlotSelectFilter(int fps) =>
+        $"select='isnan(prev_selected_t)+gt(round(t*{Inv(fps)}),round(prev_selected_t*{Inv(fps)}))'";
+
+    /// <summary>Puts each picked frame exactly on its slot (k/F), the same rounding fps=F used.</summary>
+    public static string SlotSnapFilter(int fps) => $"setpts='round(T*{Inv(fps)})/({Inv(fps)}*TB)'";
+
+    /// <summary>
+    /// "-fps_mode passthrough" (frames go to the encoder exactly as the graph timed them) and, for per-slot graphs, an
+    /// encoder time base of 1/F: with the frame-rate tag cleared (strip_fps) every encoder (NVENC, AMF, Quick Sync,
+    /// x264) then derives its rate control frame rate from that time base. "-r F" can't be used: FFmpeg 8 rejects -r
+    /// together with passthrough.
+    /// </summary>
+    private static void AddFrameTiming(List<string> a, CaptureConfig cfg)
+    {
+        a.AddRange(new[] { "-fps_mode", "passthrough" });
+        if (cfg.PicksFramesPerSlot) a.AddRange(new[] { "-enc_time_base:v", $"1/{Inv(cfg.Fps)}" });
+    }
+
     /// <summary>gfxcapture's frame-rate cap: 25% above the target and the monitor refresh, at most 1000.</summary>
     public static int GfxCaptureMaxFramerate(CaptureConfig cfg) =>
         Math.Min(1000, (int)Math.Ceiling(Math.Max(cfg.Fps, cfg.Monitor.RefreshHz) * 1.25));
@@ -121,8 +146,8 @@ public static partial class FfmpegCommandBuilder
         else if (cfg.Method == CaptureMethod.WindowsGraphicsCapture)
         {
             // max_framerate is only a cap (Windows 11 24H2+ MinUpdateInterval). Exactly 1/F would make Windows skip a
-            // composed frame that comes a little early, so leave headroom above both the target and the panel; fps=F
-            // below picks the frames.
+            // composed frame that comes a little early, so leave headroom above both the target and the panel; the
+            // per-slot select below picks the frames.
             f.Add($"gfxcapture=hmonitor={Inv(cfg.Monitor.MonitorHandle)}:max_framerate={Inv(GfxCaptureMaxFramerate(cfg))}:capture_cursor={cursor}:display_border=0:capture_border=0");
         }
         else
@@ -135,14 +160,32 @@ public static partial class FfmpegCommandBuilder
             // so it never sleeps and waits in AcquireNextFrame instead (1 ms timeout; 667+ would make it 0 = busy
             // polling). dup_frames=0 keeps waiting until a new picture comes; the cost is that a completely still
             // screen sends nothing (see CaptureConfig.PausesOnStillScreen).
-            f.Add($"ddagrab=output_idx={Inv(cfg.Monitor.OutputIndex)}:framerate={Inv(DdaEventFramerate)}:draw_mouse={cursor}:dup_frames=0");
+            if (cfg.TimerPacedCapture)
+            {
+                // Classic (1.0.1) timing, a fallback: ddagrab's own timer; dup_frames=1 keeps frames (and segments)
+                // flowing on a static screen.
+                f.Add($"ddagrab=output_idx={Inv(cfg.Monitor.OutputIndex)}:framerate={Inv(cfg.Fps)}:draw_mouse={cursor}:dup_frames={(uniqueFramesProbe ? 0 : 1)}");
+            }
+            else
+            {
+                f.Add($"ddagrab=output_idx={Inv(cfg.Monitor.OutputIndex)}:framerate={Inv(DdaEventFramerate)}:draw_mouse={cursor}:dup_frames=0");
+            }
         }
 
         if (anchor) f.Add(AnchorFilter);
-        // Constant frame rate: each output slot gets the newest picture by its timestamp (repeated when the game runs
-        // slower than F, dropped when the screen refreshes faster). ddagrab stamps frames with the QPC clock when they
-        // arrive, gfxcapture with the compositor's time. Works on GPU frames.
-        if (!uniqueFramesProbe) f.Add($"fps={Inv(cfg.Fps)}");
+        if (cfg.PicksFramesPerSlot)
+        {
+            // At most one picture per 1/F slot, put exactly on the slot. ddagrab stamps frames with the QPC clock when
+            // they arrive, gfxcapture with the compositor's time. A slot without a new picture stays empty (the player
+            // keeps showing the last one), so the stream is variable-rate only where the screen didn't change.
+            f.Add(SlotSelectFilter(cfg.Fps));
+            f.Add(SlotSnapFilter(cfg.Fps));
+        }
+        else if (!uniqueFramesProbe)
+        {
+            // Classic timing: constant frame rate by repeating/dropping to the nearest slot.
+            f.Add($"fps={Inv(cfg.Fps)}");
+        }
 
         bool scale = cfg.Width != cfg.Monitor.Width || cfg.Height != cfg.Monitor.Height;
         // scale_d3d11's video processor converts with BT.601 limited range but copies the RGB tags of its input;
@@ -190,6 +233,9 @@ public static partial class FfmpegCommandBuilder
                     break;
             }
         }
+        // Last, after any scaler (vpp_qsv sets its own rate from its input): drop the source's nominal frame rate (666
+        // for ddagrab), or the encoder would budget its bitrate for 666 frames per second. See AddFrameTiming.
+        if (cfg.PicksFramesPerSlot && cfg.StripFrameRateTag) f.Add("setpts=PTS:strip_fps=1");
         return string.Join(",", f);
     }
 
@@ -363,18 +409,20 @@ public static partial class FfmpegCommandBuilder
     {
         var a = new List<string> { "-hide_banner", "-nostdin", "-nostats", "-loglevel", "level+info", "-progress", "pipe:1", "-stats_period", "1" };
         AddHwDevice(a, cfg);
-        a.AddRange(new[] { "-filter_complex", VideoGraph(cfg, anchor: false, uniqueFramesProbe: false) + "[v]", "-map", "[v]", "-fps_mode", "passthrough" });
+        a.AddRange(new[] { "-filter_complex", VideoGraph(cfg, anchor: false, uniqueFramesProbe: false) + "[v]", "-map", "[v]" });
+        AddFrameTiming(a, cfg);
         AddEncoder(a, cfg);
         a.AddRange(new[] { "-t", Inv(seconds), "-an", "-f", "null", "-" });
         return a;
     }
 
-    /// <summary>"Test my PC" pass 2: no duplicated frames, timestamps passed through, so frame count = real captured frames.</summary>
+    /// <summary>"Test my PC" pass 2 (classic timing only; a per-slot graph already counts different frames in pass 1): no duplicated frames, timestamps passed through, so frame count = real captured frames.</summary>
     public static IReadOnlyList<string> BuildUniqueFramesTestArgs(CaptureConfig cfg, int seconds)
     {
         var a = new List<string> { "-hide_banner", "-nostdin", "-nostats", "-loglevel", "level+info", "-progress", "pipe:1", "-stats_period", "1" };
         AddHwDevice(a, cfg);
-        a.AddRange(new[] { "-filter_complex", VideoGraph(cfg, anchor: false, uniqueFramesProbe: true) + "[v]", "-map", "[v]", "-fps_mode", "passthrough" });
+        a.AddRange(new[] { "-filter_complex", VideoGraph(cfg, anchor: false, uniqueFramesProbe: true) + "[v]", "-map", "[v]" });
+        AddFrameTiming(a, cfg);
         AddEncoder(a, cfg);
         a.AddRange(new[] { "-t", Inv(seconds), "-an", "-f", "null", "-" });
         return a;
