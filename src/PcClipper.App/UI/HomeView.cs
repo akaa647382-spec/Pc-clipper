@@ -357,7 +357,7 @@ internal sealed class HomeView : UserControl
             {
                 // ffmpeg's speed lags while a still screen sends no video (it catches up with the next picture), so
                 // that is no sign of a slow PC.
-                bool still = cfg is { PausesOnStillScreen: true } && _app.Stats is { } st && st.SinceNewVideo > TimeSpan.FromSeconds(4);
+                bool still = cfg is { PausesOnStillScreen: true } && _app.Stats is { } st && st.SinceNewVideo > TimeSpan.FromSeconds(2);
                 if (!still && _app.Stats is { } stats && stats.Uptime > TimeSpan.FromSeconds(15) && stats.Speed > 0 && stats.Speed < 0.93)
                     hint = "Your PC is struggling to keep up right now, so clips may look choppy. Lower the quality or frame rate in Settings.";
             }
