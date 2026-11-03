@@ -15,6 +15,7 @@ internal sealed class FlatButton : Button
     private bool _dimmed;
     private Mark _glyph;
     private Color? _glyphColor;
+    private double? _progress;
 
     public FlatButton()
     {
@@ -81,6 +82,23 @@ internal sealed class FlatButton : Button
     }
 
     public event EventHandler? DimmedClick;
+
+    /// <summary>
+    /// A thin bar along the bottom edge filled to this fraction (0..1), e.g. how close a locked save length is to
+    /// unlocking; null = no bar. Repaints only when the bar would change by at least a pixel.
+    /// </summary>
+    public double? Progress
+    {
+        get => _progress;
+        set
+        {
+            double? v = value is { } p && !double.IsNaN(p) ? Math.Clamp(p, 0, 1) : null;
+            if (v is null && _progress is null) return;
+            if (v is { } a && _progress is { } b && Math.Abs(a - b) * Math.Max(1, Width) < 1) return;
+            _progress = v;
+            Invalidate();
+        }
+    }
 
     public void ApplyKind(ButtonKind kind)
     {
@@ -192,6 +210,16 @@ internal sealed class FlatButton : Button
             {
                 using var pen = new Pen(live ? (_hover ? Theme.BorderHover : edge) : Theme.Mix(edge, parentBack, 0.5));
                 g.DrawPath(pen, path);
+            }
+            if (_progress is { } progress && progress > 0)
+            {
+                // Clipped to the rounded shape, so the bar follows the bottom corners.
+                var saved = g.Save();
+                g.SetClip(path);
+                float h = LogicalToDeviceUnits(3);
+                using var bar = new SolidBrush(Theme.Mix(Theme.Accent, parentBack, live ? 0 : 0.25));
+                g.FillRectangle(bar, rect.X, rect.Bottom - h, rect.Width * (float)progress, h + 1);
+                g.Restore(saved);
             }
             if (Focused && ShowFocusCues)
             {

@@ -136,7 +136,16 @@ public sealed record SegmentInfo(int Index, string Path, double StartSeconds, do
 
 public sealed record SaveResult(bool Success, string? Path, TimeSpan Duration, string? ErrorMessage, bool ShorterThanRequested)
 {
+    /// <summary>Nothing was saved because less than the asked minimum was recorded (see <see cref="Available"/>).</summary>
+    public bool NotEnoughRecorded { get; init; }
+
+    /// <summary>With <see cref="NotEnoughRecorded"/>: how much was recorded when the save was refused.</summary>
+    public TimeSpan Available { get; init; }
+
     public static SaveResult Fail(string message) => new(false, null, TimeSpan.Zero, message, false);
+
+    public static SaveResult NotEnough(TimeSpan available, string message) =>
+        Fail(message) with { NotEnoughRecorded = true, Available = available };
 }
 
 public sealed record EngineStats(

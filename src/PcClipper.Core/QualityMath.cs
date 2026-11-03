@@ -109,6 +109,16 @@ public static class QualityMath
         _ => $"{seconds / 60}:{seconds % 60:00}",
     };
 
+    /// <summary>A clip's real length for its file name: "40 sec", "7 min", "7 min 12 sec", "1 hour" (whole seconds, rounded down).</summary>
+    public static string FormatClipLength(TimeSpan t)
+    {
+        int s = Math.Max(0, (int)Math.Floor(t.TotalSeconds + 1e-6));
+        if (s < 60) return $"{s} sec";
+        if (s == 3600) return "1 hour";
+        if (s > 3600) return $"{s / 3600} h {s / 60 % 60} min";
+        return s % 60 == 0 ? $"{s / 60} min" : $"{s / 60} min {s % 60} sec";
+    }
+
     public static EncoderVendor VendorOf(uint gpuVendorId) => gpuVendorId switch
     {
         MonitorInfo.VendorNvidia => EncoderVendor.Nvidia,

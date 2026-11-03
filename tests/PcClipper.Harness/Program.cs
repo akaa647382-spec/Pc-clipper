@@ -125,6 +125,9 @@ CaptureConfig Config(VideoCodec codec, int bufferSeconds, bool audio = true) => 
         PadLabels.Describe(PadChord.Of(PadButtons.View, PadButtons.A), true));
     var json = System.Text.Json.JsonSerializer.Serialize(new AppSettings());
     var back = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(json)!;
+    Check("clip length names", QualityMath.FormatClipLength(TimeSpan.FromSeconds(40.9)) == "40 sec" &&
+        QualityMath.FormatClipLength(TimeSpan.FromSeconds(432.2)) == "7 min 12 sec" && QualityMath.FormatClipLength(TimeSpan.FromSeconds(900)) == "15 min" &&
+        QualityMath.FormatClipLength(TimeSpan.FromSeconds(3600)) == "1 hour");
     Check("controller shortcuts survive settings save/load", back.PadSaveReplay.SameAs(PadChord.Of(PadButtons.View, PadButtons.A)) && back.ControllerShortcuts);
 }
 
@@ -196,6 +199,15 @@ await engine.StartAsync(Config(VideoCodec.H264, bufferSeconds));
 Check("engine running", engine.State == EngineState.Running, $"start took {sw.ElapsedMilliseconds} ms");
 Check("stale session removed", !Directory.Exists(stale));
 
+// Like PlayStation: a length can't be saved before that much has been recorded (the UI greys it out; the engine refuses).
+bool earlyNamed = false;
+var earlyPath = Path.Combine(clips, "early.mp4");
+var early = await engine.SaveLastAsync(TimeSpan.FromSeconds(15), _ => { earlyNamed = true; return earlyPath; }, TimeSpan.FromSeconds(15));
+Check("a save before 15 s are recorded is refused and writes nothing",
+    !early.Success && early.NotEnoughRecorded && !earlyNamed && !File.Exists(earlyPath) && early.Available.TotalSeconds < 15 &&
+    engine.Buffered.TotalSeconds < 15,
+    $"{early.ErrorMessage} available={early.Available.TotalSeconds:0.0} buffered={engine.Buffered.TotalSeconds:0.0}");
+
 await Task.Delay(TimeSpan.FromSeconds(runSeconds / 2.0));
 Check("recording starts", engine.StartRecording());
 await Task.Delay(TimeSpan.FromSeconds(12));
@@ -212,6 +224,24 @@ int maxExpected = bufferSeconds / 2 + 2 + 2 + 1;
 Check("janitor keeps the buffer bounded", segFiles <= maxExpected, $"{segFiles} segment files (max {maxExpected}), fps={stats.Fps} speed={stats.Speed}");
 Check("video keeps full frame rate with audio attached", stats.Fps >= 57, $"fps={stats.Fps}");
 Check("buffered capped at buffer length", Math.Abs(engine.Buffered.TotalSeconds - bufferSeconds) < 2.5, $"{engine.Buffered.TotalSeconds:0.0}s");
+// The longest length unlocks once the buffer is full: Buffered must reach it exactly, not stop just short.
+Check("a full buffer reports its whole length (the longest button unlocks)",
+    engine.Buffered.TotalSeconds >= bufferSeconds - SegmentStore.SelectionSlackSeconds, $"{engine.Buffered.TotalSeconds:0.000}s");
+TimeSpan? wholePicked = null;
+var whole = await engine.SaveLastAsync(TimeSpan.FromSeconds(bufferSeconds),
+    got => { wholePicked = got; return Path.Combine(clips, "whole.mp4"); }, TimeSpan.FromSeconds(bufferSeconds));
+var dWhole = whole.Success ? Probe.Duration(whole.Path!) : 0;
+Check("a strict save of the whole buffer works and is named from the footage it picked",
+    whole.Success && Math.Abs(dWhole - bufferSeconds) <= 3 && wholePicked is { } wp && Math.Abs(wp.TotalSeconds - dWhole) < 0.6,
+    $"{whole.ErrorMessage} dur={dWhole:0.00} picked={wholePicked?.TotalSeconds:0.00}");
+TimeSpan? shortcutPicked = null;
+var shortcut = await engine.SaveLastAsync(TimeSpan.FromMinutes(15),
+    got => { shortcutPicked = got; return Path.Combine(clips, "shortcut.mp4"); }, TimeSpan.FromSeconds(15));
+var dShortcut = shortcut.Success ? Probe.Duration(shortcut.Path!) : 0;
+Check("a shortcut asking for more than is recorded saves all of it and names it by its real length",
+    shortcut.Success && shortcut.ShorterThanRequested && shortcutPicked is { } sp && Math.Abs(sp.TotalSeconds - dShortcut) < 0.6 &&
+    QualityMath.FormatClipLength(sp) != QualityMath.FormatSaveLength(900),
+    $"{shortcut.ErrorMessage} dur={dShortcut:0.00} name={(shortcutPicked is { } spn ? QualityMath.FormatClipLength(spn) : "-")}");
 var someSeg = Directory.GetFiles(run0, "seg_*").OrderBy(f => f).SkipLast(2).Last(); // recent: old ones get deleted
 Check("a single segment decodes on its own (headers repeated)", Probe.DecodeErrors(someSeg).Length == 0 && Probe.Frames(someSeg) > 60, Path.GetFileName(someSeg));
 

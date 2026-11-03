@@ -171,6 +171,9 @@ public sealed partial class SegmentStore
         get { lock (_gate) return _segments.Count == 0 ? 0 : _segments[^1].EndSeconds; }
     }
 
+    /// <summary>How far short of the asked length a selection may stop (rounding in the segment list's times).</summary>
+    public const double SelectionSlackSeconds = 0.05;
+
     /// <summary>Newest contiguous segments covering at least <paramref name="seconds"/> (or all that exist), oldest first.</summary>
     public IReadOnlyList<SegmentInfo> SelectLast(double seconds)
     {
@@ -178,7 +181,7 @@ public sealed partial class SegmentStore
         {
             var picked = new List<SegmentInfo>();
             double total = 0;
-            for (int i = _segments.Count - 1; i >= 0 && total < seconds - 0.05; i--)
+            for (int i = _segments.Count - 1; i >= 0 && total < seconds - SelectionSlackSeconds; i--)
             {
                 if (picked.Count > 0 && _segments[i].Index != picked[^1].Index - 1) break; // never bridge a gap
                 picked.Add(_segments[i]);

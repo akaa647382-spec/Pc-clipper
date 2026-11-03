@@ -114,11 +114,21 @@ internal sealed class TrayController : IDisposable
         _toggleReplay.Text = on ? "Turn replay off" : "Turn replay on";
         _toggleReplay.Enabled = state is not (ReplayUiState.Starting or ReplayUiState.Stopping or ReplayUiState.CheckingFfmpeg);
 
+        // Like the Home buttons: a length is offered once that much is recorded.
         bool canSave = _app.CanSave;
         int buffer = _app.BufferSeconds;
+        var buffered = _app.SafeBuffered();
         _saveMenu.Enabled = canSave;
         foreach (ToolStripItem item in _saveMenu.DropDownItems)
-            if (item.Tag is int s) item.Enabled = canSave && s <= buffer;
+        {
+            if (item.Tag is not int s) continue;
+            bool recorded = _app.HasRecorded(s, buffered);
+            item.Enabled = canSave && recorded;
+            string label = QualityMath.FormatSaveLength(s);
+            item.Text = canSave && !recorded && s <= buffer && state == ReplayUiState.On
+                ? $"{label}  (unlocks {AppController.UnlocksIn(s, buffered)})"
+                : label;
+        }
 
         _record.Text = _app.IsRecording ? $"Stop recording ({Fmt.Clock(_app.RecordingElapsed)})"
             : _app.IsRecordingSaving ? "Saving recording..."

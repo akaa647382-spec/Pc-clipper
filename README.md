@@ -10,7 +10,10 @@ Save the last few minutes of your gameplay with one button, like the PlayStation
 - **Replay buffer**: turn it on and PC Clipper quietly keeps the last **1 to 60 minutes** of your screen and sound.
   Nothing is saved until you ask.
 - **Save the last…** 15 sec, 30 sec, 1 min, 5 min, 15 min, 30 min or 1 hour, from the window, the tray icon, or a hotkey.
-  Saving copies what's already recorded (no re-encoding), so it's quick and barely touches your game;
+  Like on PlayStation, each length unlocks once that much has been recorded: right after you turn the replay on
+  everything is greyed out, 15 sec unlocks after 15 seconds, 1 hour after an hour (a bar on each button fills up).
+  The hotkey and controller shortcut always save what there is, from 15 seconds up, and the clip's name says how long it
+  really is. Saving copies what's already recorded (no re-encoding), so it's quick and barely touches your game;
   an hour of high-quality video still takes a little while because it's tens of gigabytes.
 - **Record**: normal start/stop recording, as long as you like.
 - **Screenshot**: a full-quality PNG of your screen.

@@ -378,19 +378,26 @@ internal sealed class HomeView : UserControl
         _toggle.Dimmed = busy || _app.IsBenchmarkRunning;
         SetKind(_toggle, ref _toggleKind, active && !busy ? ButtonKind.Secondary : ButtonKind.Primary);
 
-        // Save buttons
+        // Save buttons: like on PlayStation, each length unlocks once that much is recorded (greyed out until then, with a
+        // bar filling up towards it). The same number drives the "0:40 saved of 15:00" line above.
         bool canSave = _app.CanSave;
+        var buffered = _app.SafeBuffered();
+        bool capturing = state == ReplayUiState.On;
         foreach (var b in _saveButtons)
         {
             int seconds = (int)b.Tag!;
             string label = QualityMath.FormatSaveLength(seconds);
             bool tooLong = seconds > bufferSeconds;
+            bool recorded = _app.HasRecorded(seconds, buffered);
             Theme.SetText(b, _app.IsSaving(seconds) ? "Saving..." : label);
-            b.Dimmed = !canSave || tooLong;
+            b.Dimmed = !canSave || tooLong || !recorded;
+            b.Progress = canSave && !tooLong && !recorded ? buffered.TotalSeconds / seconds : null;
             Theme.SetTip(_tips, b,
                 tooLong ? $"Your buffer keeps {QualityMath.FormatSaveLength(bufferSeconds)}. Increase it in Settings."
                 : !canSave ? "Turn the replay buffer on first."
-                : $"Save the last {label} as a video");
+                : recorded ? $"Save the last {label} as a video"
+                : capturing ? $"Unlocks once {label} is recorded ({AppController.UnlocksIn(seconds, buffered)}). So far: {Fmt.MinSec(buffered)}."
+                : $"Only {Fmt.MinSec(buffered)} was recorded before the capture stopped.");
         }
 
         // Action row

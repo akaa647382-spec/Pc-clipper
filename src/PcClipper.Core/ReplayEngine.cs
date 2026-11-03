@@ -58,17 +58,34 @@ public sealed class ReplayEngine : IDisposable
     /// different settings). Uses <see cref="EngineEnvironment.RecordingPathFactory"/>.</summary>
     public event Action<SaveResult>? RecordingAutoSaved;
 
-    /// <summary>How much can be saved right now (capped at the buffer length).</summary>
+    /// <summary>
+    /// How much can be saved right now, capped at the buffer length: exactly the footage a save of the whole buffer would
+    /// pick (<see cref="CoverableSeconds"/>, the same walk as <see cref="SaveLastAsync(TimeSpan, Func{TimeSpan, string}, TimeSpan, CancellationToken)"/>),
+    /// so a length the UI offers once this reaches it really saves that much. Never across a gap (e.g. an old block kept
+    /// for an unsaved recording). The segment being written isn't counted yet, so it trails the live picture by up to one
+    /// segment; a save waits for that segment, so it gets at least this much.
+    /// </summary>
     public TimeSpan Buffered
     {
         get
         {
             var s = CurrentSession();
             if (s is null) return TimeSpan.Zero;
-            double total = 0;
-            foreach (var run in s.CompatibleRunsNewestFirst()) total += run.Store.TotalDuration;
-            return TimeSpan.FromSeconds(Math.Min(total, s.BufferSeconds));
+            return TimeSpan.FromSeconds(Math.Min(CoverableSeconds(s, s.BufferSeconds), s.BufferSeconds));
         }
+    }
+
+    /// <summary>Seconds a save asking for <paramref name="want"/> would select now (without pinning): the newest contiguous
+    /// segments of each compatible run, newest run first, until <paramref name="want"/> is covered.</summary>
+    private static double CoverableSeconds(Session s, double want)
+    {
+        double covered = 0;
+        foreach (var run in s.CompatibleRunsNewestFirst())
+        {
+            if (covered >= want - SegmentStore.SelectionSlackSeconds) break;
+            foreach (var seg in run.Store.SelectLast(want - covered)) covered += seg.Duration;
+        }
+        return covered;
     }
 
     public bool IsRecording { get { lock (_gate) return _recording is not null; } }
@@ -575,7 +592,16 @@ public sealed class ReplayEngine : IDisposable
     }
 
     /// <summary>Save the last <paramref name="length"/> (or less if not buffered yet) to <paramref name="outputMp4"/>.</summary>
-    public async Task<SaveResult> SaveLastAsync(TimeSpan length, string outputMp4, CancellationToken ct = default)
+    public Task<SaveResult> SaveLastAsync(TimeSpan length, string outputMp4, CancellationToken ct = default) =>
+        SaveLastAsync(length, _ => outputMp4, TimeSpan.Zero, ct);
+
+    /// <summary>
+    /// Save the last <paramref name="length"/> (or less if not buffered yet). <paramref name="outputFor"/> names the file
+    /// once the footage is picked and gets its length, so a name can say how long the clip really is. With less than
+    /// <paramref name="minimum"/> recorded, nothing is saved and the result has <see cref="SaveResult.NotEnoughRecorded"/>
+    /// set and <see cref="SaveResult.Available"/> = what there was.
+    /// </summary>
+    public async Task<SaveResult> SaveLastAsync(TimeSpan length, Func<TimeSpan, string> outputFor, TimeSpan minimum, CancellationToken ct = default)
     {
         var s = CurrentSession();
         if (s is null) return SaveResult.Fail("The replay buffer is off. Turn it on first.");
@@ -589,9 +615,10 @@ public sealed class ReplayEngine : IDisposable
             double want = Math.Min(length.TotalSeconds, s.BufferSeconds);
             var parts = new List<SavePart>();
             double covered = 0;
+            // Same walk as CoverableSeconds (which Buffered reports), plus pinning.
             foreach (var run in s.CompatibleRunsNewestFirst())
             {
-                if (covered >= want - 0.05) break;
+                if (covered >= want - SegmentStore.SelectionSlackSeconds) break;
                 var segs = run.Store.SelectLastAndPin(want - covered, out var pin);
                 pins.Add(pin);
                 if (segs.Count == 0) continue;
@@ -599,9 +626,16 @@ public sealed class ReplayEngine : IDisposable
                 covered += segs.Sum(x => x.Duration);
             }
             if (parts.Count == 0)
-                return SaveResult.Fail(s.Current?.Config.Method == CaptureMethod.WindowsGraphicsCapture
+                return SaveResult.NotEnough(TimeSpan.Zero, s.Current?.Config.Method == CaptureMethod.WindowsGraphicsCapture
                     ? "Nothing recorded yet. With Windows Graphics Capture the picture only records once something on screen changes."
                     : "Nothing recorded yet - wait a few seconds and try again.");
+            if (covered < minimum.TotalSeconds - SegmentStore.SelectionSlackSeconds)
+            {
+                _log.Info($"Not saving: {QualityMath.FormatDuration(TimeSpan.FromSeconds(covered))} recorded, at least {QualityMath.FormatDuration(minimum)} needed.");
+                return SaveResult.NotEnough(TimeSpan.FromSeconds(covered),
+                    $"Only {QualityMath.FormatDuration(TimeSpan.FromSeconds(covered))} recorded so far - wait a little and try again.");
+            }
+            string outputMp4 = outputFor(TimeSpan.FromSeconds(covered));
 
             await _saveLock.WaitAsync(ct).ConfigureAwait(false);
             try

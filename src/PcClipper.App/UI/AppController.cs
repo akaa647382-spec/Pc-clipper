@@ -323,6 +323,24 @@ internal sealed partial class AppController : ApplicationContext
     /// <summary>False when the notification-area icon could not be created.</summary>
     public bool HasTray => _tray is not null;
     public bool IsSaving(int seconds) => _savesInFlight.TryGetValue(seconds, out var n) && n > 0;
+
+    /// <summary>The shortest clip (the first save length): nothing shorter is ever saved, not even from a shortcut.</summary>
+    public static int MinClipSeconds => AppSettings.SaveLengthsSeconds[0];
+
+    /// <summary>
+    /// Like on PlayStation, a save length unlocks once that much has been recorded: true when <paramref name="buffered"/>
+    /// (<see cref="SafeBuffered"/>) covers <paramref name="seconds"/> and the buffer is long enough to ever hold it.
+    /// Says nothing about whether saving is possible at all (<see cref="CanSave"/>).
+    /// </summary>
+    public bool HasRecorded(int seconds, TimeSpan buffered) =>
+        seconds <= BufferSeconds && buffered.TotalSeconds >= seconds - SegmentStore.SelectionSlackSeconds;
+
+    /// <summary>"in 12 s" / "in about 14 min": how long until <paramref name="seconds"/> is recorded.</summary>
+    public static string UnlocksIn(int seconds, TimeSpan buffered)
+    {
+        double left = Math.Max(1, Math.Ceiling(seconds - buffered.TotalSeconds));
+        return left < 60 ? $"in {left:0} s" : $"in about {Math.Ceiling(left / 60):0} min";
+    }
     /// <summary>Latest capture statistics (polled in the background every second while running), or null.</summary>
     public EngineStats? Stats => _engine.State == EngineState.Running ? _stats : null;
 
@@ -519,8 +537,9 @@ internal sealed partial class AppController : ApplicationContext
     }
 
     /// <param name="onSuccess">Runs (UI thread) after the clip was saved; used by controller shortcuts for their rumble.</param>
-    public void SaveLast(int seconds, Action? onSuccess = null) =>
-        Fire(async () => { if (await SaveLastAsync(seconds)) onSuccess?.Invoke(); }, "Saving the clip");
+    /// <param name="fromShortcut">A hotkey or controller shortcut (see <see cref="SaveLastAsync"/>), not a button or menu item.</param>
+    public void SaveLast(int seconds, Action? onSuccess = null, bool fromShortcut = false) =>
+        Fire(async () => { if (await SaveLastAsync(seconds, fromShortcut)) onSuccess?.Invoke(); }, "Saving the clip");
 
     /// <param name="onSuccess">Runs (UI thread) once a recording started, or was stopped and saved.</param>
     public void ToggleRecording(bool fromHotkey = false, Action? onSuccess = null) =>
@@ -1960,8 +1979,15 @@ internal sealed partial class AppController : ApplicationContext
     // Saving, recording, screenshots
     // =====================================================================================================
 
-    /// <summary>Saves the last <paramref name="seconds"/>; true when the clip was written.</summary>
-    public async Task<bool> SaveLastAsync(int seconds)
+    /// <summary>
+    /// Saves the last <paramref name="seconds"/>; true when the clip was written. Like on PlayStation a length can only be
+    /// saved once that much is recorded: the buttons and the tray menu are greyed out until then (<see cref="HasRecorded"/>),
+    /// and a press that still gets here (it raced a buffer restart) is refused. A hotkey or controller shortcut
+    /// (<paramref name="fromShortcut"/>) can't be greyed out, and refusing it would make the default "save the last
+    /// 15 min" do nothing for the first quarter hour of every session, so it saves everything recorded so far, at least
+    /// <see cref="MinClipSeconds"/>, and the toast and file name say how long the clip really is.
+    /// </summary>
+    public async Task<bool> SaveLastAsync(int seconds, bool fromShortcut = false)
     {
         if (_exiting) return false;
         // A double-click (FlatButton raises Click twice) or a repeated hotkey press would queue the same clip twice.
@@ -1984,11 +2010,25 @@ internal sealed partial class AppController : ApplicationContext
 
         int buffer = BufferSeconds;
         int effective = Math.Min(seconds, buffer);
+        var minimum = TimeSpan.FromSeconds(fromShortcut ? Math.Min(MinClipSeconds, effective) : effective);
+        // Clearly not enough yet, even with the segment being written now (the engine waits for it): say so right away.
+        var buffered = SafeBuffered();
+        double segment = _engine.ActiveConfig?.SegmentSeconds ?? 2;
+        if (buffered.TotalSeconds + segment < minimum.TotalSeconds - SegmentStore.SelectionSlackSeconds)
+        {
+            NotifyNotEnough(effective, fromShortcut, buffered, null);
+            return false;
+        }
         var folder = OutputFolder(_settings.ClipsFolder, DefaultPaths.ClipsFolder, "clips");
         if (folder is null) return false;
         // Only a save that really starts arms the debounce (a refused press must not swallow the next one).
         _lastSaveRequestMs[seconds] = now;
-        var path = Path.Combine(folder, $"Clip {DateTime.Now:yyyy-MM-dd HH-mm-ss} (last {QualityMath.FormatSaveLength(effective)}).mp4");
+        var stamp = DateTime.Now;
+        // Named once the footage is picked: "(last 15 min)", or the real length when less was recorded ("(last 7 min 12 sec)").
+        string PathFor(TimeSpan got) => Path.Combine(folder, $"Clip {stamp:yyyy-MM-dd HH-mm-ss} (last " +
+            (got.TotalSeconds >= effective - SegmentStore.SelectionSlackSeconds
+                ? QualityMath.FormatSaveLength(effective)
+                : QualityMath.FormatClipLength(got)) + ").mp4");
 
         _savesInFlight[seconds] = _savesInFlight.GetValueOrDefault(seconds) + 1;
         // Exit, Windows shutdown and Turn OFF wait for this (ending the process would kill the copy and lose the clip).
@@ -1998,15 +2038,20 @@ internal sealed partial class AppController : ApplicationContext
         try
         {
             var length = TimeSpan.FromSeconds(effective);
-            var r = await Task.Run(() => _engine.SaveLastAsync(length, path));
+            var r = await Task.Run(() => _engine.SaveLastAsync(length, PathFor, minimum));
             if (r.Success && r.Path is not null)
             {
                 string text = $"Saved last {QualityMath.FormatDuration(r.Duration)}";
-                if (r.ShorterThanRequested) text += " (all that was recorded so far)";
+                if (r.ShorterThanRequested) text += $" - all that was recorded so far (you asked for {QualityMath.FormatSaveLength(effective)})";
                 else if (seconds > buffer) text += $" (your whole {QualityMath.FormatSaveLength(buffer)} buffer)";
                 Notify(text, ToastKind.Success, SoundKind.Saved);
                 MergeRecent(RecentItem.FromFile(r.Path, RecentKind.Clip, r.Duration));
                 return true;
+            }
+            if (r.NotEnoughRecorded)
+            {
+                NotifyNotEnough(effective, fromShortcut, r.Available, r.ErrorMessage);
+                return false;
             }
             Notify(r.ErrorMessage ?? "Saving failed.", ToastKind.Warning, SoundKind.Error);
             return false;
@@ -2018,6 +2063,23 @@ internal sealed partial class AppController : ApplicationContext
             done.TrySetResult();
             RaiseChanged();
         }
+    }
+
+    /// <summary>A save refused because too little is recorded: how much there is and when the length unlocks.</summary>
+    private void NotifyNotEnough(int effective, bool fromShortcut, TimeSpan available, string? engineMessage)
+    {
+        string text;
+        if (available <= TimeSpan.Zero && engineMessage is not null) text = engineMessage; // "Nothing recorded yet..."
+        else if (_engine.State != EngineState.Running) // capture interrupted or stopped: nothing is being added right now
+            text = $"Only {Fmt.MinSec(available)} was recorded before the capture stopped" +
+                   (fromShortcut ? $" - clips start at {QualityMath.FormatSaveLength(MinClipSeconds)}." : $", so \"{QualityMath.FormatSaveLength(effective)}\" can't be saved.");
+        else if (fromShortcut)
+            text = $"Only {Fmt.MinSec(available)} recorded so far - clips start at {QualityMath.FormatSaveLength(MinClipSeconds)}. " +
+                   $"Try again {UnlocksIn(MinClipSeconds, available)}.";
+        else
+            text = $"Only {Fmt.MinSec(available)} recorded so far. \"{QualityMath.FormatSaveLength(effective)}\" unlocks " +
+                   UnlocksIn(effective, available) + ".";
+        Notify(text, ToastKind.Info, SoundKind.Error);
     }
 
     /// <summary>Starts or stops (and saves) a recording; true when a recording started, or was stopped and saved.</summary>
@@ -2534,7 +2596,7 @@ internal sealed partial class AppController : ApplicationContext
         switch (action)
         {
             case HotkeyAction.SaveReplay:
-                SaveLast(_settings.HotkeySaveSeconds, onSuccess);
+                SaveLast(_settings.HotkeySaveSeconds, onSuccess, fromShortcut: true);
                 break;
             case HotkeyAction.ToggleRecording:
                 ToggleRecording(fromHotkey: true, onSuccess);

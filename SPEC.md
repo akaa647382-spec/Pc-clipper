@@ -61,6 +61,15 @@ updating both sides. Implementers may ADD public members if needed.
    Serialise saves (one at a time) but never block capture.
 5. Unpin. Return actual duration (sum of selected segment durations) and `ShorterThanRequested` when less was buffered.
 6. Saves of up to 1 hour must finish in seconds (pure stream copy). Never re-encode.
+7. **A length unlocks once that much is recorded (like PlayStation).** `Buffered` is exactly what a save of the whole
+   buffer would select (same newest-first, never-across-a-gap walk as step 3, capped at the buffer length; the segment
+   being written is not counted yet). The Home buttons and tray items for N are greyed out until `Buffered >= N - 0.05 s`
+   (a thin bar on the button fills up towards it; the tooltip / menu text says "unlocks in 12 s"). `SaveLastAsync` takes
+   a minimum and refuses (`NotEnoughRecorded`, nothing written) below it, and names the file only after picking the
+   footage (`Func<TimeSpan, string>`). Buttons/tray: minimum = N (a click that raced a buffer restart is refused).
+   Hotkey/controller: they can't be greyed out and refusing would make "save last 15 min" useless for the first quarter
+   hour, so minimum = 15 s: they save everything recorded so far, and the toast and file name give the real length
+   ("Clip … (last 7 min 12 sec).mp4", "Saved last 7:12 - all that was recorded so far (you asked for 15 min)").
 
 ### Manual recording
 
@@ -171,7 +180,8 @@ HOME page:
    While Starting: "Starting…" and the button disabled.
 2. "Save the last…" card: 7 big buttons in a row/grid: 15 sec, 30 sec, 1 min, 5 min, 15 min, 30 min, 1 hour.
    Disabled while the buffer is off. Lengths longer than the buffer length setting are disabled with a tooltip
-   ("Your buffer keeps 30 min. Increase it in Settings."). While a save runs, show "Saving…" on that button and keep
+   ("Your buffer keeps 30 min. Increase it in Settings."). Lengths not recorded yet are greyed out until they are
+   (see Saving, step 7). While a save runs, show "Saving…" on that button and keep
    the others usable (saves queue). After save: toast + the clip appears in Recent.
 3. Action row: [● Record] (becomes "■ Stop 03:21" in red while recording), [Screenshot], [Open clips folder].
 4. Recent card: the last 8 clips/screenshots saved this run (and existing files found in the clips folder on start,
@@ -205,7 +215,8 @@ running and `CaptureDiffers`, ask "Applying these settings restarts the replay b
 - Engine: FFmpeg path + version + working encoders list; buttons "Download FFmpeg" / "Browse…"; "Open log folder".
 
 ### Tray icon (NotifyIcon)
-Always visible while running. Double-click shows the window. Menu: Turn replay on/off · Save the last ▸ (7 lengths) ·
+Always visible while running. Double-click shows the window. Menu: Turn replay on/off · Save the last ▸ (7 lengths; a
+length not recorded yet is greyed out: "15 min  (unlocks in about 14 min)") ·
 Start/Stop recording · Take screenshot · Open clips folder · Show PC Clipper · Exit. Tooltip shows state ("PC Clipper —
 replay on, 12:34 buffered"; max 63 chars). Icon gets a small red dot overlay while recording (draw at runtime).
 
