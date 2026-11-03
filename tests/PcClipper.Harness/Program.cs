@@ -376,20 +376,22 @@ Check("turning the buffer off auto-saves a running recording", autoSaved.Count =
 
 // ---------------------------------------------------------------- still screen
 // Real capture sends nothing while the screen is still. Emulate it: a writer feeds a FIFO at 60 fps, frames are stamped
-// on arrival (like ddagrab), and the writer is frozen with SIGSTOP. Up to 1.0.1's fps=F, the pause came out as a burst of
-// repeats afterwards and the first seconds of motion after it were lost; the per-slot graph must not do that.
+// on arrival (like ddagrab), and the writer is frozen with SIGSTOP. With fps=F after such a source (the first 1.0.2 draft)
+// the pause came out as a burst of repeats afterwards and the first seconds of motion after it were lost; the per-slot
+// graph must not do that.
 if (!quick && OperatingSystem.IsLinux())
 {
     var fifo = Path.Combine(root, "still.fifo");
+    File.Delete(fifo);
     Process.Start("mkfifo", fifo)!.WaitForExit();
-    var writerPsi = new ProcessStartInfo("ffmpeg") { UseShellExecute = false, RedirectStandardError = true };
-    foreach (var a in new[] { "-hide_banner", "-loglevel", "error", "-re", "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=60",
-                 "-c:v", "rawvideo", "-pix_fmt", "yuv420p", "-f", "nut", "-y", fifo })
-        writerPsi.ArgumentList.Add(a);
-    using var writer = Process.Start(writerPsi)!;
-    writer.ErrorDataReceived += (_, _) => { };
-    writer.BeginErrorReadLine();
-    void Signal(string sig) => Process.Start("kill", $"-{sig} {writer.Id}")!.WaitForExit();
+    // ffmpeg 6.1 opens a movie source twice (probe, then for real), which kills a single writer with SIGPIPE: keep
+    // respawning it. Signals go to every process whose command line has the marker (the loop and its ffmpeg, never
+    // the capture ffmpeg that reads the FIFO).
+    const string writerMarker = "pcclipper-still-writer";
+    using var writer = Process.Start("bash", new[] { "-c",
+        $"while :; do ffmpeg -nostdin -hide_banner -loglevel error -re -f lavfi -i testsrc2=size=640x360:rate=60 " +
+        $"-c:v rawvideo -pix_fmt yuv420p -metadata comment={writerMarker} -f nut -y '{fifo}'; sleep 0.05; done" })!;
+    void Signal(string sig) => Process.Start("pkill", new[] { $"-{sig}", "-f", writerMarker })!.WaitForExit();
 
     var stillCfg = Config(VideoCodec.H264, 60).With(b =>
     {
@@ -441,7 +443,7 @@ if (!quick && OperatingSystem.IsLinux())
     {
         try { Signal("CONT"); } catch { }
         try { if (e5.State != EngineState.Off) await e5.StopAsync(); } catch { }
-        try { writer.Kill(); } catch { }
+        try { Signal("KILL"); } catch { }
     }
 }
 
