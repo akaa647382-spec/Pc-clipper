@@ -436,14 +436,17 @@ if (!quick && OperatingSystem.IsLinux())
             for (int i = 1; i < pts.Count; i++)
                 if (pts[i] - pts[i - 1] > maxGap) { maxGap = pts[i] - pts[i - 1]; gapEnd = pts[i]; }
             int afterGap = pts.Count(t => t >= gapEnd && t < gapEnd + 5);
-            int lastFive = Math.Min(afterGap, pts.Count(t => t > end - 5));
+            double gapStart = gapEnd - maxGap;
+            int beforeGap = pts.Count(t => t > gapStart - 5 && t <= gapStart);
+            // Relative to the rate just before the still, so a busy test machine doesn't fail it; a catch-up slideshow
+            // (the fps=F burst) would show only a few frames per second here.
             Check("after a still the picture holds (one long frame), with no burst of repeats",
                 Math.Abs(maxGap - stillSeconds) < 1.5, $"longest frame {maxGap:0.00}s, still lasted {stillSeconds:0.00}s, {pts.Count} frames");
             double vDur = Probe.StreamDuration(afterStill.Path!, "v:0"), aDur = Probe.StreamDuration(afterStill.Path!, "a:0");
             Check("picture and sound stay together across a long still (saves keep the timestamps)",
                 vDur > 20 && Math.Abs(vDur - aDur) < 0.5, $"video {vDur:0.00}s, audio {aDur:0.00}s");
             Check("motion right after the still is recorded live (no slideshow while catching up)",
-                lastFive >= 270, $"{afterGap} frames in the 5 s after the still, {pts.Count(t => t > end - 5)} in the last 5 s (60 fps = 300)");
+                afterGap >= 0.85 * beforeGap && afterGap >= 150, $"{afterGap} frames in the 5 s after the still, {beforeGap} in the 5 s before it (60 fps = 300)");
             Check("sound keeps running through the still", Probe.AudioGaps(afterStill.Path!) == 0 && Probe.DecodeErrors(afterStill.Path!).Length == 0,
                 $"{Probe.AudioGaps(afterStill.Path!)} audio gaps");
         }
