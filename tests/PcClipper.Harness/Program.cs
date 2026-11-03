@@ -181,7 +181,7 @@ if (args.Contains("sync"))
     {
         FfmpegPath = "ffmpeg", BufferRoot = Path.Combine(root, "buffer"), Monitor = monitor, Width = 1280, Height = 720, Fps = 60,
         Vendor = EncoderVendor.Cpu, Codec = VideoCodec.H264, EncoderName = "libx264", BitrateKbps = 4000, BufferSeconds = 60,
-        DesktopAudio = true, TestVideoSource = TestSource, AudioLatencyMs = latency,
+        DesktopAudio = true, TestVideoSource = TestSource, StripFrameRateTag = stripFps, AudioLatencyMs = latency,
     };
     await e.StartAsync(cfgSync);
     int samples = int.TryParse(Environment.GetEnvironmentVariable("PCCLIPPER_SYNC_TICKS"), out var t) ? t : 30;
@@ -349,7 +349,7 @@ var changedScreen = new CaptureConfig
 {
     FfmpegPath = "ffmpeg", BufferRoot = Path.Combine(root, "buffer"), Monitor = monitor with { Width = 1600, Height = 900 },
     Width = 1600, Height = 900, Fps = 60, Vendor = EncoderVendor.Cpu, Codec = VideoCodec.H264, EncoderName = "libx264",
-    BitrateKbps = 4000, BufferSeconds = bufferSeconds, DesktopAudio = true, TestVideoSource = TestSource,
+    BitrateKbps = 4000, BufferSeconds = bufferSeconds, DesktopAudio = true, TestVideoSource = TestSource, StripFrameRateTag = stripFps,
 };
 await engine.ResumeAsync(changedScreen); // supervised resume: keeps the buffer and its format
 Check("resume keeps the buffer's format when the screen changed", engine.ActiveConfig is { Width: 1280, Height: 720 },
@@ -478,7 +478,7 @@ foreach (var codec in new[] { VideoCodec.Hevc, VideoCodec.Av1 })
     {
         FfmpegPath = "ffmpeg", BufferRoot = crashRoot, Monitor = monitor, Width = 1280, Height = 720, Fps = 60,
         Vendor = EncoderVendor.Cpu, Codec = VideoCodec.H264, EncoderName = "libx264", BitrateKbps = 4000, BufferSeconds = 30,
-        DesktopAudio = true, TestVideoSource = TestSource,
+        DesktopAudio = true, TestVideoSource = TestSource, StripFrameRateTag = stripFps,
     };
     await crashEngine.StartAsync(crashCfg);
     crashEngine.StartRecording();
