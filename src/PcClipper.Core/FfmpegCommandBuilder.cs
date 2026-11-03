@@ -359,7 +359,10 @@ public static partial class FfmpegCommandBuilder
     /// </summary>
     public static IReadOnlyList<string> BuildSaveArgs(string inputUrl, bool isFfconcat, string outputMp4, VideoCodec codec, bool faststart)
     {
-        var a = new List<string> { "-hide_banner", "-nostdin", "-loglevel", "error", "-y" };
+        // -copyts -start_at_zero: keep the recorded timestamps (shifted to start at 0). Without it ffmpeg treats any jump
+        // of more than 10 s in MPEG-TS as a broken stream and closes it up - for a still screen of over 10 s (no video
+        // then, sound keeps going) that would pull the picture up to 10+ s ahead of the sound for the rest of the clip.
+        var a = new List<string> { "-hide_banner", "-nostdin", "-loglevel", "error", "-y", "-copyts", "-start_at_zero" };
         if (isFfconcat)
             a.AddRange(new[] { "-protocol_whitelist", "file,concatf,crypto,data", "-f", "concat", "-safe", "0", "-i", inputUrl });
         else

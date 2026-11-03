@@ -9,7 +9,8 @@ using System.Text.RegularExpressions;
 using PcClipper.Core;
 
 var quick = args.Contains("quick");
-var root = Path.Combine(Path.GetTempPath(), "pcclipper-harness");
+// One folder per run: two harness runs at once (e.g. a reviewer's and ours) must not wipe each other's buffers.
+var root = Path.Combine(Path.GetTempPath(), $"pcclipper-harness-{Environment.ProcessId}");
 if (Directory.Exists(root)) Directory.Delete(root, true);
 Directory.CreateDirectory(root);
 var log = new ConsoleLog();
@@ -387,7 +388,7 @@ if (!quick && OperatingSystem.IsLinux())
     // ffmpeg 6.1 opens a movie source twice (probe, then for real), which kills a single writer with SIGPIPE: keep
     // respawning it. Signals go to every process whose command line has the marker (the loop and its ffmpeg, never
     // the capture ffmpeg that reads the FIFO).
-    const string writerMarker = "pcclipper-still-writer";
+    string writerMarker = $"pcclipper-still-writer-{Environment.ProcessId}";
     using var writer = Process.Start("bash", new[] { "-c",
         $"while :; do ffmpeg -nostdin -hide_banner -loglevel error -re -f lavfi -i testsrc2=size=640x360:rate=60 " +
         $"-c:v rawvideo -pix_fmt yuv420p -metadata comment={writerMarker} -f nut -y '{fifo}'; sleep 0.05; done" })!;
