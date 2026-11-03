@@ -154,9 +154,9 @@ public static partial class FfmpegProbe
             message = $"Too heavy: the encoder only managed {fps:0.#} of {cfg.Fps} fps ({speed:0.00}x real time) for {what}. Try a lower resolution or frame rate.";
         else
             message = $"The encoder keeps up, but {method} only delivered {unique:0} different frames per second (of {cfg.Fps})." +
-                      (cfg.Method == CaptureMethod.DesktopDuplication
-                          ? " Try Settings > Capture method > Windows Graphics Capture, or record at 60 fps."
-                          : " Make sure the game really runs that fast, or record at 60 fps.");
+                      (cfg.Fps > 60
+                          ? $" Your monitor may not really refresh at {cfg.Fps} Hz (check Windows display settings), or record at 60 fps."
+                          : " Something may be slowing down the screen capture; try the other capture method in Settings.");
         return new BenchmarkResult(encoderOk && captureOk, fps, speed, unique, message);
     }
 

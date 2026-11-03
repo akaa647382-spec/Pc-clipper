@@ -59,6 +59,17 @@ public interface IAudioSource : IDisposable
 public interface IProcessGuard
 {
     void Attach(Process process);
+
+    /// <summary>
+    /// The long-running capture process: ask Windows to run its GPU work (screen copy, colour conversion) ahead of
+    /// normal apps, so a game using 100% of the graphics card doesn't starve the capture. Best effort, never throws;
+    /// safe to call again (it re-checks).
+    /// </summary>
+    void RaiseCaptureGpuPriority(Process process) { }
+
+    /// <summary>A save (pure stream copy of gigabytes): low disk and memory priority so the game's own disk reads win.
+    /// Best effort, never throws.</summary>
+    void LowerToBackground(Process process) { }
 }
 
 public sealed class NullProcessGuard : IProcessGuard

@@ -18,7 +18,8 @@ namespace PcClipper.App.Platform;
 /// "Open clip" would then be killed when PC Clipper exits.</para>
 /// <para>Priority: AboveNormal keeps the capture loop on time without starving the game. A CPU encoder (libx264, libx265,
 /// libsvtav1) stays Normal, because at a raised priority its encoder threads compete with the game for CPU. Saves are
-/// lowered to BelowNormal by Core right after <see cref="Attach"/>.</para>
+/// lowered to BelowNormal by Core right after <see cref="Attach"/>, plus low disk and memory priority
+/// (<see cref="LowerToBackground"/>). The capture also gets high GPU priority (<see cref="RaiseCaptureGpuPriority"/>).</para>
 /// </remarks>
 public sealed class JobObjectGuard : IProcessGuard
 {
@@ -119,6 +120,60 @@ public sealed class JobObjectGuard : IProcessGuard
         ProcessTuning.DisablePowerThrottling(handle, "ffmpeg");
     }
 
+    private int _gpuPriorityLogged;
+    private int _backgroundWarned;
+
+    /// <summary>
+    /// D3DKMT GPU scheduling priority HIGH for the capture ffmpeg (what OBS uses with hardware-accelerated GPU scheduling;
+    /// REALTIME needs admin and has caused NVIDIA driver freezes, so it is never requested). Reads it back first, so a
+    /// second call only re-applies when needed. Logs the outcome once per session. Never throws.
+    /// </summary>
+    public void RaiseCaptureGpuPriority(Process process)
+    {
+        try
+        {
+            if (process.HasExited) return;
+            var h = process.SafeHandle;
+            if (D3DKMTGetProcessSchedulingPriorityClass(h, out int current) >= 0 && current >= D3DKMT_SCHEDULINGPRIORITYCLASS_HIGH)
+                return;
+            int status = D3DKMTSetProcessSchedulingPriorityClass(h, D3DKMT_SCHEDULINGPRIORITYCLASS_HIGH);
+            if (Interlocked.Exchange(ref _gpuPriorityLogged, 1) == 0)
+                PlatformLog.Info(status >= 0
+                    ? "Capture GPU priority set to high."
+                    : $"Capture GPU priority not raised (NTSTATUS 0x{status:X8}); capture may lag while a game uses the whole GPU.");
+        }
+        catch (Exception ex) when (ex is EntryPointNotFoundException or DllNotFoundException or InvalidOperationException
+                                       or System.ComponentModel.Win32Exception or NotSupportedException)
+        {
+            if (Interlocked.Exchange(ref _gpuPriorityLogged, 1) == 0)
+                PlatformLog.Info("Capture GPU priority unavailable: " + ex.Message);
+        }
+    }
+
+    /// <summary>Low I/O priority (NtSetInformationProcess ProcessIoPriority, as Process Explorer uses) and low memory
+    /// priority (its file cache pages go first) for a save. Never throws.</summary>
+    public void LowerToBackground(Process process)
+    {
+        try
+        {
+            if (process.HasExited) return;
+            var h = process.SafeHandle;
+            int io = IoPriorityLow;
+            int status = NtSetInformationProcess(h, ProcessIoPriority, ref io, sizeof(int));
+            var mem = new MEMORY_PRIORITY_INFORMATION { MemoryPriority = MEMORY_PRIORITY_LOW };
+            bool memOk = SetProcessInformation(h, ProcessMemoryPriority, ref mem, (uint)Marshal.SizeOf<MEMORY_PRIORITY_INFORMATION>());
+            if ((status < 0 || !memOk) && Interlocked.Exchange(ref _backgroundWarned, 1) == 0)
+                PlatformLog.Info($"Save priority: disk {(status >= 0 ? "low" : $"unchanged (NTSTATUS 0x{status:X8})")}, " +
+                                 $"memory {(memOk ? "low" : $"unchanged (Windows error {Marshal.GetLastWin32Error()})")}.");
+        }
+        catch (Exception ex) when (ex is EntryPointNotFoundException or DllNotFoundException or InvalidOperationException
+                                       or System.ComponentModel.Win32Exception or NotSupportedException)
+        {
+            if (Interlocked.Exchange(ref _backgroundWarned, 1) == 0)
+                PlatformLog.Info("Save priority unavailable: " + ex.Message);
+        }
+    }
+
     /// <summary>True when the command line selects a software video encoder (judged from "-c:v lib...").</summary>
     private static bool UsesCpuEncoder(Process p)
     {
@@ -186,4 +241,31 @@ public sealed class JobObjectGuard : IProcessGuard
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool AssignProcessToJobObject(SafeFileHandle hJob, IntPtr hProcess);
+
+    private const int D3DKMT_SCHEDULINGPRIORITYCLASS_HIGH = 4; // IDLE 0 .. NORMAL 2 .. HIGH 4, REALTIME 5 (never)
+
+    [DllImport("gdi32.dll", ExactSpelling = true)]
+    private static extern int D3DKMTSetProcessSchedulingPriorityClass(SafeProcessHandle hProcess, int priority);
+
+    [DllImport("gdi32.dll", ExactSpelling = true)]
+    private static extern int D3DKMTGetProcessSchedulingPriorityClass(SafeProcessHandle hProcess, out int priority);
+
+    private const int ProcessIoPriority = 33;  // PROCESSINFOCLASS
+    private const int IoPriorityLow = 1;       // VeryLow 0, Low 1, Normal 2
+    private const int ProcessMemoryPriority = 0; // PROCESS_INFORMATION_CLASS
+    private const uint MEMORY_PRIORITY_LOW = 2;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MEMORY_PRIORITY_INFORMATION
+    {
+        public uint MemoryPriority;
+    }
+
+    [DllImport("ntdll.dll", ExactSpelling = true)]
+    private static extern int NtSetInformationProcess(SafeProcessHandle hProcess, int infoClass, ref int info, int length);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetProcessInformation(SafeProcessHandle hProcess, int infoClass,
+        ref MEMORY_PRIORITY_INFORMATION info, uint size);
 }

@@ -113,6 +113,15 @@ public sealed class CaptureConfig
     /// </summary>
     public string? TestVideoSource { get; init; }
 
+    /// <summary>
+    /// True when no video comes while nothing on screen changes. Both real capture methods are event-driven (they take
+    /// each picture Windows presents instead of polling on a timer, see FfmpegCommandBuilder.VideoGraph), so a completely
+    /// still screen produces no frames: segments wait, ffmpeg stops reading audio for a while (the audio queue holds it),
+    /// and the first frame after the still repeats the last picture for the whole pause. The harness's test source runs
+    /// continuously.
+    /// </summary>
+    public bool PausesOnStillScreen => TestVideoSource is null;
+
     /// <summary>Codec, size and rate: runs with equal signatures can be stream-copied together.</summary>
     public string Signature => $"{EncoderName}|{Width}x{Height}|{Fps}|{(AudioEnabled ? "a" : "-")}";
 

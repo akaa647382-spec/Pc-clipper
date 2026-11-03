@@ -515,7 +515,7 @@ public static List<Target> EnumerateTargets() {
 5. **Disk and SSD wear.** A 60-min buffer at 5K120/200 Mb/s is about 90 GB, written continuously at about 25 MB/s (about 2 TB/day). Check free space, put the buffer on a fast drive, and warn the user.
 6. **Hybrid laptops, monitors on the iGPU port, and per-app GPU preferences** break zero-copy or the adapter index. Detect the vendor per output, and pick QSV/AMF, gfxcapture on the dGPU, or the download path (with `-init_hw_device cuda`).
 7. **Driver floors.** NVENC needs ≥570 with the 8.1 builds and ≥610 with 9.0+ builds. Parse the error and fall back to another encoder or the CPU.
-8. **FFmpeg version differences.** vpp_amf option names changed in 9.0. gfxcapture `dup_frames` exists only after 9.1. 7.1 AMF rejects BGRA. Read the version from `ffmpeg -version` and capabilities from `-filters`/`-encoders` at runtime, and never pass an option the chosen encoder lacks (it is fatal).
+8. **FFmpeg version differences.** vpp_amf option names changed in 9.0. gfxcapture `dup_frames` exists only on FFmpeg master (committed 2026-10-24; not in 8.1.x, 9.0.x or release/9.1). 7.1 AMF rejects BGRA. Read the version from `ffmpeg -version` and capabilities from `-filters`/`-encoders` at runtime, and never pass an option the chosen encoder lacks (it is fatal).
 9. **Color tagging** on scale_d3d11 / vpp_qsv / AMF paths. Verify on each vendor by recording a known color pattern and checking with ffprobe and a player.
 10. **HDR desktops** give washed-out SDR captures. Detect and warn.
 11. **Session limits:** a maximum of 4 DDA processes, plus GeForce's NVENC session limit. The screenshot process counts while recording.

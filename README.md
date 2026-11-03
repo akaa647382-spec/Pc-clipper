@@ -69,13 +69,14 @@ it and take the focus from your game; a combo with it saved by an earlier versio
 - **Disk space**: the buffer lives on your disk, not in memory. Settings shows how much it needs, e.g. about 17 GB for
   60 minutes at 1440p 60 fps on High. If your main drive is small or you want to spare your SSD, move the buffer folder to
   another drive in Settings. Saving a clip needs that much free space again for the file.
-- **5K / 120 fps**: only worth it if your monitor really is 5K / 120 Hz; PC Clipper can't add detail that isn't on your screen,
-  and it never records faster than your monitor refreshes. 5K needs HEVC or AV1 and a strong graphics card (RTX 40/50 class).
+- **5K / 120 fps**: needs a monitor that really is 5K / 120 Hz; PC Clipper can't add detail that isn't on your screen,
+  and it never records bigger or faster than your monitor. 5K needs HEVC or AV1 and a strong graphics card (RTX 40/50 class).
   Use **Settings → Test my PC** to see what your PC really manages before relying on it.
-- **120 fps capture**: Windows' standard capture (Desktop Duplication) may only catch about 60 different frames per second.
-  Test my PC measures it; *Capture method → Windows Graphics Capture* avoids the limit (best on Windows 11). It only
-  records while something on screen changes, and Windows 10 draws a yellow border while it runs, so it is never chosen
-  automatically.
+- **Smooth clips**: PC Clipper takes every picture Windows shows the moment it appears (since 1.0.2; before, the capture
+  woke on Windows' coarse 15.6 ms timer, which made clips stutter several times a second). When nothing at all moves on
+  screen, nothing new is recorded and the clip simply holds the still picture; the "saved" counter waits meanwhile.
+- **Resolution**: PC Clipper never records bigger than your monitor. Picking 4K or 5K on a smaller screen records at the
+  screen's own size, because upscaling adds no detail, only file size and a load that makes clips stutter.
 - **Interruptions**: a UAC prompt, the lock screen, or a game switching resolution/fullscreen briefly stops screen capture.
   PC Clipper resumes by itself and keeps what it had already buffered.
 - **Changing quality settings** restarts the buffer, so what was buffered before is cleared. Changing only the buffer

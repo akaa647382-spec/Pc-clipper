@@ -54,8 +54,10 @@ public static class FfmpegRunner
         guard?.Attach(p);
         if (priority is { } pc)
         {
-            // Saves run below normal so they never compete with the game or the live capture.
+            // Saves run below normal so they never compete with the game or the live capture: CPU, and (a save is
+            // mostly reading and writing gigabytes) disk and memory too.
             try { p.PriorityClass = pc; } catch { /* not permitted / already exited */ }
+            if (pc is ProcessPriorityClass.BelowNormal or ProcessPriorityClass.Idle) guard?.LowerToBackground(p);
         }
         p.BeginErrorReadLine();
         p.BeginOutputReadLine();

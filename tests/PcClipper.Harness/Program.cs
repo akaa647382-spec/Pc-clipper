@@ -60,8 +60,10 @@ CaptureConfig Config(VideoCodec codec, int bufferSeconds, bool audio = true) => 
 
 // ---------------------------------------------------------------- pure checks
 {
-    var (w, h) = QualityMath.TargetSize(ResolutionPreset.P2880, 2560, 1440);
-    Check("5K target size from 1440p monitor", w == 5120 && h == 2880, $"{w}x{h}");
+    var (w, h) = QualityMath.TargetSize(ResolutionPreset.P2880, 5120, 2880);
+    Check("5K target size on a 5K monitor", w == 5120 && h == 2880, $"{w}x{h}");
+    var (nw, nh) = QualityMath.TargetSize(ResolutionPreset.P2880, 2560, 1440);
+    Check("never upscales: 5K on a 1440p monitor records at 1440p", nw == 2560 && nh == 1440, $"{nw}x{nh}");
     var (uw, uh) = QualityMath.TargetSize(ResolutionPreset.P1080, 3440, 1440);
     Check("ultrawide aspect kept", uw == 2580 && uh == 1080, $"{uw}x{uh}");
     int kbps = QualityMath.BitrateKbps(QualityLevel.High, 0, 1920, 1080, 60, VideoCodec.H264);
@@ -93,10 +95,13 @@ CaptureConfig Config(VideoCodec codec, int bufferSeconds, bool audio = true) => 
         BitrateKbps = 200000, BufferSeconds = 3600, DesktopAudio = true,
     };
     var cmd = string.Join(" ", FfmpegCommandBuilder.BuildCaptureArgs(nv, @"\\.\pipe\x"));
-    Check("NVENC 5K command line", cmd.Contains("d3d11va=dda:1") && cmd.Contains("ddagrab=output_idx=0:framerate=120") &&
+    Check("NVENC 5K command line", cmd.Contains("d3d11va=dda:1") && cmd.Contains("ddagrab=output_idx=0:framerate=666:") && cmd.Contains(",fps=120,") &&
         cmd.Contains("scale_d3d11=width=5120:height=2880:format=nv12") && cmd.Contains("split_encode_mode") &&
         cmd.Contains("-nofind_stream_info") && cmd.Contains("atrim=start_sample=12000") && cmd.Contains("setts=ts=TS-0.25/TB") &&
         !cmd.Contains("thread_queue_size") && cmd.Contains(FfmpegCommandBuilder.AnchorFilter), cmd.Length > 160 ? cmd[..160] + "..." : cmd);
+    var ddaGraph = FfmpegCommandBuilder.VideoGraph(nv.With(b => b.Fps = 60), anchor: true, uniqueFramesProbe: false);
+    Check("Desktop Duplication is event-driven (no timer pacing) and keeps the constant-rate filter",
+        ddaGraph.Contains("framerate=666:") && ddaGraph.Contains("dup_frames=0") && ddaGraph.Contains(",fps=60") && nv.PausesOnStillScreen, ddaGraph);
     Check("concatf list quoting", FfmpegCommandBuilder.ConcatfList(new[] { @"C:\it's\seg.ts" }) == "'C:/it'\\''s/seg.ts'\n");
 }
 

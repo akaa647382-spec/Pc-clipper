@@ -14,6 +14,8 @@ namespace PcClipper.Core;
 public sealed class ReplayEngine : IDisposable
 {
     private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(20);
+    /// <summary>How long a completely still screen may hold up the video (and so the audio queue) before capture restarts.</summary>
+    private const int StillScreenLimitSeconds = 600;
     private static readonly TimeSpan AudioConnectTimeout = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan AnchorTimeout = TimeSpan.FromSeconds(8);
     private const long MinFreeBytesWhileRunning = 2L << 30;
@@ -229,9 +231,9 @@ public sealed class ReplayEngine : IDisposable
             {
                 // The pipe must exist before ffmpeg starts, or ffmpeg fails to open it.
                 run.Sink = _env.CreatePcmSink();
-                // Windows Graphics Capture sends no video while the screen is still, and ffmpeg then stops reading audio
-                // too; let the audio wait up to 10 minutes (about 230 MB) instead of 1.
-                if (cfg.Method == CaptureMethod.WindowsGraphicsCapture && run.Sink is QueuedPcmSink q) q.MaxQueueSeconds = 600;
+                // The capture sends no video while the screen is still, and ffmpeg then stops reading audio too; let the
+                // audio wait up to 10 minutes (about 230 MB) instead of 1.
+                if (cfg.PausesOnStillScreen && run.Sink is QueuedPcmSink q) q.MaxQueueSeconds = StillScreenLimitSeconds;
                 run.SinkConnected = run.Sink.WaitForConnectionAsync(run.Cts.Token);
             }
 
@@ -254,6 +256,9 @@ public sealed class ReplayEngine : IDisposable
                 throw new InvalidOperationException(ExplainLaunchFailure(ex, cfg.FfmpegPath), ex);
             }
             _env.ProcessGuard.Attach(p);
+            // OBS skips Intel GPUs for this (no reason given); do the same.
+            bool gpuPriority = cfg.Monitor.GpuVendorId != MonitorInfo.VendorIntel;
+            if (gpuPriority) _env.ProcessGuard.RaiseCaptureGpuPriority(p);
             p.BeginErrorReadLine();
             p.BeginOutputReadLine();
 
@@ -274,11 +279,11 @@ public sealed class ReplayEngine : IDisposable
                 store.Refresh();
                 if (run.ExitedTask.IsCompleted) throw StartFailure(run, "ffmpeg stopped right after starting.");
                 if (store.Completed.Count > 0) break;
-                // Windows Graphics Capture produces nothing until the screen changes: a still screen is not a failure.
-                if (cfg.Method == CaptureMethod.WindowsGraphicsCapture && run.Uptime.Elapsed > TimeSpan.FromSeconds(8) &&
+                // The capture produces nothing until the screen changes: a still screen is not a failure.
+                if (cfg.PausesOnStillScreen && run.Uptime.Elapsed > TimeSpan.FromSeconds(8) &&
                     (run.SinkConnected is null || run.SinkConnected.IsCompletedSuccessfully))
                 {
-                    _log.Info("Windows Graphics Capture is running but the screen hasn't changed yet.");
+                    _log.Info("Capture is running but the screen hasn't changed yet.");
                     break;
                 }
                 if (run.Pump is { IsAnchored: false } && run.ConnectedClock.Elapsed > AnchorTimeout)
@@ -290,6 +295,8 @@ public sealed class ReplayEngine : IDisposable
                 await Task.Delay(200, ct).ConfigureAwait(false);
             }
             run.LastNewSegmentMs = Environment.TickCount64;
+            // Once ffmpeg surely has its GPU device open: check the priority stuck (re-applied if not).
+            if (gpuPriority) _env.ProcessGuard.RaiseCaptureGpuPriority(p);
             return run;
         }
         catch
@@ -374,7 +381,7 @@ public sealed class ReplayEngine : IDisposable
         if (ex is AudioClockJumpException)
             run.FaultReason ??= "The PC slept or paused, so capture was restarted.";
         else if (ex is PcmQueueOverflowException overflow)
-            run.FaultReason ??= run.Config.Method == CaptureMethod.WindowsGraphicsCapture
+            run.FaultReason ??= run.Config.PausesOnStillScreen
                 ? $"Nothing changed on screen for {overflow.Seconds / 60} minutes, so capture was restarted."
                 : "The video engine stopped reading the sound, so capture was restarted.";
         else
@@ -517,14 +524,19 @@ public sealed class ReplayEngine : IDisposable
             if (current is not null && !current.Stopping && !current.ExitedTask.IsCompleted)
             {
                 current.Store.Refresh();
-                // Watchdog: Desktop Duplication duplicates frames on a static screen, so silence means a hang.
-                // (Windows Graphics Capture legitimately pauses while nothing changes, so it is exempt.)
+                // Watchdog. A continuous source (the harness's) always delivers, so 15 s of silence means a hang. Real
+                // capture legitimately pauses while nothing on screen changes, so it only gets the same limit as the
+                // audio queue (without audio nothing else would notice a hang).
                 // The store timestamps new segments itself, so saves refreshing it in between can't hide progress.
                 long lastNew = Math.Max(current.Store.LastNewSegmentMs, current.LastNewSegmentMs);
-                long stallLimitMs = Math.Max(15, current.Config.SegmentSeconds * 6) * 1000L;
-                if (current.Config.Method == CaptureMethod.DesktopDuplication && Environment.TickCount64 - lastNew > stallLimitMs)
+                long stallLimitMs = current.Config.PausesOnStillScreen
+                    ? StillScreenLimitSeconds * 1000L
+                    : Math.Max(15, current.Config.SegmentSeconds * 6) * 1000L;
+                if (Environment.TickCount64 - lastNew > stallLimitMs)
                 {
-                    current.FaultReason ??= "Screen capture froze (no new video for 15 seconds), so it was restarted.";
+                    current.FaultReason ??= current.Config.PausesOnStillScreen
+                        ? $"Nothing changed on screen for {StillScreenLimitSeconds / 60} minutes, so capture was restarted."
+                        : "Screen capture froze (no new video for 15 seconds), so it was restarted.";
                     _log.Warn(current.FaultReason);
                     try { current.Process?.Kill(entireProcessTree: true); } catch { }
                 }
@@ -626,8 +638,8 @@ public sealed class ReplayEngine : IDisposable
                 covered += segs.Sum(x => x.Duration);
             }
             if (parts.Count == 0)
-                return SaveResult.NotEnough(TimeSpan.Zero, s.Current?.Config.Method == CaptureMethod.WindowsGraphicsCapture
-                    ? "Nothing recorded yet. With Windows Graphics Capture the picture only records once something on screen changes."
+                return SaveResult.NotEnough(TimeSpan.Zero, s.Current?.Config.PausesOnStillScreen == true
+                    ? "Nothing recorded yet. The picture only records once something on screen changes."
                     : "Nothing recorded yet - wait a few seconds and try again.");
             if (covered < minimum.TotalSeconds - SegmentStore.SelectionSlackSeconds)
             {

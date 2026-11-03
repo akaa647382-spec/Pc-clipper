@@ -98,6 +98,16 @@ public static partial class FfmpegCommandBuilder
         a.AddRange(new[] { "-filter_hw_device", "dda" });
     }
 
+    /// <summary>
+    /// ddagrab "framerate" for event-driven capture: the highest value whose AcquireNextFrame timeout is still 1 ms
+    /// (half a slot, rounded); 667 and up give a 0 ms timeout, i.e. a busy loop.
+    /// </summary>
+    public const int DdaEventFramerate = 666;
+
+    /// <summary>gfxcapture's frame-rate cap: 25% above the target and the monitor refresh, at most 1000.</summary>
+    public static int GfxCaptureMaxFramerate(CaptureConfig cfg) =>
+        Math.Min(1000, (int)Math.Ceiling(Math.Max(cfg.Fps, cfg.Monitor.RefreshHz) * 1.25));
+
     /// <summary>Source + anchor + scaling/format conversion for the encoder.</summary>
     public static string VideoGraph(CaptureConfig cfg, bool anchor, bool uniqueFramesProbe)
     {
@@ -110,17 +120,28 @@ public static partial class FfmpegCommandBuilder
         }
         else if (cfg.Method == CaptureMethod.WindowsGraphicsCapture)
         {
-            f.Add($"gfxcapture=hmonitor={Inv(cfg.Monitor.MonitorHandle)}:max_framerate={Inv(cfg.Fps)}:capture_cursor={cursor}:display_border=0:capture_border=0");
+            // max_framerate is only a cap (Windows 11 24H2+ MinUpdateInterval). Exactly 1/F would make Windows skip a
+            // composed frame that comes a little early, so leave headroom above both the target and the panel; fps=F
+            // below picks the frames.
+            f.Add($"gfxcapture=hmonitor={Inv(cfg.Monitor.MonitorHandle)}:max_framerate={Inv(GfxCaptureMaxFramerate(cfg))}:capture_cursor={cursor}:display_border=0:capture_border=0");
         }
         else
         {
-            // dup_frames=1 keeps frames (and segments) flowing on a static screen.
-            f.Add($"ddagrab=output_idx={Inv(cfg.Monitor.OutputIndex)}:framerate={Inv(cfg.Fps)}:draw_mouse={cursor}:dup_frames={(uniqueFramesProbe ? 0 : 1)}");
+            // Event-driven Desktop Duplication: take every picture Windows presents, stamped the moment it arrives.
+            // With framerate=F ddagrab paces itself with Sleep(), and ffmpeg.exe never asks Windows for a fine timer
+            // (PC Clipper's timeBeginPeriod doesn't reach a child process since Windows 10 2004), so it woke on the
+            // 15.6 ms tick: uneven grabs that fps=F turned into repeated and skipped frames several times a second
+            // (and at most ~64 different frames/s at 120 fps). At framerate=666 its frame clock falls behind at once,
+            // so it never sleeps and waits in AcquireNextFrame instead (1 ms timeout; 667+ would make it 0 = busy
+            // polling). dup_frames=0 keeps waiting until a new picture comes; the cost is that a completely still
+            // screen sends nothing (see CaptureConfig.PausesOnStillScreen).
+            f.Add($"ddagrab=output_idx={Inv(cfg.Monitor.OutputIndex)}:framerate={Inv(DdaEventFramerate)}:draw_mouse={cursor}:dup_frames=0");
         }
 
         if (anchor) f.Add(AnchorFilter);
-        // Constant frame rate by rounding each frame to the nearest slot. Both capture sources stamp frames with the
-        // wall clock (jittery, and gfxcapture only sends frames when something changes). Works on GPU frames.
+        // Constant frame rate: each output slot gets the newest picture by its timestamp (repeated when the game runs
+        // slower than F, dropped when the screen refreshes faster). ddagrab stamps frames with the QPC clock when they
+        // arrive, gfxcapture with the compositor's time. Works on GPU frames.
         if (!uniqueFramesProbe) f.Add($"fps={Inv(cfg.Fps)}");
 
         bool scale = cfg.Width != cfg.Monitor.Width || cfg.Height != cfg.Monitor.Height;

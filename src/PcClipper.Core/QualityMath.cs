@@ -46,12 +46,16 @@ public static class QualityMath
         _ => "Auto",
     };
 
-    /// <summary>Output size: the preset height with the monitor's aspect ratio, both rounded to even numbers.</summary>
+    /// <summary>
+    /// Output size: the preset height with the monitor's aspect ratio, both rounded to even numbers. Never bigger than
+    /// the monitor: upscaling adds no detail, only encoder load (5K from a 1440p screen is 4x the pixels, enough to make
+    /// the encoder fall behind and the clip stutter) and file size, so a preset above the monitor records at its size.
+    /// </summary>
     public static (int Width, int Height) TargetSize(ResolutionPreset preset, int nativeWidth, int nativeHeight)
     {
         if (nativeWidth <= 0 || nativeHeight <= 0) throw new ArgumentOutOfRangeException(nameof(nativeWidth));
         int h = PresetHeight(preset);
-        if (h == 0 || h == nativeHeight) return (Even(nativeWidth), Even(nativeHeight));
+        if (h == 0 || h >= nativeHeight) return (Even(nativeWidth), Even(nativeHeight));
         int w = (int)Math.Round(nativeWidth * (double)h / nativeHeight);
         return (Even(w), Even(h));
     }
@@ -204,8 +208,9 @@ public static class QualityMath
     {
         var list = new List<string>();
         var (w, h) = TargetSize(s.Resolution, monitor.Width, monitor.Height);
-        if (h > monitor.Height)
-            list.Add($"Your monitor is {monitor.Width}x{monitor.Height}. {PresetLabel(s.Resolution)} will be upscaled: bigger files, no extra detail.");
+        if (PresetHeight(s.Resolution) > monitor.Height)
+            list.Add($"Your monitor is {monitor.Width}x{monitor.Height}, so PC Clipper records at {w}x{h}. Recording bigger than your " +
+                     "screen adds no detail - only bigger files and a heavier load that can make clips stutter.");
         if (monitor.RefreshHz > 0 && s.Fps > monitor.RefreshHz + 1)
             list.Add($"Your monitor runs at {monitor.RefreshHz} Hz, so PC Clipper records at {EffectiveFps(s.Fps, monitor)} fps (more would only repeat frames).");
         if (monitor.RotationDegrees != 0 && (resolved is null || resolved.Method == CaptureMethod.DesktopDuplication))
@@ -216,14 +221,10 @@ public static class QualityMath
             list.Add("Windows HDR is on for this monitor, so clips will look washed out. Turn HDR off in Windows display settings for accurate colours.");
         if (resolved is not null)
         {
-            if (resolved.Fps > 60 && resolved.Method == CaptureMethod.DesktopDuplication)
-                list.Add("Above 60 fps, Desktop Duplication may only catch about 60 different frames per second on Windows. 'Test my PC' shows the real number; Capture method > Windows Graphics Capture avoids the limit.");
             if (resolved.Method == CaptureMethod.WindowsGraphicsCapture && !IsWindows11)
                 list.Add("On Windows 10, Windows Graphics Capture draws a yellow border around the screen while recording.");
             if (s.CaptureMethod == CaptureMethod.WindowsGraphicsCapture && resolved.Method != CaptureMethod.WindowsGraphicsCapture)
                 list.Add("Windows Graphics Capture needs FFmpeg 8.1 or newer; using Desktop Duplication.");
-            if (resolved.Method == CaptureMethod.WindowsGraphicsCapture)
-                list.Add("Windows Graphics Capture only records while something on screen changes (a frozen screen pauses the buffer).");
             if (s.Codec != VideoCodec.Auto && resolved.Codec != s.Codec)
                 list.Add($"{CodecLabel(s.Codec)} is not available for this size/encoder; using {CodecLabel(resolved.Codec)}.");
             if (s.Encoder != EncoderVendor.Auto && resolved.Vendor != s.Encoder)
@@ -257,9 +258,10 @@ public static class QualityMath
     }
 
     /// <summary>
-    /// Desktop Duplication is the default (Auto): it keeps recording on a still screen. Windows Graphics Capture is
-    /// event driven (no ~64 fps pacing limit) but delivers nothing while the screen is still and shows a yellow border on
-    /// Windows 10, so it is only used when the user picks it.
+    /// Desktop Duplication is the default (Auto). Both methods are event driven now (each picture Windows presents, no
+    /// timer pacing) and both pause on a completely still screen; Windows Graphics Capture is newer in FFmpeg, needs
+    /// Windows 11 24H2 for its frame-rate cap and shows a yellow border on Windows 10, so it is only used when the user
+    /// picks it, or for a rotated monitor (Desktop Duplication would record it sideways).
     /// </summary>
     public static CaptureMethod ResolveMethod(CaptureMethod requested, int fps, MonitorInfo monitor, FfmpegCapabilities caps)
     {

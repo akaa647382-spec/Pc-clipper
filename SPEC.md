@@ -321,8 +321,9 @@ Capture (WorkingDirectory = run folder; names relative because '%' in a path bre
 -hide_banner -nostats -loglevel level+info -progress pipe:1 -stats_period 1
 -init_hw_device d3d11va=dda:{adapter} -filter_hw_device dda
 [-nofind_stream_info -f f32le -ar 48000 -ac 2 -i \\.\pipe\pcclipper-audio-...]
--filter_complex "ddagrab=output_idx={O}:framerate={F}:draw_mouse={0|1}:dup_frames=1,<anchor setpts>,fps={F},<conversion>[v]"
-   (WGC: gfxcapture=hmonitor={H}:max_framerate={F}:capture_cursor={0|1}:display_border=0:capture_border=0,<anchor>,fps={F},...)
+-filter_complex "ddagrab=output_idx={O}:framerate=666:draw_mouse={0|1}:dup_frames=0,<anchor setpts>,fps={F},<conversion>[v]"
+   (event-driven: see Capture method below; WGC: gfxcapture=hmonitor={H}:max_framerate={ceil(max(F,refresh)*1.25)}:
+    capture_cursor={0|1}:display_border=0:capture_border=0,<anchor>,fps={F},...)
    conversion: NVENC/AMF native = none (they take D3D11 BGRA); scaled = scale_d3d11=width=W:height=H:format=nv12,setparams=...
                QSV = hwmap=derive_device=qsv,format=qsv,vpp_qsv=w=W:h=H:format=nv12:out_color_matrix=bt709:out_range=tv
                CPU = scale_d3d11=...:format=nv12,hwdownload,format=nv12,setparams=...
@@ -354,12 +355,28 @@ Never: `-thread_queue_size` on inputs (removed in FFmpeg master), `-find_stream_
 - NVENC in these builds needs NVIDIA driver ≥ 570.
 
 ### Capture method
-- Desktop Duplication (ddagrab) is the default: reliable, duplicates frames on static screens. Its frame pacing uses
-  Sleep(), and ffmpeg.exe never raises the Windows timer resolution, so above 60 fps it may deliver only ~64 different
-  frames/s (unverified on hardware → "Test my PC" measures it).
-- Windows Graphics Capture (gfxcapture, FFmpeg 8.1+): event driven, no pacing limit, survives UAC; but it delivers no
-  frames while nothing changes (segments pause), and on Windows 10 shows a yellow border. Auto = WGC only for >60 fps on
-  Windows 11. User can force either in Settings ("Capture method").
+- Desktop Duplication (ddagrab) is the default, **event-driven since 1.0.2** (`framerate=666:dup_frames=0`). Up to 1.0.1
+  it ran `framerate=F:dup_frames=1`, which paces itself with av_usleep → winpthreads nanosleep → Sleep/WaitForSingleObject
+  in whole ms with a GetTickCount64 deadline (checked in the gyan 8.1.1 and BtbN 8.1 binaries). ffmpeg.exe never calls
+  timeBeginPeriod (only vsrc_amf does), and PC Clipper's own call doesn't reach a child process since Windows 10 2004, so
+  grabs woke on the 15.625 ms tick: gaps of 15.6/31.25 ms, which fps=F turned into repeated + skipped frames (modelled:
+  ~4 hitches/s at 60 fps on 60 Hz, ~33/s on 144 Hz; ~64 different frames/s at 120 fps). That is the likely cause of
+  "the saved video lags" reports. At framerate=666 the slot clock (+≤2 slots of 1.5 ms per call) falls behind real time
+  at once, so av_usleep is never reached; AcquireNextFrame waits (1 ms timeout, re-polled while dup_frames=0) and each
+  presented picture is stamped with the QPC clock on arrival; fps=F then picks the right picture per slot. 667+ would
+  make the timeout 0 (busy poll). Above ~333 Hz of presents the sleep path can come back (not handled). Cost: every
+  present is copied (e.g. 144/s on a 144 Hz monitor), and a completely still screen sends nothing (mouse movement does
+  produce frames): `CaptureConfig.PausesOnStillScreen` gives it the old WGC treatment (start accepted after 8 s without
+  a segment, 10-minute audio queue, watchdog 10 minutes instead of 15 s). After a still period fps=F emits the missing
+  slots as repeats at once; the encoder catches up quickly but the first moments after a long pause can be skipped.
+  Not measured on hardware: the 1.0.2 change rests on reading FFmpeg's source and the pinned binaries.
+- Windows Graphics Capture (gfxcapture, FFmpeg 8.1+): event driven (FrameArrived, compositor SystemRelativeTime pts),
+  survives UAC; also pauses on still screens; on Windows 10 shows a yellow border; its max_framerate is only a cap
+  (MinUpdateInterval, Windows 11 24H2+), given 25% headroom. Auto = WGC only for rotated monitors. User can force either
+  in Settings ("Capture method").
+- The capture ffmpeg gets D3DKMT GPU scheduling priority HIGH (not REALTIME: needs admin, NVIDIA freezes with HAGS; skipped
+  for Intel like OBS); saves get low I/O and memory priority on top of BelowNormal CPU.
+- Resolution presets above the monitor's height record at the monitor's size (never upscaled).
 
 ## Behaviour added after the adversarial review (all implemented)
 
@@ -375,8 +392,8 @@ Never: `-thread_queue_size` on inputs (removed in FFmpeg master), `-find_stream_
 - **Long saves**: concatf lists are chunked (≤ 1000 segments; Windows' C runtime allows ~8000 open files) and joined by an
   ffconcat with exact chunk durations; save timeouts scale with size (≥ 15 MB/s).
 - **Exit/shutdown wait for in-flight saves** (`ActiveOperations`) instead of killing them.
-- **Capture method**: Auto = Desktop Duplication. Windows Graphics Capture is opt-in (still screens produce no video; its
-  start is accepted after 8 s without a segment, and its audio queue holds 10 minutes).
+- **Capture method**: Auto = Desktop Duplication (WGC only for rotated monitors). Both pause on still screens (see Capture
+  method above).
 - **Encoder choice**: AMF/Quick Sync must run on the monitor's GPU (zero copy); NVENC may run on another GPU via system
   memory (`CrossAdapter`, extra `-init_hw_device cuda`). With no usable GPU encoder, CPU H.264 capped at 1080p60.
 - **"Test my PC"** judges only the steady-state window (block-to-block deltas), not ffmpeg's totals incl. start-up.

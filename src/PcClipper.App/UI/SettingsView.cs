@@ -773,17 +773,17 @@ internal sealed class SettingsView : UserControl, IMessageFilter
             CaptureMethod.Auto => "Auto (recommended) - uses Desktop Duplication",
             CaptureMethod.DesktopDuplication => "Desktop Duplication (recommended)",
             CaptureMethod.WindowsGraphicsCapture when !wgcPossible => "Windows Graphics Capture - not available",
-            CaptureMethod.WindowsGraphicsCapture => "Windows Graphics Capture - try it for 120 fps",
+            CaptureMethod.WindowsGraphicsCapture => "Windows Graphics Capture",
             _ => Fmt.MethodLabel(m),
         });
         const string ddaHint =
-            "Recommended: reliable, and keeps recording while the screen is still. Above 60 fps it may catch only about " +
-            "64 different frames per second - \"Test my PC\" shows the real number.";
+            "Recommended: takes every picture Windows shows, the moment it appears, so clips move smoothly at 60 and " +
+            "120 fps. While nothing at all moves on screen it records nothing new; the clip just holds the still picture.";
         string hint = _pending.CaptureMethod switch
         {
             CaptureMethod.WindowsGraphicsCapture =>
-                "Try it if you record at 120 fps (especially on Windows 11). It only records while something on screen " +
-                "changes, so a still screen pauses the buffer. Windows 10 shows a yellow border around the screen." +
+                "Try it if Desktop Duplication gives you trouble (some laptops with two graphics chips). Best on Windows 11; " +
+                "Windows 10 shows a yellow border around the screen. A still screen pauses it the same way." +
                 (wgcPossible ? "" : " Needs FFmpeg 8.1 or newer."),
             _ => ddaHint,
         };
