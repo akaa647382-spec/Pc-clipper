@@ -75,10 +75,11 @@
     targetMode: 'newyear', customTarget: '',
     use24h: false,
     showOverlay: true, showClock: true, showDate: true, showCount: true, showSyncBadge: true, finalTen: true,
-    overlayPos: 'tr', overlaySize: 'm',
+    overlayPos: 'tl', overlaySize: 'm',
     celebration: 'stark',
     standbyScreen: true,
     autoRecover: true, autoRecoverSec: 10,
+    autoRestart: true,
     lockControls: false,
     useNetTime: true,
     volume: 1, muted: false,
@@ -121,6 +122,11 @@
     saveTimer = setTimeout(saveNow, 200);
   }
   window.addEventListener('beforeunload', saveNow);
+
+  /** Tells the main process whether a countdown is armed: keep-awake, close guard, crash watchdog. */
+  function tellArmed(flag) {
+    try { native.setArmed(!!flag, cfg.autoRestart !== false); } catch (e) { /* stays as it was */ }
+  }
 
   /* =============================================================== clock === */
 
@@ -422,7 +428,7 @@
       if (s.endEpoch != null && Clock.now() >= s.endEpoch - 1000) {
         if (opts.restore) {
           cfg.armed = false; cfg.armedTarget = null; saveNow();
-          native.setArmed(false);
+          tellArmed(false);
           toast('That countdown has already finished.');
           this.session = this.computeFree();
           UI.onMode();
@@ -437,7 +443,7 @@
       cfg.armed = true;
       cfg.armedTarget = s.targetEpoch;
       saveNow();
-      native.setArmed(true);
+      tellArmed(true);
       this.logEvent((opts.restore ? 'Countdown resumed' : 'Countdown armed') + ': movie starts ' + C.fmtDateTime(s.startEpoch, cfg.use24h));
       UI.onMode();
       await this.recalibrate('arm');
@@ -449,7 +455,7 @@
       this.waiter = null;
       this.mode = 'free';
       cfg.armed = false; cfg.armedTarget = null; saveNow();
-      native.setArmed(false);
+      tellArmed(false);
       if (Media.ready) { video.playbackRate = 1; if (!video.paused) video.pause(); }
       UI.hideSlip();
       this.session = this.computeFree();
@@ -614,7 +620,7 @@
       if (this.test) { this.setPhase('idle'); return; }
       this.mode = 'free';
       cfg.armed = false; cfg.armedTarget = null; saveNow();
-      native.setArmed(false);
+      tellArmed(false);
       this.session = this.computeFree();
       this.setPhase('idle');
       UI.onMode();
@@ -1631,6 +1637,7 @@
       el.optAutoRecover.checked = cfg.autoRecover;
       el.optAutoRecoverSec.value = String(cfg.autoRecoverSec);
       el.optLock.checked = cfg.lockControls;
+      el.optAutoRestart.checked = cfg.autoRestart !== false;
       el.optNetTime.checked = cfg.useNetTime;
       el.subSize.value = cfg.subSize;
       el.subBg.value = cfg.subBg;
@@ -1722,21 +1729,23 @@
       this.prevNow = now;
 
       /* overlay */
-      const ovOn = cfg.showOverlay && (cfg.showClock || cfg.showDate || cfg.showCount);
+      const ovOn = cfg.showOverlay && (cfg.showClock || cfg.showDate || cfg.showCount || cfg.finalTen);
       setHidden(el.overlay, !ovOn);
       if (ovOn) {
         setHidden(el.ovClock, !cfg.showClock);
         setHidden(el.ovDate, !cfg.showDate);
         if (cfg.showClock) { setText(el.ovTime, cp.hms); setText(el.ovAmpm, cp.ampm); }
         if (cfg.showDate) this.renderDate(date, now, dateLine);
-        let showCount = cfg.showCount && !!s;
+        // 10, 9, 8 …: for the last ten seconds the countdown row itself becomes the big ticking number.
+        const ten = cfg.finalTen && s && Engine.mode === 'armed' && toSnap > 0 && toSnap <= 10000 ? C.countdownParts(toSnap).total : 0;
+        let showCount = (cfg.showCount || ten > 0) && !!s;
         let done = false;
         if (showCount) {
           if (toSnap > 0) {
             const parts = C.countdownParts(toSnap);
             setText(el.ovCountLbl, newYear ? 'NEW YEAR IN' : 'THE SNAP IN');
-            setText(el.ovCountVal, parts.d > 0 || parts.h > 0 ? C.fmtCountdown(toSnap) : C.pad(parts.m) + ':' + C.pad(parts.s));
-          } else if (toSnap > -90000) {
+            setText(el.ovCountVal, ten ? String(ten) : parts.d > 0 || parts.h > 0 ? C.fmtCountdown(toSnap) : C.pad(parts.m) + ':' + C.pad(parts.s));
+          } else if (toSnap > -90000 && cfg.showCount) {
             done = true;
             setText(el.ovCountLbl, newYear ? 'HAPPY NEW YEAR' : 'RIGHT ON TIME');
             setText(el.ovCountVal, newYear ? String(new Date(s.targetEpoch).getFullYear()) : '00:00');
@@ -1745,7 +1754,15 @@
           }
         }
         setHidden(el.ovCount, !showCount);
+        el.overlay.classList.toggle('final', ten > 0);
         el.overlay.classList.toggle('done', done);
+        if (ten && ten !== this.lastTen) {
+          el.ovCountVal.classList.remove('pop');
+          void el.ovCountVal.offsetWidth;
+          el.ovCountVal.classList.add('pop');
+        }
+        if (!ten && this.lastTen) el.ovCountVal.classList.remove('pop');
+        this.lastTen = ten;
         const badge = cfg.showSyncBadge && Engine.mode === 'armed';
         setHidden(el.ovSync, !badge);
         if (badge) {
@@ -1754,18 +1771,6 @@
           setText(el.ovSyncTxt, b.short);
         }
       }
-
-      /* 10, 9, 8 … one big number per second for the last ten seconds */
-      const ten = cfg.finalTen && s && Engine.mode === 'armed' && toSnap > 0 && toSnap <= 10000 ? C.countdownParts(toSnap).total : 0;
-      setHidden(el.bigCount, !ten);
-      if (ten && ten !== this.lastTen) {
-        setText(el.bigNum, String(ten));
-        el.bigCount.classList.toggle('last', ten <= 3);
-        el.bigNum.classList.remove('pop');
-        void el.bigNum.offsetWidth;
-        el.bigNum.classList.add('pop');
-      }
-      this.lastTen = ten;
 
       /* standby */
       const standby = Engine.mode === 'armed' && Engine.phase === 'standby' && cfg.standbyScreen && toStart > 250;
@@ -2130,7 +2135,7 @@
     });
     el.resumeDiscard.addEventListener('click', () => {
       cfg.armed = false; cfg.armedTarget = null; saveNow();
-      native.setArmed(false);
+      tellArmed(false);
       UI.renderResume();
     });
 
@@ -2259,6 +2264,7 @@
     bindToggle(el.optAutoRecover, 'autoRecover');
     bindSelect(el.optAutoRecoverSec, 'autoRecoverSec', (v) => +v);
     bindToggle(el.optLock, 'lockControls');
+    bindToggle(el.optAutoRestart, 'autoRestart', () => tellArmed(cfg.armed));
     el.resetAll.addEventListener('click', () => {
       if (Engine.mode === 'armed' || Engine.test) { toast('Stop the countdown first'); return; }
       const keep = { moviePath: cfg.moviePath, movieName: cfg.movieName };
@@ -2424,6 +2430,10 @@
     native.appInfo().then((info) => {
       const v = 'Avengers Player ' + (info.version || '');
       setText(el.appVersion, v.trim());
+      if (info.recovered) {
+        Engine.logEvent('The app was restarted by the crash watchdog');
+        setTimeout(() => toast('Recovered after a crash', 'good'), 1500);
+      }
       el.aboutInfo.textContent = v.trim() + (info.electron ? ' · Electron ' + info.electron + ' · Chromium ' + String(info.chrome).split('.')[0] : '') +
         '. An unofficial fan-made player. It plays your own copy of the film and ships no film content.';
     }).catch(() => {});
@@ -2434,7 +2444,7 @@
       cfg.armed = false; cfg.armedTarget = null; saveNow();
     }
     if (!Number.isFinite(cfg.armedTarget)) cfg.armed = false;
-    native.setArmed(!!cfg.armed);
+    tellArmed(cfg.armed);
 
     // Know the true time before deciding where the film should be.
     const firstTime = NetTime.measure(false);

@@ -82,15 +82,12 @@
     <div id="subs" class="subs" aria-live="off"></div>
 
     <!-- clock / calendar / countdown overlay -->
-    <div id="overlay" class="overlay pos-tr size-m" hidden>
+    <div id="overlay" class="overlay pos-tl size-m" hidden>
       <div class="ov-clock" id="ovClock"><span class="t" id="ovTime">--:--:--</span><span class="ampm" id="ovAmpm"></span></div>
       <div class="ov-date" id="ovDate">&nbsp;</div>
       <div class="ov-count" id="ovCount"><span class="lbl" id="ovCountLbl">NEW YEAR IN</span><span class="val" id="ovCountVal">--:--:--</span></div>
       <div class="ov-sync" id="ovSync"><i></i><span id="ovSyncTxt">IN SYNC</span></div>
     </div>
-
-    <!-- 10, 9, 8 … for the last ten seconds -->
-    <div id="bigCount" class="bigcount" hidden><span id="bigNum">10</span></div>
 
     <!-- small celebration banner (minimal style) -->
     <div id="banner" class="banner" hidden><span id="bannerText">HAPPY NEW YEAR</span></div>
@@ -247,7 +244,7 @@
         </div>
         <div class="tcard">
           <h4><span>2</span>Snap test</h4>
-          <p>Jumps to just before midnight. Watch the snap land on 12:00:00, the calendar flip and the celebration.</p>
+          <p>Jumps to just before midnight. Watch the snap land on 12:00:00, the date roll over to January 1 and the celebration.</p>
           <div class="row">
             <select id="tsLeadSnap" aria-label="Seconds before the snap"><option value="20">20 s before</option><option value="40" selected>40 s before</option><option value="75">75 s before</option><option value="150">2½ min before</option></select>
             <button class="btn btn-primary btn-sm" data-test="snap" type="button">Run</button>
@@ -260,7 +257,7 @@
         </div>
         <div class="tcard">
           <h4><span>4</span>Crash recovery</h4>
-          <p>With the countdown armed, close Avengers Player and open it again: it reloads the movie and jumps to the right spot by itself.</p>
+          <p>With the countdown armed, end "Avengers Player" in Task Manager. It comes back by itself within a few seconds, reloads the movie and jumps to where the clock says the film should be.</p>
         </div>
         <h3 class="sec">Results</h3>
         <div class="results" id="testResults"><div class="empty">No test run yet.</div></div>
@@ -281,13 +278,13 @@
         <label class="sw sub"><input type="checkbox" id="optCount"><i></i><span>Countdown mode <kbd>N</kbd><small>A countdown to the snap, under the clock and date.</small></span></label>
         <label class="sw sub"><input type="checkbox" id="optSyncBadge"><i></i><span>Sync badge</span></label>
         <div class="grid2">
-          <label class="fld"><span>Position</span><select id="optPos"><option value="tr">Top right</option><option value="tl">Top left</option><option value="tc">Top centre</option><option value="br">Bottom right</option><option value="bl">Bottom left</option></select></label>
+          <label class="fld"><span>Position</span><select id="optPos"><option value="tl">Top left</option><option value="tr">Top right</option><option value="tc">Top centre</option><option value="br">Bottom right</option><option value="bl">Bottom left</option></select></label>
           <label class="fld"><span>Size</span><select id="optSize"><option value="s">Small</option><option value="m">Medium</option><option value="l">Large</option><option value="xl">Extra large</option></select></label>
           <label class="fld"><span>Clock format</span><select id="opt24h"><option value="12">12-hour</option><option value="24">24-hour</option></select></label>
         </div>
 
         <h3 class="sec">Final countdown</h3>
-        <label class="sw"><input type="checkbox" id="optFinal"><i></i><span>10 · 9 · 8 countdown animation <kbd>T</kbd><small>Big numbers on screen for the last ten seconds before the snap.</small></span></label>
+        <label class="sw"><input type="checkbox" id="optFinal"><i></i><span>10 · 9 · 8 countdown animation <kbd>T</kbd><small>For the last ten seconds the countdown inside the clock panel grows and ticks 10, 9, 8… Nothing is drawn across the picture.</small></span></label>
 
         <h3 class="sec">Happy New Year animation</h3>
         <div class="seg" id="optCelebration" role="radiogroup">
@@ -371,6 +368,7 @@
 
         <h3 class="sec">Slip recovery</h3>
         <label class="sw"><input type="checkbox" id="optAutoRecover"><i></i><span>Recalibrate by itself if nobody presses the button<small>After <select id="optAutoRecoverSec" class="inline"><option value="5">5</option><option value="10">10</option><option value="20">20</option><option value="30">30</option></select> seconds.</small></span></label>
+        <label class="sw"><input type="checkbox" id="optAutoRestart"><i></i><span>Come back by itself after a crash<small>While the countdown is armed, the app restarts itself if it crashes or is killed, opens again after a restart of the PC, reloads the movie and re-syncs to the clock.</small></span></label>
         <label class="sw"><input type="checkbox" id="optLock"><i></i><span>Lock the controls while armed <kbd>L</kbd><small>Play, pause and the timeline ignore clicks and keys, so a slip cannot happen.</small></span></label>
 
         <h3 class="sec">Shortcuts</h3>

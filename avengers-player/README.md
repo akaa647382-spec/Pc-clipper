@@ -22,8 +22,10 @@ You bring your own copy of the movie. Nothing is uploaded anywhere.
 3. Press **F** for fullscreen. A standby screen counts down to the start.
 4. Walk away. At 9:29:30 PM the movie starts by itself.
 
-The app remembers the armed countdown. If it is closed, crashes or the PC restarts, open it again and it loads the
-movie and jumps to exactly where the clock says the film should be. Nothing to click.
+**If the app crashes, it comes back by itself.** While the countdown is armed a small watchdog keeps an eye on the
+app. If the app crashes or is killed, the watchdog starts it again within a couple of seconds; after a restart of the PC,
+Windows opens it again when you sign in. Either way it imports the movie again and jumps to exactly where the clock says
+the film should be. Nothing to click. (Closing the app yourself is different: it asks first, and then stays closed.)
 
 ## Rehearse first (Test tab)
 
@@ -34,6 +36,7 @@ A test run moves the app's own clock, not your PC clock, so you can try the whol
 | **Auto-start** | Jumps to a few seconds before 9:29:30 PM. The movie must start alone, on the dot. |
 | **Snap** | Jumps to just before midnight. Watch the snap land on 12:00:00, the date roll over to January 1 and the animation play. |
 | **Slip and recovery drill** | Knocks the film out of sync on purpose so you can practise **Recalibrate**. |
+| **Crash recovery** | With the countdown armed, end "Avengers Player" in Task Manager. It is back and in sync a few seconds later. |
 
 Each test prints a result with the measured error in milliseconds.
 
@@ -54,14 +57,15 @@ corrected automatically, without a box. **L** locks the controls so a slip canno
 
 ## On-screen clock
 
-Top right of the picture: the **digital clock**, the **date** under it, and the **countdown** under that. At midnight the
+Top left of the picture: the **digital clock**, the **date** under it, and the **countdown** under that. For the last ten
+seconds the countdown grows inside that panel and ticks 10, 9, 8 … Nothing is drawn across the picture. At midnight the
 date rolls over from December 31 to January 1.
 
 | Key | |
 |---|---|
 | **O** | Show or hide the whole overlay (hide it if everyone has a phone out anyway) |
 | **N** | Countdown mode on or off |
-| **T** | The big 10 · 9 · 8 animation for the last ten seconds, on or off |
+| **T** | The 10 · 9 · 8 animation in the clock panel for the last ten seconds, on or off |
 | **H** | Happy New Year animation: Stark (gold dust forms the words, then blows away), Fireworks, Minimal, Off |
 | **C** | Subtitles on or off |
 | **Z** / **X** | Subtitles earlier / later |
@@ -124,7 +128,7 @@ npm run build:win        # package for Windows and build ../download/Avengers-Pl
 
 | Path | |
 |---|---|
-| `main/` | Electron main process: files, fullscreen, keep-awake, crash recovery, NTP time, FFmpeg helper |
+| `main/` | Electron main process: files, fullscreen, keep-awake, crash watchdog, NTP time, FFmpeg helper |
 | `src/core.js` | Timing maths and the drift controller (pure, unit-tested) |
 | `src/app.js` | The player: sync engine, slip recovery, test runs, overlay, panels |
 | `src/subs-core.js` | Subtitle decoding and parsing |

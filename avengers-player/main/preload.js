@@ -34,8 +34,8 @@ contextBridge.exposeInMainWorld('apNative', {
   isFullscreen: () => ipcRenderer.invoke('win:is-fullscreen'),
   onFullscreen: (cb) => on('win:fullscreen-changed', cb),
 
-  // session: keeps the PC awake and guards the close button while the countdown is armed
-  setArmed: (flag) => ipcRenderer.send('session:armed', !!flag),
+  // session: keeps the PC awake, guards the close button and runs the crash watchdog while armed
+  setArmed: (flag, autoRestart) => ipcRenderer.send('session:armed', { armed: !!flag, autoRestart: autoRestart !== false }),
 
   // internet time
   measureTime: () => ipcRenderer.invoke('time:measure'),

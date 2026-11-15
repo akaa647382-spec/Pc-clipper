@@ -58,8 +58,12 @@ export async function launch(profile, extraEnv) {
   page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
   await page.waitForFunction(() => !!window.__AP, null, { timeout: 20000 });
   return {
-    app, page, errors,
-    async close() { try { await app.close(); } catch (e) { /* already gone */ } }
+    app, page, errors, profile,
+    async close() {
+      // Tell the crash watchdog this is a deliberate exit, so no test leaves a resurrected app behind.
+      try { fs.writeFileSync(path.join(profile, 'clean-exit'), 'test'); } catch (e) { /* profile gone */ }
+      try { await app.close(); } catch (e) { /* already gone */ }
+    }
   };
 }
 

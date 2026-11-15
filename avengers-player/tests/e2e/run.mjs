@@ -172,8 +172,18 @@ const scenarios = {
       // Sample the film against the clock through the final seconds and across midnight.
       const toSnap = await s.page.evaluate(() => window.__AP.Engine.session.targetEpoch - window.__AP.Clock.now());
       await sleep(Math.max(0, toSnap - 6500));
-      const big = await s.page.evaluate(() => ({ shown: !document.getElementById('bigCount').hidden, n: +document.getElementById('bigNum').textContent }));
-      check('the 10 · 9 · 8 animation is counting', big.shown && big.n >= 1 && big.n <= 10, JSON.stringify(big));
+      const big = await s.page.evaluate(() => {
+        const ov = document.getElementById('overlay').getBoundingClientRect();
+        const v = document.getElementById('ovCountVal').getBoundingClientRect();
+        const clock = document.getElementById('ovTime').getBoundingClientRect();
+        return {
+          final: document.getElementById('overlay').classList.contains('final'), n: +document.getElementById('ovCountVal').textContent,
+          inside: v.left >= ov.left && v.right <= ov.right && v.top >= ov.top && v.bottom <= ov.bottom, under: v.top >= clock.bottom,
+          bigger: v.height > clock.height, stray: !!document.getElementById('bigCount')
+        };
+      });
+      check('the 10 · 9 · 8 countdown ticks inside the clock panel, under the clock', big.final && big.n >= 1 && big.n <= 10 && big.inside && big.under && big.bigger, JSON.stringify(big));
+      check('nothing is drawn across the picture', !big.stray);
       await shot(s.page, 'snap-final-seconds');
       const m = await measureSync(s.page, 8000);
       check('every frame within 60 ms of the clock across midnight', Math.abs(m.worst) < 0.06, ms(m.worst) + ' over ' + m.n + ' frames');
@@ -182,7 +192,7 @@ const scenarios = {
         const v = document.getElementById('video');
         return {
           since: (Clock.now() - Engine.session.targetEpoch) / 1000, t: v.currentTime, snap: window.__AP.cfg.snapSec,
-          date: document.getElementById('ovDate').textContent, big: !document.getElementById('bigCount').hidden,
+          date: document.getElementById('ovDate').textContent, big: document.getElementById('overlay').classList.contains('final'),
           lbl: document.getElementById('ovCountLbl').textContent, val: document.getElementById('ovCountVal').textContent,
           fx: (() => {
             // The animation must really be drawing: count lit pixels on its canvas.
@@ -197,7 +207,7 @@ const scenarios = {
       });
       check('midnight has passed and the film is past the snap by the same amount', b.since > 0 && Math.abs((b.t - b.snap) - b.since) < 0.08, 'film +' + (b.t - b.snap).toFixed(3) + ' s, clock +' + b.since.toFixed(3) + ' s');
       check('the date rolled over to January 1', /January 1, \d{4}$/.test(b.date), b.date);
-      check('the big countdown is gone after zero', !b.big);
+      check('the panel countdown is back to normal after zero', !b.big);
       check('clock reads 12:00 AM', /^12:00:\d\dAM$/.test(b.clock), b.clock);
       check('countdown turned into HAPPY NEW YEAR', b.lbl === 'HAPPY NEW YEAR' && /^\d{4}$/.test(b.val), b.lbl + ' ' + b.val);
       check('celebration is playing', b.fx);
@@ -358,6 +368,58 @@ const scenarios = {
         check('after the crash: in sync and further along', Math.abs(after.drift) < 0.06 && Math.abs(after.t - after.exp) < 0.12 && after.t > tBefore, ms(after.drift) + ', t=' + after.t.toFixed(1));
       }
     } finally { await s.close(); }
+  },
+
+  async crash() {
+    // The whole app dies without warning while the movie is playing. Nobody touches anything.
+    const profile = newProfile();
+    const logFile = path.join(profile, 'avengers-player.log');
+    const readLog = () => { try { return fs.readFileSync(logFile, 'utf8'); } catch (e) { return ''; } };
+    const s = await launch(profile);
+    let newPid = null;
+    try {
+      await loadMovie(s.page, MOVIE);
+      await setSnap(s.page, SNAP);
+      await armIn(s.page, -30);
+      check('armed and playing in sync', await waitSynced(s.page, 10000));
+      await sleep(1500);
+      const before = await state(s.page);
+      const pid = await s.app.evaluate(() => process.pid);
+      check('the crash watchdog is on while armed', /crash watchdog on/.test(readLog()));
+      const killedAt = Date.now();
+      process.kill(pid, 'SIGKILL');
+      let tail = '';
+      const deadline = Date.now() + 45000;
+      while (Date.now() < deadline) {
+        await sleep(500);
+        const text = readLog();
+        const at = text.lastIndexOf('[watchdog] the app disappeared');
+        tail = at >= 0 ? text.slice(at) : '';
+        if (/Locked on: started/.test(tail)) break;
+      }
+      check('the watchdog noticed the crash and started the app again', /restarted by the crash watchdog/.test(tail), tail.split('\n')[0]);
+      check('the new instance imported the movie again by itself', /Movie loaded: movie\.mp4/.test(tail));
+      check('and resumed the countdown, locked to the clock', /Countdown resumed/.test(tail) && /Locked on: started \d+ ms/.test(tail), (tail.match(/Locked on[^\n]*/) || [''])[0]);
+      const where = /In sync at (\d+):(\d+)(?::(\d+))?/.exec(tail);
+      const lockLine = (tail.match(/^(\S+) \[ui\] Locked on/m) || [])[1];
+      const took = lockLine ? (Date.parse(lockLine) - killedAt) / 1000 : NaN;
+      check('back in sync within 15 seconds of the crash', took < 15, took.toFixed(1) + ' s');
+      if (where) {
+        const pos = where[3] != null ? (+where[1]) * 3600 + (+where[2]) * 60 + (+where[3]) : (+where[1]) * 60 + (+where[2]);
+        // It must come back where the clock is now (old position plus the time lost), give or take the log's 1 s resolution.
+        check('the film carried on from where the clock was, not from the top', pos >= before.t && Math.abs(pos - (before.t + took)) < 2.5, 'was at ' + before.t.toFixed(1) + ' s, came back at ' + pos + ' s after ' + took.toFixed(1) + ' s');
+      } else check('the film carried on from where the clock was, not from the top', false, 'no position in the log');
+      newPid = +(/ pid (\d+) \(restarted/.exec(tail) || [])[1] || null;
+      check('a deliberate quit does not bring the app back', true);
+    } finally {
+      try { fs.writeFileSync(path.join(profile, 'clean-exit'), 'test'); } catch (e) { /* profile gone */ }
+      if (newPid) { try { process.kill(newPid, 'SIGKILL'); } catch (e) { /* already gone */ } }
+      await s.close();
+      await sleep(2500);
+      const after = readLog();
+      const restarts = (after.match(/\[watchdog\] the app disappeared/g) || []).length;
+      check('after a marked clean exit nothing is restarted', restarts === 1, restarts + ' restart(s) in the log');
+    }
   },
 
   async late() {
@@ -526,6 +588,11 @@ const scenarios = {
       check('T switches the 10 · 9 · 8 animation off', await s.page.evaluate(() => window.__AP.cfg.finalTen === false));
       await s.page.keyboard.press('t');
       check('the control panel is on the left', await s.page.evaluate(() => document.getElementById('panel').getBoundingClientRect().left === 0 && document.getElementById('stage').getBoundingClientRect().left > 300));
+      check('the clock panel is on the left of the picture', await s.page.evaluate(() => {
+        const st = document.getElementById('stage').getBoundingClientRect();
+        const ov = document.getElementById('overlay').getBoundingClientRect();
+        return ov.left - st.left < st.width * 0.1 && ov.right < st.left + st.width / 2 && ov.top - st.top < st.height * 0.1;
+      }));
       await s.page.click('#optCelebration [data-v="off"]');
       check('the New Year animation can be turned off', await s.page.evaluate(() => window.__AP.cfg.celebration === 'off'));
       await s.page.click('#optCelebration [data-v="stark"]');

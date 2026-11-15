@@ -10,6 +10,7 @@ const { app, BrowserWindow, Menu, dialog, ipcMain, powerSaveBlocker, shell } = r
 const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
+const { spawn } = require('child_process');
 const { Store } = require('./store');
 
 const IS_TEST = process.env.AP_TEST === '1';
@@ -73,6 +74,59 @@ let armed = false;
 let quitting = false;
 let blockerId = null;
 let unresponsiveTimer = null;
+let watchdog = null;
+const CLEAN_EXIT = path.join(USER_DATA, 'clean-exit');     // present only after the app was closed on purpose
+const RECOVERED = process.argv.includes('--recovered');     // this instance was started by the crash watchdog
+
+/**
+ * Crash recovery beyond a page reload: while the countdown is armed, a tiny second process watches
+ * this one and starts the app again if it disappears (see watchdog.js).
+ */
+function startWatchdog() {
+  if (watchdog || process.env.AP_NO_WATCHDOG === '1') return;
+  try {
+    const skip = (a) => a === '--recovered' || /^--(inspect|remote-debugging)/.test(a);
+    const relaunch = {
+      exe: process.execPath,
+      args: app.isPackaged ? [] : process.argv.slice(1).filter((a) => !skip(a)),
+      cwd: process.cwd()
+    };
+    watchdog = spawn(process.execPath, [path.join(__dirname, 'watchdog.js'), String(process.pid), USER_DATA, JSON.stringify(relaunch)], {
+      env: Object.assign({}, process.env, { ELECTRON_RUN_AS_NODE: '1' }),
+      detached: true, stdio: 'ignore', windowsHide: true
+    });
+    const mine = watchdog;
+    watchdog.on('error', (e) => { log('main', 'watchdog failed: ' + e.message); if (watchdog === mine) watchdog = null; });
+    watchdog.on('exit', () => { if (watchdog === mine) watchdog = null; });
+    watchdog.unref();
+    log('main', 'crash watchdog on');
+  } catch (e) {
+    log('main', 'watchdog could not start: ' + (e && e.message));
+    watchdog = null;
+  }
+}
+
+function stopWatchdog() {
+  if (!watchdog) return;
+  try { watchdog.kill(); } catch (e) { /* already gone */ }
+  watchdog = null;
+  log('main', 'crash watchdog off');
+}
+
+/** While armed, Windows starts the app again after a restart of the PC (an update, a power cut). */
+function setStartAtLogin(on) {
+  if (process.platform !== 'win32' || !app.isPackaged) return;
+  try {
+    if (app.getLoginItemSettings().openAtLogin !== !!on) app.setLoginItemSettings({ openAtLogin: !!on });
+  } catch (e) {
+    log('main', 'start-at-login could not be changed: ' + (e && e.message));
+  }
+}
+
+function markCleanExit() {
+  try { fs.writeFileSync(CLEAN_EXIT, new Date().toISOString()); } catch (e) { /* worst case the watchdog restarts us */ }
+  stopWatchdog();
+}
 
 function send(channel, payload) {
   if (win && !win.isDestroyed() && !win.webContents.isDestroyed()) win.webContents.send(channel, payload);
@@ -163,6 +217,7 @@ function createWindow() {
       if (choice === 0) { e.preventDefault(); return; }
     }
     quitting = true;
+    markCleanExit();                 // closed on purpose: the watchdog must not bring the app back
     try {
       store.merge({ window: { bounds: win.getNormalBounds(), maximized: win.isMaximized() } });
     } catch (err) { /* window state is a convenience only */ }
@@ -226,10 +281,14 @@ function registerIpc() {
   ipcMain.on('state:load', (e) => { e.returnValue = own(e) ? (store.get().renderer || {}) : {}; });
   ipcMain.handle('state:save', (e, obj) => (own(e) ? store.merge({ renderer: obj }) : false));
 
-  ipcMain.on('session:armed', (e, on) => {
+  ipcMain.on('session:armed', (e, payload) => {
     if (!own(e)) return;
-    armed = !!on;
+    const o = payload && typeof payload === 'object' ? payload : { armed: !!payload, autoRestart: true };
+    armed = !!o.armed;
     setKeepAwake(armed);
+    const guard = armed && o.autoRestart !== false;
+    if (guard) startWatchdog(); else stopWatchdog();
+    setStartAtLogin(guard);
   });
 
   ipcMain.on('log', (e, line) => { if (own(e)) log('ui', line); });
@@ -240,7 +299,9 @@ function registerIpc() {
     chrome: process.versions.chrome,
     platform: process.platform,
     logFile: LOG_FILE,
-    isTest: IS_TEST
+    isTest: IS_TEST,
+    recovered: RECOVERED,
+    pid: process.pid
   }));
 
   ipcMain.handle('movie:pick', async (e) => {
@@ -422,12 +483,16 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.whenReady().then(() => {
-    log('main', 'start v' + app.getVersion() + ' electron ' + process.versions.electron);
+    log('main', 'start v' + app.getVersion() + ' electron ' + process.versions.electron + ' pid ' + process.pid + (RECOVERED ? ' (restarted by the crash watchdog)' : ''));
+    try { fs.unlinkSync(CLEAN_EXIT); } catch (e) { /* no marker from last time */ }
+    // No armed countdown on record: make sure nothing is left that would start the app at login.
+    const saved = store.get().renderer || {};
+    if (!saved.armed) setStartAtLogin(false);
     registerIpc();
     createWindow();
   });
 
-  app.on('window-all-closed', () => { setKeepAwake(false); app.quit(); });
+  app.on('window-all-closed', () => { setKeepAwake(false); if (quitting) stopWatchdog(); app.quit(); });
   app.on('child-process-gone', (_e, details) => log('main', 'child process gone: ' + details.type + ' ' + details.reason));
   process.on('uncaughtException', (err) => log('main', 'uncaught: ' + (err && err.stack)));
   process.on('unhandledRejection', (err) => log('main', 'unhandled rejection: ' + (err && err.stack || err)));

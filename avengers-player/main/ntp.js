@@ -575,9 +575,10 @@ async function collectSamples(socket, peer, cfg, clock, token) {
  * to `clock`, plus `address` and `samples` (number of good samples) for diagnostics.
  *
  * `claimed` (optional) maps "address:port" to the name that got there first in this measurement.
- * Two names can lead to one machine (Cloudflare's time servers are also members of pool.ntp.org,
- * and routers or local DNS sometimes point every time server name at themselves); that machine
- * must not get two votes, so the second name is not asked at all.
+ * Two names can lead to one machine: pool.ntp.org hands out other people's servers, which may
+ * well be one of the operators already on the list, and some routers and local DNS setups point
+ * every time server name at themselves. That machine must not get two votes, so the second name
+ * is not asked at all.
  */
 async function sampleServer(target, cfg, clock, token, claimed) {
   const entry = Object.assign(emptyEntry(target.label), { address: null, samples: 0 });

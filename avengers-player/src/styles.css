@@ -248,20 +248,18 @@ kbd {
 .ov-sync[data-state="fix"] i { background: var(--warn); }
 .ov-sync[data-state="bad"] i { background: var(--danger); }
 
-/* ---- 10, 9, 8 … ---- */
-.bigcount {
-  position: absolute; left: 50%; top: 71%; translate: -50% -50%; z-index: 7; pointer-events: none;
-  font: 800 calc(var(--u) * 26) / 1 var(--display); font-variant-numeric: tabular-nums; color: #fff;
-  text-shadow: 0 0 .12em rgba(0, 0, 0, .55), 0 .04em .22em rgba(0, 0, 0, .6), 0 0 .5em color-mix(in srgb, var(--acc) 70%, transparent);
+/* ---- 10, 9, 8 …: the countdown row of the clock panel grows for the last ten seconds ---- */
+.overlay.final .ov-count { flex-direction: column; align-items: center; gap: .1em; padding-top: .4em; }
+.overlay.final .ov-count .lbl { color: var(--hot); letter-spacing: .3em; padding-left: .3em; }
+.overlay.final .ov-count .val {
+  font: 800 4.2em/1 var(--display); letter-spacing: 0; color: #fff; min-width: 1.4em; text-align: center;
+  text-shadow: 0 0 .35em color-mix(in srgb, var(--hot) 75%, transparent);
 }
-.bigcount.last { text-shadow: 0 0 .12em rgba(0, 0, 0, .55), 0 .04em .22em rgba(0, 0, 0, .6), 0 0 .55em var(--hot); }
-.bigcount span { display: inline-block; }
-.bigcount span.pop { animation: bigpop 1s cubic-bezier(.2, .8, .3, 1) both; }
-@keyframes bigpop {
-  0% { transform: scale(1.9); opacity: 0; }
-  16% { transform: scale(1); opacity: 1; }
-  70% { transform: scale(.97); opacity: 1; }
-  100% { transform: scale(.82); opacity: 0; }
+.overlay.final .ov-count .val.pop { animation: tenpop .95s cubic-bezier(.2, .8, .3, 1) both; }
+@keyframes tenpop {
+  0% { transform: scale(1.45); opacity: .2; color: var(--hot); }
+  18% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; color: #fff; }
 }
 
 /* ---- subtitles ---- */
