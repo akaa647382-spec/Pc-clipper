@@ -61,7 +61,7 @@
       async ffCancel() { return true; },
       onFfProgress() {},
       async appInfo() { return { version: 'dev', electron: '', chrome: '', platform: 'browser', logFile: '', isTest: false }; },
-      showItem() {}, openLog() {}, log() {}
+      showItem() {}, openLog() {}, log() {}, crashNow() {}
     };
   }
   const native = window.apNative || browserShim();
@@ -2255,6 +2255,15 @@
       Engine.startTest(kind, lead);
     }));
     el.thEnd.addEventListener('click', () => Engine.endTest('Stopped by you.'));
+    el.crashBtn.addEventListener('click', () => {
+      if (Engine.test) { toast('End the test run first'); return; }
+      if (Engine.mode !== 'armed') { toast('Start the countdown first: recovery only works while it is armed'); return; }
+      if (cfg.autoRestart === false) { toast('Switch on "Come back by itself after a crash" in Setup first'); return; }
+      saveNow();
+      Engine.logEvent('Crash drill: the app is about to crash on purpose');
+      toast('Crashing on purpose… it will be back in a few seconds');
+      setTimeout(() => native.crashNow(), 900);
+    });
 
     /* display tab */
     bindToggle(el.optOverlay, 'showOverlay');

@@ -293,6 +293,14 @@ function registerIpc() {
 
   ipcMain.on('log', (e, line) => { if (own(e)) log('ui', line); });
 
+  // The crash drill in the Test tab: take the whole app down the hard way, so the user can watch
+  // the watchdog bring it back. Only honoured while a countdown is armed.
+  ipcMain.on('drill:crash', (e) => {
+    if (!own(e) || !armed) return;
+    log('main', 'crash drill: crashing on purpose');
+    setTimeout(() => process.crash(), 300);
+  });
+
   ipcMain.handle('app:info', () => ({
     version: app.getVersion(),
     electron: process.versions.electron,

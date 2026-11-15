@@ -37,6 +37,9 @@ contextBridge.exposeInMainWorld('apNative', {
   // session: keeps the PC awake, guards the close button and runs the crash watchdog while armed
   setArmed: (flag, autoRestart) => ipcRenderer.send('session:armed', { armed: !!flag, autoRestart: autoRestart !== false }),
 
+  // the crash drill: takes the whole app down so the watchdog can be seen bringing it back
+  crashNow: () => ipcRenderer.send('drill:crash'),
+
   // internet time
   measureTime: () => ipcRenderer.invoke('time:measure'),
 

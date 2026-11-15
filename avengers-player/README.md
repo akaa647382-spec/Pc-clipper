@@ -36,7 +36,7 @@ A test run moves the app's own clock, not your PC clock, so you can try the whol
 | **Auto-start** | Jumps to a few seconds before 9:29:30 PM. The movie must start alone, on the dot. |
 | **Snap** | Jumps to just before midnight. Watch the snap land on 12:00:00, the date roll over to January 1 and the animation play. |
 | **Slip and recovery drill** | Knocks the film out of sync on purpose so you can practise **Recalibrate**. |
-| **Crash recovery** | With the countdown armed, end "Avengers Player" in Task Manager. It is back and in sync a few seconds later. |
+| **Crash recovery** | With the countdown armed, press *Crash the app now*. The app crashes for real and is back, in sync, a few seconds later. |
 
 Each test prints a result with the measured error in milliseconds.
 

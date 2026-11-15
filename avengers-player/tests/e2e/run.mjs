@@ -384,10 +384,13 @@ const scenarios = {
       check('armed and playing in sync', await waitSynced(s.page, 10000));
       await sleep(1500);
       const before = await state(s.page);
-      const pid = await s.app.evaluate(() => process.pid);
       check('the crash watchdog is on while armed', /crash watchdog on/.test(readLog()));
-      const killedAt = Date.now();
-      process.kill(pid, 'SIGKILL');
+      // The drill button in the Test tab crashes the main process for real.
+      await s.page.click('.tab[data-tab="test"]');
+      await s.page.click('#crashBtn');
+      const dead = Date.now() + 8000;
+      while (Date.now() < dead && !/crash drill: crashing on purpose/.test(readLog())) await sleep(100);
+      const killedAt = Date.now() + 300;
       let tail = '';
       const deadline = Date.now() + 45000;
       while (Date.now() < deadline) {
@@ -419,6 +422,38 @@ const scenarios = {
       const after = readLog();
       const restarts = (after.match(/\[watchdog\] the app disappeared/g) || []).length;
       check('after a marked clean exit nothing is restarted', restarts === 1, restarts + ' restart(s) in the log');
+    }
+  },
+
+  async killed() {
+    // Same recovery when the app is killed from outside (no crash handler gets a chance to run).
+    const profile = newProfile();
+    const logFile = path.join(profile, 'avengers-player.log');
+    const readLog = () => { try { return fs.readFileSync(logFile, 'utf8'); } catch (e) { return ''; } };
+    const s = await launch(profile);
+    let newPid = null;
+    try {
+      await loadMovie(s.page, MOVIE);
+      await setSnap(s.page, SNAP);
+      await armIn(s.page, 8);
+      check('armed and waiting for the start', await waitPhase(s.page, 'standby', 5000));
+      const pid = await s.app.evaluate(() => process.pid);
+      process.kill(pid, 'SIGKILL');
+      let tail = '';
+      const deadline = Date.now() + 45000;
+      while (Date.now() < deadline) {
+        await sleep(500);
+        const text = readLog();
+        const at = text.lastIndexOf('[watchdog] the app disappeared');
+        tail = at >= 0 ? text.slice(at) : '';
+        if (/Locked on: started/.test(tail)) break;
+      }
+      check('killed while waiting: the app came back and still started the movie on time', /restarted by the crash watchdog/.test(tail) && /In sync at 0:00 \(arm\)/.test(tail) && /Locked on: started \d+ ms/.test(tail), (tail.match(/Locked on[^\n]*/) || ['no lock'])[0]);
+      newPid = +(/ pid (\d+) \(restarted/.exec(tail) || [])[1] || null;
+    } finally {
+      try { fs.writeFileSync(path.join(profile, 'clean-exit'), 'test'); } catch (e) { /* profile gone */ }
+      if (newPid) { try { process.kill(newPid, 'SIGKILL'); } catch (e) { /* already gone */ } }
+      await s.close();
     }
   },
 
