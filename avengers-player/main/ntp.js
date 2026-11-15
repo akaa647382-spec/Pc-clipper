@@ -369,6 +369,8 @@ function readSample(message, request, sentAt, receivedAt) {
     offsetMs: ((reply.receiveMs - sentAt) + (reply.transmitMs - receivedAt)) / 2,
     delayMs: Math.max(0, delayMs),
     stratum: reply.stratum,
+    // How far the server says its own clock may be from true time (RFC 5905 root distance).
+    rootDistanceMs: reply.rootDelayMs / 2 + reply.rootDispersionMs,
   };
 }
 
@@ -571,8 +573,13 @@ async function collectSamples(socket, peer, cfg, clock, token) {
 /**
  * Measures against one server. Resolves (never rejects) with an entry whose offset is relative
  * to `clock`, plus `address` and `samples` (number of good samples) for diagnostics.
+ *
+ * `claimed` (optional) maps "address:port" to the name that got there first in this measurement.
+ * Two names can lead to one machine (Cloudflare's time servers are also members of pool.ntp.org,
+ * and routers or local DNS sometimes point every time server name at themselves); that machine
+ * must not get two votes, so the second name is not asked at all.
  */
-async function sampleServer(target, cfg, clock, token) {
+async function sampleServer(target, cfg, clock, token, claimed) {
   const entry = Object.assign(emptyEntry(target.label), { address: null, samples: 0 });
   if (target.error) return Object.assign(entry, { error: target.error });
   let socket = null;
@@ -582,6 +589,13 @@ async function sampleServer(target, cfg, clock, token) {
       entry.address = await resolveIpv4(target.hostname, cfg.lookup, cfg.timeoutMs, token);
     } catch (err) {
       return Object.assign(entry, { error: token.cancelled ? token.reason : 'dns: ' + errorText(err) });
+    }
+    if (claimed) {
+      const key = entry.address + ':' + target.port;
+      if (claimed.has(key)) {
+        return Object.assign(entry, { error: 'same machine as ' + claimed.get(key) });
+      }
+      claimed.set(key, target.label);
     }
     try {
       socket = await openSocket();
@@ -593,7 +607,11 @@ async function sampleServer(target, cfg, clock, token) {
     entry.samples = good;
     if (!best) return Object.assign(entry, { error: lastError });
     return Object.assign(entry, {
-      ok: true, offsetMs: best.offsetMs, delayMs: best.delayMs, stratum: best.stratum,
+      ok: true,
+      offsetMs: best.offsetMs,
+      delayMs: best.delayMs,
+      stratum: best.stratum,
+      rootDistanceMs: best.rootDistanceMs,
     });
   } catch (err) {
     return Object.assign(entry, { ok: false, error: 'internal error: ' + errorText(err) });
@@ -665,14 +683,26 @@ function ntpTolerance(sample) {
 }
 
 /**
+ * What a source that nobody else confirmed costs: a fixed penalty plus, for a time server, the
+ * error it admits to itself. Servers are accepted with up to 1.5 s of root distance; when others
+ * agree with such a server that does not matter, but on its own it must not pass for precise.
+ */
+function lonelyPenalty(sample) {
+  const own = Number.isFinite(sample.rootDistanceMs) && sample.rootDistanceMs > 0
+    ? sample.rootDistanceMs : 0;
+  return SINGLE_SOURCE_PENALTY_MS + own;
+}
+
+/**
  * Combines per-server results into one answer.
  *  - Servers further from the median offset than max(60 ms, 3 x their delay) are outliers.
  *  - A strict majority of the servers that answered has to agree, and two servers that are more
  *    than 250 ms apart (with no third to break the tie) are never trusted.
  *  - The answer is the agreeing server with the shortest round trip, because half the round trip
  *    is the hard limit on how wrong a sample can be.
- *  - uncertainty = that delay / 2 + half the spread of the agreeing offsets + 2 ms, plus 15 ms
- *    when only one server answered at all.
+ *  - uncertainty = that delay / 2 + half the spread of the agreeing offsets + 2 ms. When only one
+ *    server answered at all, 15 ms and that server's own stated error (its rootDistanceMs, when
+ *    the entry has one) are added, because nobody cross-checked it.
  * The input is not modified. `outliers` holds the rejected input entries.
  */
 function combine(serverResults) {
@@ -681,7 +711,7 @@ function combine(serverResults) {
   const split = splitByAgreement(usable, ntpTolerance, TWO_SERVER_LIMIT_MS);
   if (!split.ok) return noAnswer(split.error);
   const best = lowestDelay(split.agreeing);
-  const lonely = usable.length === 1 ? SINGLE_SOURCE_PENALTY_MS : 0;
+  const lonely = usable.length === 1 ? lonelyPenalty(best) : 0;
   return {
     ok: true,
     offsetMs: best.offsetMs,
@@ -976,6 +1006,7 @@ async function runNtpPhase(cfg, clock, token) {
   let finished = 0;
   let answered = 0;
   let graceTimer = null;
+  const claimed = new Map();
   const budgetTimer = setTimeout(() => token.cancel(STOP_NO_REPLY), cfg.ntpBudgetMs);
   const noteFinished = (entry) => {
     finished++;
@@ -988,7 +1019,7 @@ async function runNtpPhase(cfg, clock, token) {
   };
   try {
     return await Promise.all(cfg.targets.map(
-      (target) => sampleServer(target, cfg, clock, token).then(noteFinished)));
+      (target) => sampleServer(target, cfg, clock, token, claimed).then(noteFinished)));
   } finally {
     clearTimeout(budgetTimer);
     clearTimeout(graceTimer);

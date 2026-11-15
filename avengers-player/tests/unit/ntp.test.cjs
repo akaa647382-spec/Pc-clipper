@@ -9,10 +9,11 @@
  * module's), so the two implementations check each other.
  */
 
-const { test, afterEach } = require('node:test');
+const { test, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const dgram = require('node:dgram');
 const dns = require('node:dns');
+const { EventEmitter } = require('node:events');
 const fs = require('node:fs');
 const http = require('node:http');
 const net = require('node:net');
@@ -32,10 +33,26 @@ const realDateNow = Date.now;
 const realLookup = dns.lookup;
 const realCreateSocket = dgram.createSocket;
 
-/** "True time" for the fake servers: the PC clock at load, advanced monotonically. */
-const wallAtLoad = realDateNow();
-const monoAtLoad = performance.now();
-const trueNow = () => wallAtLoad + (performance.now() - monoAtLoad);
+/**
+ * "True time" for the fake servers: the PC clock, advanced monotonically from an anchor.
+ * The anchor is taken afresh before every test. ntp.js reports offsets against Date.now() as it is
+ * when measure() returns, so if the real system clock is stepped while this file runs (a VM being
+ * resumed, the host syncing its clock) an anchor taken once at load would make every later test
+ * fail by the size of the step; this way it can only upset the test it lands in.
+ */
+let wallAnchor = 0;
+let monoAnchor = 0;
+const trueNow = () => wallAnchor + (performance.now() - monoAnchor);
+
+function anchorTrueTime() {
+  // Date.now() only has whole milliseconds: wait for it to tick so the anchor is exact.
+  const first = realDateNow();
+  let now = first;
+  while (now === first) now = realDateNow();
+  wallAnchor = now;
+  monoAnchor = performance.now();
+}
+anchorTrueTime();
 
 const NTP_UNIX_DELTA_S = 2208988800;
 const TWO_32 = 4294967296;
@@ -53,6 +70,8 @@ dgram.createSocket = function trackedCreateSocket(...args) {
 };
 
 const cleanups = [];
+
+beforeEach(anchorTrueTime);
 
 afterEach(async () => {
   Date.now = realDateNow;
@@ -294,6 +313,15 @@ const offlineLookup = (hostname, options, callback) => {
 
 const sample = (host, offsetMs, delayMs) => ({ host, ok: true, offsetMs, delayMs, stratum: 2, error: null });
 
+/** A small deterministic generator, so a failing randomised test can be replayed. */
+function seededRandom(seed) {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+}
+
 // ------------------------------------------------------------------------------------------------
 // Packets
 // ------------------------------------------------------------------------------------------------
@@ -338,6 +366,12 @@ test('parsePacket decodes a well-formed reply (round trip with buildPacket)', ()
   // Version 3 servers are fine too.
   const v3 = buildReply(request, Object.assign({}, REPLY_DEFAULTS, { version: 3 }), nowMs, nowMs);
   assert.equal(ntp.parsePacket(v3, { request, pivotMs: nowMs }).ok, true);
+  // The whole legal range is accepted: stratum 1 to 15, and a pending leap second (1 or 2).
+  for (const overrides of [{ stratum: 1 }, { stratum: 15 }, { leap: 1 }, { leap: 2 }]) {
+    const legal = buildReply(request, Object.assign({}, REPLY_DEFAULTS, overrides), nowMs, nowMs);
+    const decoded = ntp.parsePacket(legal, { request, pivotMs: nowMs });
+    assert.equal(decoded.ok, true, JSON.stringify(overrides) + ': ' + decoded.error);
+  }
 });
 
 test('parsePacket rejects everything that is not a trustworthy server reply', () => {
@@ -573,6 +607,60 @@ test('stray and duplicate packets do not spoil a good exchange', async () => {
   near(result.offsetMs, 321, 5, 'offset');
 });
 
+test('a late reply to an earlier sample is never taken for the sample in flight', async () => {
+  // The answer to the first request is held back past the timeout and carries a time 90 s out.
+  // It lands while the third request is waiting for its own, slower, answer. Without the
+  // originate check it would be the quickest reply by far and so the sample that gets kept.
+  const server = await startSntp({
+    skewMs: 300,
+    plan: (i) => (i === 0 ? { sendDelayMs: 130, skewMs: 90000 } : { sendDelayMs: 30 }),
+  });
+  const { value: result, elapsedMs } = await timed(
+    () => ntp.querySntp(server.host, null, { timeoutMs: 80 }));
+  assert.equal(result.ok, true, result.error);
+  assert.equal(server.requests, 4);
+  assert.equal(result.samples, 3, 'only the answers to the three live requests count');
+  near(result.offsetMs, 300 - 15, 8, 'offset (biased by half of the 30 ms return delay)');
+  assert.ok(result.delayMs >= 28, 'the late packet was taken for a quick answer: delay ' + result.delayMs);
+  assert.ok(elapsedMs >= 140, 'the late reply must arrive while samples are still being taken');
+});
+
+test('a reply from a different IP address is ignored, even a perfectly formed one', async (t) => {
+  const front = realCreateSocket.call(dgram, 'udp4');
+  cleanups.push(() => new Promise((resolve) => front.close(resolve)));
+  const port = await bindLocal(front);
+  // The impostor answers from the same port number on another address, so the address is the
+  // only thing that tells its packets apart from the real server's.
+  const impostor = realCreateSocket.call(dgram, 'udp4');
+  cleanups.push(() => new Promise((resolve) => {
+    try {
+      impostor.close(resolve);
+    } catch (_) {
+      resolve();
+    }
+  }));
+  try {
+    await new Promise((resolve, reject) => {
+      impostor.once('error', reject);
+      impostor.bind(port, '127.0.0.2', resolve);
+    });
+  } catch (_) {
+    t.skip('this machine has no second loopback address to answer from');
+    return;
+  }
+  let requests = 0;
+  front.on('message', (request, rinfo) => {
+    requests++;
+    const now = trueNow() + 4242;
+    impostor.send(buildReply(request, REPLY_DEFAULTS, now, now), rinfo.port, rinfo.address);
+  });
+  const result = await ntp.querySntp('127.0.0.1', port, { timeoutMs: 70 });
+  assert.equal(result.ok, false, 'accepted an answer from an address that was never asked');
+  assert.equal(result.error, 'timeout (ignored: reply from unexpected address)');
+  assert.equal(result.offsetMs, null);
+  assert.equal(requests, 2);
+});
+
 test('a kiss-of-death after a good sample keeps the good sample and stops asking', async () => {
   const server = await startSntp({ skewMs: 64, plan: (i) => (i > 0 ? { stratum: 0, kiss: 'RATE' } : null) });
   const result = await ntp.querySntp(server.host, null, { timeoutMs: 1000 });
@@ -757,6 +845,63 @@ test('combine: no majority means no answer', () => {
   assert.equal(ntp.combine([sample('a', 0, 100), sample('b', 0, 100), sample('c', 200, 5), sample('d', 200, 5)]).ok, false);
 });
 
+test('combine: a lone server\'s own stated error counts against it; a confirmed server does not need it', () => {
+  const vague = Object.assign(sample('a', 100, 20), { rootDistanceMs: 300 });
+  const alone = ntp.combine([vague, { host: 'b', ok: false, error: 'timeout' }]);
+  assert.equal(alone.ok, true);
+  assert.equal(alone.offsetMs, 100);
+  assert.equal(alone.uncertaintyMs, 20 / 2 + 2 + 15 + 300);
+  const confirmed = ntp.combine([vague, sample('b', 102, 30), sample('c', 99, 40)]);
+  assert.equal(confirmed.host, 'a');
+  assert.equal(confirmed.uncertaintyMs, 20 / 2 + 3 / 2 + 2);
+  // Values that make no sense are ignored, not trusted and not thrown on.
+  for (const junk of [NaN, -5, '300', null, {}]) {
+    const verdict = ntp.combine([Object.assign(sample('a', 100, 20), { rootDistanceMs: junk })]);
+    assert.equal(verdict.uncertaintyMs, 20 / 2 + 2 + 15, 'rootDistanceMs ' + JSON.stringify(junk));
+  }
+});
+
+test('combine: a lying minority can never drag the answer outside the agreement window', () => {
+  const random = seededRandom(20261231);
+  for (let round = 0; round < 3000; round++) {
+    const honestCount = 2 + Math.floor(random() * 4);
+    const liarCount = Math.floor(random() * honestCount); // always fewer liars than honest servers
+    const truth = (random() - 0.5) * 100000;
+    const entries = [];
+    let worstHonestError = 0;
+    for (let i = 0; i < honestCount; i++) {
+      // An honest sample is never further from the truth than half its round trip.
+      const delayMs = 1 + random() * 80;
+      const errorMs = (random() - 0.5) * delayMs;
+      worstHonestError = Math.max(worstHonestError, Math.abs(errorMs));
+      entries.push(sample('honest' + i, truth + errorMs, delayMs));
+    }
+    for (let i = 0; i < liarCount; i++) {
+      // Liars say anything, from a hair off to 10 s out, and claim any round trip they like.
+      const lie = (random() - 0.5) * (random() < 0.5 ? 400 : 20000);
+      entries.splice(Math.floor(random() * (entries.length + 1)), 0,
+        sample('liar' + i, truth + lie, random() * 80));
+    }
+    const describe = () => 'round ' + round + ': ' + JSON.stringify(entries);
+    const verdict = ntp.combine(entries);
+    assert.equal(verdict.ok, true, 'an honest majority was not recognised in ' + describe());
+    const chosen = entries.find((entry) => entry.host === verdict.host);
+    assert.equal(verdict.offsetMs, chosen.offsetMs, describe());
+    assert.ok(!verdict.outliers.includes(chosen), 'the answer is one of its own outliers in ' + describe());
+    assert.ok(verdict.agreeing * 2 > entries.length, describe());
+    assert.ok(Number.isFinite(verdict.uncertaintyMs) && verdict.uncertaintyMs >= chosen.delayMs / 2 + 2, describe());
+    // The median of a set with an honest majority lies among the honest values, and the answer
+    // has to be inside its own agreement window around that median.
+    const window = worstHonestError + Math.max(60, 3 * chosen.delayMs);
+    assert.ok(Math.abs(verdict.offsetMs - truth) <= window + 1e-6,
+      'answer ' + (verdict.offsetMs - truth) + ' ms from the truth, window ' + window + ' in ' + describe());
+    // A liar that is far out is never the answer.
+    if (verdict.host.startsWith('liar')) {
+      assert.ok(Math.abs(verdict.offsetMs - truth) <= 40 + 240, describe());
+    }
+  }
+});
+
 test('combine does not modify its input', () => {
   const input = [sample('a', 100, 10), sample('b', 102, 12), sample('c', 5000, 8), { host: 'd', ok: false, error: 'timeout' }];
   const before = JSON.stringify(input);
@@ -816,10 +961,16 @@ test('measure: an outlier server is rejected and flagged', async () => {
   near(result.offsetMs, 101, 6, 'offset');
   assert.equal(result.servers[0].host, liar.host);
   assert.equal(result.servers[0].ok, false);
-  assert.match(result.servers[0].error, /^outlier: \+(489\d|490\d) ms away from the other sources$/);
+  // The distance in the message is the measured one: liar minus answer (4898 or 4900 ms depending
+  // on which good server was quicker), not a constant, so check it against the numbers reported.
+  const flagged = /^outlier: \+(\d+) ms away from the other sources$/.exec(result.servers[0].error);
+  assert.ok(flagged, 'unexpected reason: ' + result.servers[0].error);
+  near(Number(flagged[1]), result.servers[0].offsetMs - result.offsetMs, 0.6, 'stated distance');
   near(result.servers[0].offsetMs, 5000, 6, 'the outlier still reports what it measured');
   assert.equal(result.servers[1].ok, true);
   assert.equal(result.servers[2].ok, true);
+  assert.ok(Math.abs(result.offsetMs - 101) <= result.uncertaintyMs + 1, 'the truth lies inside the stated bound');
+  assert.ok(result.uncertaintyMs < 40, 'the outlier must not widen the bound: ' + result.uncertaintyMs);
 });
 
 test('measure: two servers that disagree give ok false', async () => {
@@ -918,21 +1069,170 @@ test('measure: does not wait for a dead server once three others have answered',
 });
 
 test('measure: a system clock step in the middle of the exchange does not corrupt the result', async () => {
-  const stepMs = 7000;
-  const stepClock = () => {
-    Date.now = () => realDateNow() + stepMs;
-  };
-  // The PC clock jumps 7 s forward while the second of four samples is in flight.
-  const server = await startSntp({ skewMs: 250, procDelayMs: 15, plan: (i) => (i === 1 ? { onReceive: stepClock } : null) });
-  const result = await ntp.measure({ servers: [server.host], timeoutMs: 1000, httpsFallback: false });
-  assert.equal(server.requests, 4);
+  // Forwards (Windows syncing its clock) and backwards (someone setting it back an hour).
+  for (const stepMs of [7000, -3600000]) {
+    const stepClock = () => {
+      Date.now = () => realDateNow() + stepMs;
+    };
+    // The PC clock jumps while the second of four samples is in flight.
+    const server = await startSntp({ skewMs: 250, procDelayMs: 15, plan: (i) => (i === 1 ? { onReceive: stepClock } : null) });
+    const result = await ntp.measure({ servers: [server.host], timeoutMs: 1000, httpsFallback: false });
+    assert.equal(server.requests, 4);
+    assert.equal(result.ok, true, result.error);
+    // True time has not moved; the PC clock now reads stepMs more, so the correction is that much smaller.
+    near(result.offsetMs, 250 - stepMs, 5, 'offset relative to the clock as it is now');
+    near(result.servers[0].offsetMs, 250 - stepMs, 5, 'per-server offset');
+    assert.ok(result.servers[0].delayMs < 30, 'the jump must not look like network delay: ' + result.servers[0].delayMs);
+    near(result.at, realDateNow() + stepMs, 100, 'at is the stepped Date.now()');
+    near(Date.now() + result.offsetMs, trueNow() + 250, 6, 'corrected clock');
+    Date.now = realDateNow;
+  }
+});
+
+test('measure: works end to end when the wire timestamps are in the next NTP era (after 2036)', async () => {
+  // The PC clock and the server both say June 2040; the server is 250 ms ahead.
+  const jumpMs = Date.UTC(2040, 5, 1) - realDateNow();
+  const future = await startSntp({ skewMs: jumpMs + 250 });
+  Date.now = () => realDateNow() + jumpMs;
+  const result = await ntp.measure({ servers: [future.host], timeoutMs: 1000, httpsFallback: false });
   assert.equal(result.ok, true, result.error);
-  // True time has not moved; the PC clock now reads 7 s more, so the correction is 7 s smaller.
-  near(result.offsetMs, 250 - stepMs, 5, 'offset relative to the clock as it is now');
-  near(result.servers[0].offsetMs, 250 - stepMs, 5, 'per-server offset');
-  assert.ok(result.servers[0].delayMs < 30, 'the jump must not look like network delay: ' + result.servers[0].delayMs);
-  near(result.at, realDateNow() + stepMs, 100, 'at is the stepped Date.now()');
-  near(Date.now() + result.offsetMs, trueNow() + 250, 6, 'corrected clock');
+  near(result.offsetMs, 250, 5, 'offset in 2040');
+  near(result.at, Date.UTC(2040, 5, 1), 60000, 'at');
+
+  // A PC that is 13 years behind a server is told exactly that (it is not an era mix-up)...
+  Date.now = realDateNow;
+  const behind = await ntp.measure({ servers: [future.host], timeoutMs: 1000, httpsFallback: false });
+  assert.equal(behind.ok, true, behind.error);
+  near(behind.offsetMs, jumpMs + 250, 5, 'offset of a PC 13 years behind');
+
+  // ...and so is one that is 13 years ahead of a server with the right time.
+  const present = await startSntp({ skewMs: 0 });
+  Date.now = () => realDateNow() + jumpMs;
+  const ahead = await ntp.measure({ servers: [present.host], timeoutMs: 1000, httpsFallback: false });
+  assert.equal(ahead.ok, true, ahead.error);
+  near(ahead.offsetMs, -jumpMs, 5, 'offset of a PC 13 years ahead');
+});
+
+test('measure: the true offset always lies inside the stated uncertainty, whatever the paths do', async () => {
+  const random = seededRandom(31122026);
+  for (let round = 0; round < 6; round++) {
+    const truth = Math.round((random() - 0.5) * 20000);
+    const servers = [];
+    for (let i = 0; i < 3; i++) {
+      // Every server sits behind its own lopsided path: replies come back up to 30 ms late,
+      // differently for each packet, and some servers hold on to requests for a while.
+      const holdMs = Math.floor(random() * 12);
+      servers.push(await startSntp({
+        skewMs: truth,
+        plan: () => ({ procDelayMs: holdMs, sendDelayMs: Math.floor(random() * 30) }),
+      }));
+    }
+    const result = await ntp.measure({ servers: servers.map((server) => server.host), timeoutMs: 500, httpsFallback: false });
+    assert.equal(result.ok, true, result.error);
+    const errorMs = Math.abs(result.offsetMs - truth);
+    assert.ok(errorMs <= result.uncertaintyMs,
+      'round ' + round + ': off by ' + errorMs + ' ms but claims +/- ' + result.uncertaintyMs + ' ' + JSON.stringify(result.servers));
+    assert.ok(result.uncertaintyMs < 100, 'round ' + round + ': uncertainty ' + result.uncertaintyMs);
+  }
+});
+
+test('measure: a lopsided path shared by every server is covered by the stated uncertainty', async () => {
+  // All replies come back 40 ms late (a slow downlink, say). Every server is then wrong by the
+  // same 20 ms, so they agree perfectly; only the round-trip time gives the error away.
+  for (const count of [1, 3]) {
+    const servers = [];
+    for (let i = 0; i < count; i++) servers.push(await startSntp({ skewMs: -600, sendDelayMs: 40 }));
+    const result = await ntp.measure({ servers: servers.map((server) => server.host), timeoutMs: 1000, httpsFallback: false });
+    assert.equal(result.ok, true, result.error);
+    const errorMs = Math.abs(result.offsetMs + 600);
+    assert.ok(errorMs >= 15 && errorMs <= 26, 'expected to be about 20 ms out, was ' + errorMs);
+    assert.ok(result.uncertaintyMs >= errorMs, count + ' server(s): off by ' + errorMs + ' ms but claims +/- ' + result.uncertaintyMs);
+    assert.ok(result.uncertaintyMs < 60, 'uncertainty ' + result.uncertaintyMs);
+  }
+});
+
+test('measure: a lone server that admits to being unsure is not passed off as precise', async () => {
+  // Root distance = 0.2 s / 2 + 0.9 s = 1.0 s: under the 1.5 s cut-off, so the server is accepted.
+  const vague = await startSntp({ skewMs: 400, rootDelayS: 0.2, rootDispersionS: 0.9 });
+  const alone = await ntp.measure({ servers: [vague.host], timeoutMs: 1000, httpsFallback: false });
+  assert.equal(alone.ok, true, alone.error);
+  near(alone.offsetMs, 400, 5, 'offset');
+  // The app only applies a correction that is good to 250 ms; this one is not.
+  assert.ok(alone.uncertaintyMs >= 1000 && alone.uncertaintyMs < 1060, 'uncertainty ' + alone.uncertaintyMs);
+  assert.deepEqual(Object.keys(alone.servers[0]).sort(), ['delayMs', 'error', 'host', 'offsetMs', 'ok', 'stratum']);
+
+  // Two precise servers that agree with it settle the matter.
+  const precise = [await startSntp({ skewMs: 401 }), await startSntp({ skewMs: 399 })];
+  const confirmed = await ntp.measure({
+    servers: [vague.host, precise[0].host, precise[1].host], timeoutMs: 1000, httpsFallback: false,
+  });
+  assert.equal(confirmed.ok, true, confirmed.error);
+  near(confirmed.offsetMs, 400, 6, 'offset');
+  assert.ok(confirmed.uncertaintyMs < 40, 'uncertainty ' + confirmed.uncertaintyMs);
+});
+
+test('measure: one machine known under two names gets one vote', async () => {
+  const wrong = await startSntp({ skewMs: 3000 });
+  const right = await startSntp({ skewMs: 0 });
+  const lookup = (hostname, options, callback) => process.nextTick(callback, null, '127.0.0.1', 4);
+  const result = await ntp.measure({
+    servers: ['time-a.test:' + wrong.port, 'time-b.test:' + wrong.port, 'honest.test:' + right.port],
+    lookup,
+    timeoutMs: 1000,
+    httpsFallback: false,
+  });
+  assert.equal(result.ok, false, 'a machine with two names outvoted an independent server: ' + result.offsetMs);
+  assert.match(result.error, /two sources disagree by (299\d|300\d) ms/);
+  assert.deepEqual(result.servers.map((entry) => entry.ok), [true, false, true]);
+  assert.equal(result.servers[1].error, 'same machine as time-a.test:' + wrong.port);
+  assert.equal(result.servers[1].offsetMs, null);
+  assert.equal(wrong.requests, 4, 'the machine is asked under one name only');
+
+  // An address and a name for the same machine are recognised too.
+  const mixed = await ntp.measure({
+    servers: ['127.0.0.1:' + right.port, 'honest.test:' + right.port], lookup, timeoutMs: 1000, httpsFallback: false,
+  });
+  assert.equal(mixed.ok, true, mixed.error);
+  assert.deepEqual(mixed.servers.map((entry) => entry.ok), [true, false]);
+  assert.ok(mixed.uncertaintyMs >= 17, 'one machine is a single source: ' + mixed.uncertaintyMs);
+
+  // The same address on another port is a different server (every other test here relies on it).
+  const both = await ntp.measure({
+    servers: ['time-a.test:' + right.port, 'time-b.test:' + wrong.port], lookup, timeoutMs: 1000, httpsFallback: false,
+  });
+  assert.deepEqual(both.servers.map((entry) => entry.ok), [true, true]);
+});
+
+test('measure: the backstop ends the wait even when a socket never finishes opening', async () => {
+  const tracked = dgram.createSocket;
+  const stuck = [];
+  dgram.createSocket = () => {
+    const socket = new EventEmitter();
+    socket.bind = () => {};
+    socket.close = () => {
+      socket.closed = true;
+    };
+    stuck.push(socket);
+    return socket;
+  };
+  try {
+    const { value: result, elapsedMs } = await timed(() => ntp.measure({
+      servers: ['127.0.0.1:9'], overallTimeoutMs: 600, httpsFallback: false,
+    }));
+    assert.equal(result.ok, false);
+    assert.equal(result.method, 'none');
+    assert.equal(result.offsetMs, 0);
+    assert.equal(result.uncertaintyMs, Infinity);
+    assert.equal(result.error, 'timed out');
+    assert.ok(elapsedMs >= 500 && elapsedMs <= 600, 'settled after ' + elapsedMs + ' ms, limit 600');
+    // When the socket does come up afterwards it is closed at once, not left behind.
+    assert.equal(stuck.length, 1);
+    stuck[0].emit('listening');
+    await sleep(10);
+    assert.equal(stuck[0].closed, true, 'a socket that opened after the deadline was left open');
+  } finally {
+    dgram.createSocket = tracked;
+  }
 });
 
 test('measure: host:port strings, the port option and duplicate servers', async () => {
@@ -1044,6 +1344,64 @@ test('measure: with no options it tries the five default servers, then the web, 
     ['time.cloudflare.com', 'time.google.com', 'time.windows.com', 'pool.ntp.org', 'time.apple.com']);
   assert.ok(Object.isFrozen(ntp.DEFAULT_SERVERS));
   assert.ok(ntp.DEFAULT_HTTPS_ENDPOINTS.every((endpoint) => endpoint.url.startsWith('https://')));
+});
+
+test('measure: with no arguments it still settles inside 6 s when the system resolver hangs', async () => {
+  // The worst case for the time limit: every name lookup, for the time servers and for the web
+  // fallback alike, simply never comes back.
+  const countTimers = () => process.getActiveResourcesInfo().filter((name) => name === 'Timeout').length;
+  const asked = [];
+  dns.lookup = (hostname) => {
+    asked.push(hostname);
+  };
+  const timersBefore = countTimers();
+  const { value: result, elapsedMs } = await timed(() => ntp.measure());
+  assert.ok(elapsedMs <= 6000, 'settled after ' + elapsedMs + ' ms, limit 6000');
+  assert.equal(result.ok, false);
+  assert.equal(result.method, 'none');
+  assert.equal(result.offsetMs, 0);
+  assert.equal(result.uncertaintyMs, Infinity);
+  assert.deepEqual(result.servers.map((entry) => entry.error),
+    Array(5).fill('dns: timeout').concat(Array(3).fill('no reply in time')));
+  assert.deepEqual(asked.slice(0, 5), Array.from(ntp.DEFAULT_SERVERS));
+  assert.equal(clientSockets.length, 0, 'no socket is opened before the address is known');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(countTimers(), timersBefore, 'timers still running: ' + process.getActiveResourcesInfo().join(', '));
+});
+
+test('measure: a system resolver that is still busy is not asked again', async () => {
+  const asked = [];
+  const waiting = [];
+  // Node's own UDP code sends literal addresses through dns.lookup as well; those stay real.
+  dns.lookup = (hostname, options, callback) => {
+    if (net.isIP(hostname)) return realLookup(hostname, options, callback);
+    asked.push(hostname);
+    waiting.push(callback);
+    return undefined;
+  };
+  const server = await startSntp({ skewMs: 55 });
+  const opts = { servers: ['stuck-a.test', 'stuck-b.test'], port: server.port, timeoutMs: 60, httpsFallback: false };
+  for (let i = 0; i < 3; i++) {
+    const { value: result, elapsedMs } = await timed(() => ntp.measure(opts));
+    assert.equal(result.ok, false);
+    assert.deepEqual(result.servers.map((entry) => entry.error), ['dns: timeout', 'dns: timeout']);
+    assert.ok(elapsedMs < 1000, 'took ' + elapsedMs + ' ms');
+  }
+  assert.deepEqual(asked, ['stuck-a.test', 'stuck-b.test'], 'three measurements must not queue three lookups per name');
+
+  // The resolver finally gives up. The next measurement asks afresh and uses the new answer.
+  for (const callback of waiting.splice(0)) callback(Object.assign(new Error('getaddrinfo EAI_AGAIN'), { code: 'EAI_AGAIN' }));
+  await sleep(5);
+  dns.lookup = (hostname, options, callback) => {
+    if (net.isIP(hostname)) return realLookup(hostname, options, callback);
+    asked.push(hostname);
+    process.nextTick(callback, null, '127.0.0.1', 4);
+    return undefined;
+  };
+  const recovered = await ntp.measure(opts);
+  assert.equal(recovered.ok, true, recovered.error);
+  near(recovered.offsetMs, 55, 5, 'offset');
+  assert.deepEqual(asked.slice(2), ['stuck-a.test', 'stuck-b.test']);
 });
 
 test('measure: many calls in a row, and several at once, all clean up after themselves', async () => {
@@ -1211,6 +1569,66 @@ test('fallback: unreachable and hanging endpoints fail inside the time limit', a
   assert.ok(elapsedMs <= 700, 'settled after ' + elapsedMs + ' ms, limit 700');
 });
 
+test('fallback: a system clock step while the web request is out does not corrupt the result', async () => {
+  const stepMs = -5000;
+  const web = await startWeb({ skewMs: 777, delayMs: 30 });
+  // The PC clock is set back 5 s while the request is on its way.
+  const stepper = setTimeout(() => {
+    Date.now = () => realDateNow() + stepMs;
+  }, 12);
+  const result = await ntp.measure({ servers: ['not a server!'], httpsEndpoints: [web.base + '/cdn-cgi/trace'] });
+  clearTimeout(stepper);
+  assert.equal(result.ok, true, result.error);
+  assert.equal(result.method, 'https');
+  assert.notEqual(Date.now, realDateNow, 'the clock was stepped during the request');
+  // The page is stamped when the reply leaves, 30 ms after the request arrived, so the estimate
+  // is up to half the round trip out; the stated uncertainty has to cover that.
+  near(result.offsetMs, 777 - stepMs, 40, 'offset relative to the clock as it is now');
+  near(Date.now() + result.offsetMs, trueNow() + 777, 40, 'corrected clock');
+  assert.ok(Math.abs(result.offsetMs - (777 - stepMs)) <= result.uncertaintyMs, 'inside the stated bound');
+  assert.ok(result.servers[1].delayMs < 200, 'the jump must not look like network delay: ' + result.servers[1].delayMs);
+});
+
+test('fallback: a response that stalls or never ends is cut off, and no connection is left open', async () => {
+  const open = new Set();
+  const startRaw = async (handler) => {
+    const server = http.createServer(handler);
+    server.on('connection', (socket) => {
+      open.add(socket);
+      socket.once('close', () => open.delete(socket));
+    });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    cleanups.push(() => new Promise((resolve) => {
+      server.closeAllConnections();
+      server.close(resolve);
+    }));
+    return 'http://127.0.0.1:' + server.address().port;
+  };
+  // Headers at once, then a body that never finishes.
+  const stalled = await startRaw((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.write('fl=1\n');
+  });
+  // A body far over the size limit, with a tempting timestamp at the very end.
+  const bloated = await startRaw((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('x'.repeat(100000) + '\nts=' + ((trueNow() + 5000) / 1000).toFixed(3) + '\n');
+  });
+  const mute = await startRaw(() => {});
+  const { value: result, elapsedMs } = await timed(() => ntp.measure({
+    servers: ['not a server!'],
+    overallTimeoutMs: 500,
+    httpsEndpoints: [stalled + '/cdn-cgi/trace', bloated + '/cdn-cgi/trace', mute + '/'],
+  }));
+  assert.equal(result.ok, false);
+  assert.equal(result.method, 'none');
+  assert.deepEqual(result.servers.slice(1).map((entry) => entry.error),
+    ['no reply in time', 'response too large', 'no reply in time']);
+  assert.ok(elapsedMs <= 500, 'settled after ' + elapsedMs + ' ms, limit 500');
+  await sleep(30);
+  assert.equal(open.size, 0, open.size + ' connections to the web servers were left open');
+});
+
 test('fallback: not used when a time server answers or when it is switched off', async () => {
   const web = await startWeb({ skewMs: 0 });
   const server = await startSntp({ skewMs: 12 });
@@ -1252,7 +1670,7 @@ test('fallback over real TLS: the handshake is not counted as delay, and certifi
     const net = require('net');
     const ntp = require(${JSON.stringify(NTP_MODULE)});
     const web = https.createServer({ key: fs.readFileSync(${JSON.stringify(keyFile)}), cert: fs.readFileSync(${JSON.stringify(certFile)}) },
-      (req, res) => res.end('h=x\nts=' + ((Date.now() + ${skewMs}) / 1000).toFixed(3) + '\n'));
+      (req, res) => res.end('h=x\\nts=' + ((Date.now() + ${skewMs}) / 1000).toFixed(3) + '\\n'));
     web.listen(0, '127.0.0.1', () => {
       const relay = net.createServer((client) => {
         const upstream = net.connect(web.address().port, '127.0.0.1');
@@ -1305,13 +1723,33 @@ test('fallback over real TLS: the handshake is not counted as delay, and certifi
 test('measure leaves no timers behind', async () => {
   const silent = await startSntp({ drop: true });
   const good = await startSntp({ skewMs: 1 });
+  const more = [await startSntp({ skewMs: 2 }), await startSntp({ skewMs: 0 })];
+  const slow = await startSntp({ skewMs: 1, sendDelayMs: 25 });
   const hanging = await startWeb({ hang: true });
+  const trace = await startWeb({ skewMs: 1 });
   const countTimers = () => process.getActiveResourcesInfo().filter((name) => name === 'Timeout').length;
   await sleep(20);
   const before = countTimers();
   await ntp.measure({ servers: [silent.host, good.host], timeoutMs: 80, httpsFallback: false });
   await ntp.measure({ servers: [silent.host], timeoutMs: 60, overallTimeoutMs: 400, httpsEndpoints: [hanging.base + '/'] });
   await ntp.measure({ servers: ['slow-dns.test'], lookup: () => {}, timeoutMs: 60, httpsFallback: false });
+  // Stopped early because enough servers answered (the grace timer), and a precise web answer
+  // that ends the wait for a hanging endpoint.
+  const early = await ntp.measure({
+    servers: [silent.host, good.host, more[0].host, more[1].host], timeoutMs: 2000, httpsFallback: false,
+  });
+  assert.match(early.servers[0].error, /stopped early/);
+  const viaWeb = await ntp.measure({
+    servers: [silent.host], timeoutMs: 60, httpsEndpoints: [hanging.base + '/', trace.base + '/cdn-cgi/trace'],
+  });
+  assert.equal(viaWeb.method, 'https');
+  assert.equal(viaWeb.servers[1].error, 'not needed');
+  // A slow server that finishes by itself inside the grace period: the grace timer is still
+  // pending when the measurement ends and has to be cleared.
+  const inGrace = await ntp.measure({
+    servers: [slow.host, good.host, more[0].host, more[1].host], timeoutMs: 2000, httpsFallback: false,
+  });
+  assert.deepEqual(inGrace.servers.map((entry) => entry.ok), [true, true, true, true]);
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(countTimers(), before, 'timers still running: ' + process.getActiveResourcesInfo().join(', '));
 });
