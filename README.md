@@ -92,3 +92,9 @@ it and take the focus from your game; a combo with it saved by an earlier versio
 
 Built on Linux with the .NET 8 SDK: `./build.sh` (add `test` to run the engine harness against real ffmpeg).
 How it works, and why each FFmpeg flag is there: [SPEC.md](SPEC.md) and the research notes in [docs/research](docs/research).
+
+## Also in this repository
+
+**[Avengers Player](avengers-player/README.md)**: a separate Windows app that starts *Avengers: Endgame* by itself at
+9:29:30 PM on December 31 and keeps it locked to the clock so the snap lands on midnight.
+[Download the installer](download/Avengers-Player-Setup-1.0.0.exe).

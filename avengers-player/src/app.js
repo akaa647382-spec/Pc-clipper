@@ -1464,6 +1464,7 @@
     importError(html) {
       el.importError.innerHTML = html || '';
       setHidden(el.importError, !html);
+      if (html) { try { native.log('import problem: ' + el.importError.textContent); } catch (e) { /* log is best effort */ } }
     },
 
     renderResume() {
@@ -1714,7 +1715,8 @@
 
       // The instant of the snap: fire the celebration within one frame of it.
       if (s && Engine.mode === 'armed' && this.prevNow && this.prevNow < s.targetEpoch && now >= s.targetEpoch && now - s.targetEpoch < 4000) {
-        if (Engine.phase === 'synced') Celebration.play(s.targetEpoch);
+        // Also when the film is a split second from locking on (the app was opened right before midnight).
+        if (Engine.phase === 'synced' || Engine.phase === 'cueing') Celebration.play(s.targetEpoch);
         Engine.logEvent('Target moment reached' + (Engine.st.drift != null ? ', film ' + fmtMs(Engine.st.drift) + ' from the clock' : ''));
       }
       this.prevNow = now;
@@ -2396,6 +2398,10 @@
 
   /* ================================================================ boot === */
 
+  // Anything that goes wrong in the page ends up in the log file, where it can be read afterwards.
+  window.addEventListener('error', (e) => { try { native.log('page error: ' + e.message + ' (' + String(e.filename).split('/').pop() + ':' + e.lineno + ')'); } catch (err) { /* nothing more to do */ } });
+  window.addEventListener('unhandledrejection', (e) => { try { native.log('page rejection: ' + (e.reason && (e.reason.stack || e.reason.message) || e.reason)); } catch (err) { /* nothing more to do */ } });
+
   async function boot() {
     const wantFs = cfg.armed && cfg.wasFullscreen;
     wire();
@@ -2406,6 +2412,7 @@
     Engine.session = Engine.computeFree();
     UI.onMode();
 
+    Engine.logEvent('Player started' + (cfg.armed ? ' with the countdown armed' : ''));
     setInterval(() => { try { Engine.tick(); } catch (e) { Engine.logEvent('tick error: ' + (e && e.message)); } }, 200);
     setInterval(() => NetTime.maybeMeasure(), 60000);
     const loop = () => {

@@ -236,54 +236,6 @@
     }
   }
 
-  /**
-   * Picks the most trustworthy internet-time sample. Each sample is { rtt, offset } in ms, where
-   * offset = serverTime - localTime at the middle of the request. The fastest round trip bounds
-   * the error tightest (± rtt/2), and the other fast samples must agree with it.
-   */
-  function pickTimeSample(samples) {
-    const good = (samples || []).filter(s => s && isFinite(s.rtt) && isFinite(s.offset) && s.rtt >= 0)
-      .sort((a, b) => a.rtt - b.rtt);
-    if (!good.length) return null;
-    const best = good[0];
-    const top = good.slice(0, Math.min(3, good.length)).map(s => s.offset);
-    const spread = Math.max.apply(null, top) - Math.min.apply(null, top);
-    return {
-      offsetMs: Math.round(best.offset),
-      uncertaintyMs: Math.round(best.rtt / 2 + 2),
-      rttMs: Math.round(best.rtt),
-      spreadMs: Math.round(spread),
-      n: good.length
-    };
-  }
-
-  /** Parsers for the public time endpoints the player can ask. Each returns epoch ms or NaN. */
-  const timeParsers = {
-    cloudflareTrace(text) {
-      const m = /(?:^|\n)ts=(\d+(?:\.\d+)?)/.exec(String(text));
-      return m ? Math.round(parseFloat(m[1]) * 1000) : NaN;
-    },
-    timeApiIo(text) {
-      try {
-        const j = JSON.parse(text);
-        const iso = String(j.dateTime || j.date_time || j.utc_time || '');
-        if (!iso) return NaN;
-        const m = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(\.\d{1,3})?/.exec(iso);
-        return m ? Date.parse(m[1] + (m[2] || '') + 'Z') : NaN;
-      } catch (e) { return NaN; }
-    },
-    worldTimeApi(text) {
-      try {
-        const j = JSON.parse(text);
-        if (j.utc_datetime) {
-          const m = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(\.\d{1,3})?/.exec(String(j.utc_datetime));
-          if (m) return Date.parse(m[1] + (m[2] || '') + 'Z');
-        }
-        return isFinite(j.unixtime) ? j.unixtime * 1000 : NaN;
-      } catch (e) { return NaN; }
-    }
-  };
-
   return {
     DEFAULT_SNAP_SEC: DEFAULT_SNAP_SEC,
     MONTHS: MONTHS, MONTHS_LONG: MONTHS_LONG, DAYS: DAYS, DAYS_LONG: DAYS_LONG,
@@ -292,6 +244,6 @@
     countdownParts: countdownParts, fmtCountdown: fmtCountdown,
     clockParts: clockParts, fmtClock: fmtClock, fmtDateTime: fmtDateTime, dateKey: dateKey,
     newYearTarget: newYearTarget, computeSession: computeSession, expectedPos: expectedPos,
-    DriftController: DriftController, pickTimeSample: pickTimeSample, timeParsers: timeParsers
+    DriftController: DriftController
   };
 });

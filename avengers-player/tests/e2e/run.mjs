@@ -92,6 +92,15 @@ const scenarios = {
       await sleep(200);
       check('space pauses in free mode, no slip popup', (await state(s.page)).paused && await s.page.isHidden('#slip'));
       await shot(s.page, 'boot-player');
+      // A file name full of characters that are special in URLs and on command lines.
+      const oddDir = path.join(newProfile(), 'Ünï côdé & co');
+      fs.mkdirSync(oddDir, { recursive: true });
+      const odd = path.join(oddDir, "Avengers #1 100% 'Endgame' (2019) [4K] + más.mp4");
+      fs.copyFileSync(path.join(MEDIA, 'silent.mp4'), odd);
+      check('a movie with an awkward file name loads', await loadMovie(s.page, odd));
+      await s.page.evaluate(() => document.getElementById('video').play());
+      check('and plays', await waitFor(s.page, () => document.getElementById('video').currentTime > 0.5, null, 6000));
+      check('its name is shown as it is', (await s.page.textContent('#fileName')) === path.basename(odd), await s.page.textContent('#fileName'));
       check('no page errors', s.errors.length === 0, s.errors.join(' | '));
     } finally { await s.close(); }
   },
@@ -237,6 +246,12 @@ const scenarios = {
       await sleep(2500);
       let st = await state(s.page);
       check('in sync after the automatic start', Math.abs(st.drift) < 0.05, ms(st.drift));
+
+      await s.page.click('.tab[data-tab="sync"]');
+      await sleep(400);
+      const sy = await s.page.evaluate(() => ({ state: document.getElementById('syState').textContent, drift: document.getElementById('syDrift').textContent, pos: document.getElementById('syPos').textContent, exp: document.getElementById('syExp').textContent }));
+      check('the Sync tab shows film time against clock time', sy.state === 'IN SYNC' && /^[+−±]\d+ ms$/.test(sy.drift) && /^\d:\d\d:\d\d\.\d{3}$/.test(sy.pos) && /^\d:\d\d:\d\d\.\d{3}$/.test(sy.exp), JSON.stringify(sy));
+      await s.page.click('.tab[data-tab="mission"]');
 
       // 1. Space bar: pause -> popup -> R recovers.
       await s.page.keyboard.press('Space');
@@ -518,6 +533,12 @@ const scenarios = {
       check('F enters fullscreen and hides the panel', await waitFor(s.page, () => document.getElementById('app').classList.contains('is-fs'), null, 4000) && await s.page.isHidden('#panel'));
       await sleep(500);
       await shot(s.page, 'fullscreen');
+      await s.page.evaluate(() => document.getElementById('video').play());
+      await s.page.mouse.move(700, 400);
+      check('in fullscreen the controls and the cursor hide after a few seconds', await waitFor(s.page, () => document.getElementById('stage').classList.contains('idle') && getComputedStyle(document.getElementById('controls')).opacity === '0' && getComputedStyle(document.getElementById('stage')).cursor === 'none', null, 6000));
+      await s.page.mouse.move(720, 420);
+      check('and come back when the mouse moves', await waitFor(s.page, () => !document.getElementById('stage').classList.contains('idle'), null, 2000));
+      await s.page.evaluate(() => document.getElementById('video').pause());
       await s.page.keyboard.press('Escape');
       check('Escape leaves fullscreen', await waitFor(s.page, () => !document.getElementById('app').classList.contains('is-fs'), null, 4000));
       await setSnap(s.page, '1:23.5');

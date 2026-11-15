@@ -141,20 +141,3 @@ test('drift controller needs fresh samples', () => {
   c.reset();
   assert.equal(c.rate, 1);
 });
-
-test('pickTimeSample prefers the fastest round trip', () => {
-  assert.equal(C.pickTimeSample([]), null);
-  const r = C.pickTimeSample([{ rtt: 180, offset: 900 }, { rtt: 22, offset: 512 }, { rtt: 30, offset: 520 }, { rtt: NaN, offset: 1 }]);
-  assert.equal(r.offsetMs, 512);
-  assert.equal(r.rttMs, 22);
-  assert.equal(r.n, 3);
-  assert.ok(r.uncertaintyMs >= 11);
-});
-
-test('time endpoint parsers', () => {
-  assert.equal(C.timeParsers.cloudflareTrace('fl=1\nh=x\nts=1700000000.123\nvisit_scheme=https\n'), 1700000000123);
-  assert.ok(Number.isNaN(C.timeParsers.cloudflareTrace('nothing')));
-  assert.equal(C.timeParsers.timeApiIo('{"dateTime":"2026-12-31T23:59:59.5001234"}'), Date.parse('2026-12-31T23:59:59.500Z'));
-  assert.equal(C.timeParsers.worldTimeApi('{"utc_datetime":"2026-12-31T23:59:59.250000+00:00"}'), Date.parse('2026-12-31T23:59:59.250Z'));
-  assert.ok(Number.isNaN(C.timeParsers.worldTimeApi('not json')));
-});
