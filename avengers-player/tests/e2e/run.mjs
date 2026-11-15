@@ -559,6 +559,194 @@ const scenarios = {
     } finally { await s.close(); }
   },
 
+  async reopen() {
+    // Armed days ahead, then the app is closed and opened again while still waiting for the start.
+    const profile = newProfile();
+    let s = await launch(profile);
+    try {
+      await loadMovie(s.page, MOVIE);
+      await setSnap(s.page, SNAP);
+      await waitFor(s.page, () => window.__AP.SubsUI.loaded, null, 6000);
+      await armIn(s.page, 600);
+      await waitPhase(s.page, 'standby', 5000);
+      await s.page.keyboard.press('f');
+      await waitFor(s.page, () => document.getElementById('app').classList.contains('is-fs'), null, 4000);
+      await sleep(500);
+      await s.close();
+      await sleep(1000);
+      s = await launch(profile);
+      check('reopened while waiting: back on standby', await waitPhase(s.page, 'standby', 12000));
+      const ok = await waitFor(s.page, () => window.__AP.UI.booted && window.__AP.SubsUI.loaded && document.getElementById('app').classList.contains('is-fs'), null, 8000);
+      const st = await s.page.evaluate(() => ({ booted: !!window.__AP.UI.booted, subs: window.__AP.SubsUI.loaded, fs: document.getElementById('app').classList.contains('is-fs'), standby: !document.getElementById('standby').hidden, armed: window.__AP.cfg.armed }));
+      check('startup finishes straight away: subtitles, fullscreen and the standby screen are back', ok && st.standby && st.armed, JSON.stringify(st));
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally { await s.close(); }
+  },
+
+  async timeguard() {
+    const file = path.join(newProfile(), 'ntp.json');
+    const answer = (o) => fs.writeFileSync(file, JSON.stringify(Object.assign({ ok: true, offsetMs: 0, uncertaintyMs: 10, method: 'ntp', servers: [] }, o)));
+    const remeasure = (page) => page.evaluate(() => window.__AP.NetTime.measure(false));
+
+    // 1. One vague answer must not undo a good correction.
+    answer({ offsetMs: 1500, uncertaintyMs: 12 });
+    let s = await launch(newProfile(), { AP_FAKE_NTP_FILE: file });
+    try {
+      await waitFor(s.page, () => window.__AP.Clock.netOffsetMs === 1500, null, 8000);
+      await loadMovie(s.page, MOVIE);
+      await setSnap(s.page, SNAP);
+      await armIn(s.page, -40);
+      await waitSynced(s.page, 10000);
+      await sleep(1500);
+      const before = await state(s.page);
+      answer({ offsetMs: 1480, uncertaintyMs: 600, method: 'https' });
+      await remeasure(s.page);
+      await sleep(1500);
+      let st = await state(s.page);
+      check('a vague time answer does not throw away a good correction', st.netOffset === 1500 && st.recals === before.recals && st.autoRecals === before.autoRecals, 'offset ' + st.netOffset + ', recals ' + st.recals);
+      answer({ ok: false, offsetMs: 0, uncertaintyMs: null, method: 'none' });
+      await remeasure(s.page);
+      st = await state(s.page);
+      check('nor does a failed one', st.netOffset === 1500, 'offset ' + st.netOffset);
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally { await s.close(); }
+
+    // 2. A correction that only arrives shortly before the start is still used while the film waits.
+    answer({ ok: false, offsetMs: 0, uncertaintyMs: null, method: 'none' });
+    s = await launch(newProfile(), { AP_FAKE_NTP_FILE: file });
+    try {
+      await loadMovie(s.page, MOVIE);
+      await setSnap(s.page, SNAP);
+      await armIn(s.page, 20);
+      await waitPhase(s.page, 'standby', 5000);
+      check('inside the last two minutes before the start', await s.page.evaluate(() => window.__AP.Engine.nearCritical()));
+      answer({ offsetMs: 3000, uncertaintyMs: 10 });
+      await remeasure(s.page);
+      check('a late first correction is applied while waiting', await waitFor(s.page, () => window.__AP.Clock.netOffsetMs === 3000, null, 3000));
+      check('and the film then starts on true time', await waitSynced(s.page, 22000));
+      await sleep(1500);
+      const st = await state(s.page);
+      check('in sync on the corrected clock', Math.abs(st.drift) < 0.06 && st.netOffset === 3000, ms(st.drift));
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally { await s.close(); }
+
+    // 3. A PC clock that is hours wrong gets fixed while the film waits: the countdown must survive.
+    answer({ offsetMs: 36000000, uncertaintyMs: 10 });
+    s = await launch(newProfile(), { AP_FAKE_NTP_FILE: file });
+    try {
+      await waitFor(s.page, () => window.__AP.Clock.netOffsetMs === 36000000, null, 8000);
+      await loadMovie(s.page, MOVIE);
+      await setSnap(s.page, SNAP);
+      await s.page.evaluate(({ snap }) => {
+        const { cfg, Engine, Clock } = window.__AP;
+        const d = new Date(Clock.now() + (300 + snap) * 1000);
+        const pad = (n) => String(n).padStart(2, '0');
+        cfg.targetMode = 'custom';
+        cfg.customTarget = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+        Engine.session = Engine.computeFree();
+      }, { snap: SNAP });
+      await s.page.click('#armBtn');
+      await waitPhase(s.page, 'standby', 5000);
+      const toStart = () => s.page.evaluate(() => (window.__AP.Engine.session.startEpoch - window.__AP.Clock.now()) / 1000);
+      const t0 = await toStart();
+      answer({ offsetMs: 0, uncertaintyMs: 10 });
+      await s.page.evaluate(() => { const real = Date.now.bind(Date); Date.now = () => real() + 36000000; });
+      await sleep(5000);
+      const st = await state(s.page);
+      const t1 = await toStart();
+      check('a ten-hour clock fix while waiting does not disarm the countdown', st.mode === 'armed' && st.phase === 'standby' && st.armed, st.mode + '/' + st.phase);
+      check('and the start time has not moved', st.netOffset === 0 && Math.abs((t0 - t1) - 5) < 1.5, 'start in ' + t0.toFixed(1) + ' s -> ' + t1.toFixed(1) + ' s');
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally { await s.close(); }
+  },
+
+  async unplug() {
+    // The movie lives on a drive that drops out for a moment while the countdown is armed.
+    const dir = newProfile();
+    const film = path.join(dir, 'film.mp4');
+    const away = path.join(dir, 'film.away');
+    fs.copyFileSync(path.join(MEDIA, 'silent.mp4'), film);
+    const s = await launch(newProfile());
+    try {
+      await loadMovie(s.page, film);
+      await setSnap(s.page, SNAP);
+      await armIn(s.page, 16);
+      await waitPhase(s.page, 'standby', 5000);
+      fs.renameSync(film, away);
+      await s.page.evaluate(() => document.getElementById('video').dispatchEvent(new Event('error')));
+      check('the movie going away is noticed', await waitFor(s.page, () => document.getElementById('app').dataset.view === 'import' && window.__AP.cfg.armed, null, 8000));
+      await sleep(1500);
+      fs.renameSync(away, film);
+      check('when it is back the app picks it up by itself', await waitFor(s.page, () => window.__AP.Media.ready && window.__AP.Engine.mode === 'armed', null, 15000));
+      check('and the movie still starts on time', await waitSynced(s.page, 20000), JSON.stringify(await s.page.evaluate(() => ({ phase: window.__AP.Engine.phase, mode: window.__AP.Engine.mode, exp: window.__AP.Engine.expected(), dur: document.getElementById('video').duration, ev: window.__AP.Engine.events.slice(-8).map((e) => e.text) }))));
+      await sleep(1200);
+      const st = await state(s.page);
+      check('in sync after the drop-out', Math.abs(st.drift) < 0.06 && Math.abs(st.t - st.expected) < 0.12, ms(st.drift));
+      const unexpected = s.errors.filter((e) => !/ERR_FILE_NOT_FOUND/.test(e));      // the missing file itself is expected
+      check('no page errors', unexpected.length === 0, unexpected.join(' | '));
+    } finally { await s.close(); }
+  },
+
+  async fumbles() {
+    const s = await launch(newProfile());
+    try {
+      await loadMovie(s.page, MOVIE);
+      await setSnap(s.page, SNAP);
+      await s.page.evaluate(() => { window.__AP.cfg.autoRecoverSec = 30; });
+      await armIn(s.page, -30);
+      await waitSynced(s.page, 10000);
+
+      // Double tap on Space while the popup is up: must end in sync, not "started early".
+      await s.page.keyboard.press('Space');
+      await waitPhase(s.page, 'slipped', 2000);
+      await s.page.keyboard.press('Space');
+      await sleep(150);
+      await s.page.keyboard.press('Space');
+      check('a double tap on Space still ends in sync', await waitSynced(s.page, 8000) && await s.page.isHidden('#slip'));
+      let st = await state(s.page);
+      check('and is not read as a second slip', st.slips === 1, st.slips + ' slips');
+
+      // A dropdown keeps the focus: the recovery keys must still work.
+      await s.page.click('.tab[data-tab="setup"]');
+      await s.page.selectOption('#optAutoRecoverSec', '30');
+      await s.page.evaluate(() => document.getElementById('video').pause());
+      await waitPhase(s.page, 'slipped', 2000);
+      await s.page.keyboard.press('r');
+      check('R works right after using a dropdown', await waitSynced(s.page, 8000));
+
+      // Double click on Recalibrate in fullscreen must not leave fullscreen.
+      await s.page.keyboard.press('f');
+      await waitFor(s.page, () => document.getElementById('app').classList.contains('is-fs'), null, 4000);
+      await s.page.keyboard.press('Space');
+      await waitPhase(s.page, 'slipped', 2000);
+      check('the popup shows in fullscreen, centred', await s.page.evaluate(() => {
+        const p = document.getElementById('slip').getBoundingClientRect();
+        const st = document.getElementById('stage').getBoundingClientRect();
+        return !document.getElementById('slip').hidden && Math.abs((p.left + p.right) / 2 - (st.left + st.right) / 2) < 4 && Math.abs((p.top + p.bottom) / 2 - (st.top + st.bottom) / 2) < 4;
+      }));
+      await shot(s.page, 'slip-fullscreen');
+      await s.page.dblclick('#slipBtn');
+      check('a double click on Recalibrate recovers', await waitSynced(s.page, 8000));
+      await sleep(400);
+      check('and stays in fullscreen', await s.page.evaluate(() => document.getElementById('app').classList.contains('is-fs')));
+      await s.page.keyboard.press('Escape');
+
+      // Someone pauses seconds before midnight: the New Year animation still plays.
+      await s.page.evaluate(() => {
+        const { Engine, Clock } = window.__AP;
+        const shift = Engine.session.targetEpoch - Clock.now() - 6000;      // the snap is now 6 s away
+        Engine.session.targetEpoch -= shift; Engine.session.startEpoch -= shift; Engine.session.endEpoch -= shift;
+        Engine.recalibrate('manual');
+      });
+      await waitSynced(s.page, 8000);
+      await s.page.keyboard.press('Space');
+      await waitPhase(s.page, 'slipped', 2000);
+      check('paused seconds before midnight', (await state(s.page)).phase === 'slipped');
+      check('the celebration still fires at midnight', await waitFor(s.page, () => window.__AP.Celebration.fx.running, null, 9000));
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally { await s.close(); }
+  },
+
   async ui() {
     const profile = newProfile();
     let s = await launch(profile);

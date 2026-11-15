@@ -229,11 +229,37 @@
     playedMs: 0,
     loadToken: 0,
 
+    /** Loads a movie. `loading` is true for the duration, so nothing else starts a second load. */
     async load(info, opts) {
+      this.loading = true;
+      try {
+        return await this.loadNow(info, opts);
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    /**
+     * The countdown is armed but there is no movie (the drive hiccuped, the USB stick is not in yet):
+     * keep looking for it, every 5 s for the first minute and every 30 s after that.
+     */
+    retryWhileArmed(perf) {
+      if (this.ready || this.loading || !cfg.armed || !cfg.moviePath || !native.isNative) return;
+      if (perf < (this.retryAt || 0)) return;
+      this.retries = (this.retries || 0) + 1;
+      this.retryAt = perf + (this.retries <= 12 ? 5000 : 30000);
+      if (this.retries === 1) Engine.logEvent('The movie is not available: it will be tried again every few seconds');
+      native.openMovie(cfg.moviePath).then((info) => {
+        if (info && !this.ready && !this.loading && cfg.armed) return this.load(info, { retry: true });
+        return false;
+      }).catch(() => {});
+    },
+
+    async loadNow(info, opts) {
       opts = opts || {};
       if (!info || !info.url) return false;
       const token = ++this.loadToken;
-      UI.importError('');
+      if (!opts.retry) UI.importError('');
       UI.importBusy(true);
       Engine.hardReset();
       SubsUI.found = [];
@@ -273,12 +299,17 @@
         video.load();
         this.info = null;
         UI.showImport();
-        UI.importError(await this.explainFailure(info, ok, hadVideo));
+        // A silent retry keeps whatever explanation is already on screen.
+        if (!opts.retry) UI.importError(await this.explainFailure(info, ok, hadVideo) + (cfg.armed ? ' The countdown stays armed and the app keeps trying this movie.' : ''));
         return false;
       }
 
       this.info = info;
       this.ready = true;
+      if (this.retries) Engine.logEvent('The movie is available again');
+      this.retries = 0;
+      this.retryAt = 0;
+      UI.importError('');
       this.hasAudio = detectAudio(false);
       cfg.moviePath = info.path || '';
       cfg.movieName = info.name || '';
@@ -446,13 +477,22 @@
       tellArmed(true);
       this.logEvent((opts.restore ? 'Countdown resumed' : 'Countdown armed') + ': movie starts ' + C.fmtDateTime(s.startEpoch, cfg.use24h));
       UI.onMode();
-      await this.recalibrate('arm');
+      // Not awaited: before the start time this only finishes when the film starts, and whoever
+      // armed (startup, the button) has other things to do meanwhile.
+      this.recalibrate('arm').catch((e) => this.logEvent('Recalibration failed: ' + (e && e.message)));
+    },
+
+    /** Abandons whoever is waiting for the clock, telling them so. */
+    dropWaiter() {
+      const w = this.waiter;
+      this.waiter = null;
+      if (w) w.res(false);
     },
 
     disarm() {
       if (this.mode !== 'armed' || this.test) return;
       this.token++;
-      this.waiter = null;
+      this.dropWaiter();
       this.mode = 'free';
       cfg.armed = false; cfg.armedTarget = null; saveNow();
       tellArmed(false);
@@ -467,7 +507,7 @@
     /** Drops everything in flight (used when another movie is loaded). The saved armed flag is kept. */
     hardReset() {
       this.token++;
-      this.waiter = null;
+      this.dropWaiter();
       if (this.test) { Clock.testOffsetMs = 0; this.test = null; UI.onTest(); }
       this.mode = 'free';
       Celebration.stop();
@@ -487,7 +527,7 @@
     async recalibrate(reason) {
       if (this.mode !== 'armed' || !Media.ready) return;
       const tok = ++this.token;
-      this.waiter = null;
+      this.dropWaiter();
       this.mark = null;
       UI.hideSlip();
       el.blocked.hidden = true;
@@ -561,16 +601,22 @@
       return new Promise((res) => {
         this.engineSeeks++;
         let finished = false;
+        let began = false;
         let to = 0;
         const done = (ok) => {
           if (finished) return;
           finished = true;
+          video.removeEventListener('seeking', onSeeking);
           video.removeEventListener('seeked', onSeeked);
           clearTimeout(to);
           this.engineSeeks = Math.max(0, this.engineSeeks - 1);
           res(ok);
         };
-        const onSeeked = () => done(true);
+        // A 'seeked' left over from an earlier seek must not finish this one: wait for this seek's
+        // own 'seeking', and check the film really is where it was sent.
+        const onSeeking = () => { began = true; };
+        const onSeeked = () => { if (began && Math.abs(video.currentTime - pos) < 0.5) done(true); };
+        video.addEventListener('seeking', onSeeking);
         video.addEventListener('seeked', onSeeked);
         to = setTimeout(() => done(false), 10000);
         try { video.currentTime = pos; } catch (e) { done(false); }
@@ -588,6 +634,7 @@
     pump() {
       const w = this.waiter;
       if (!w) return;
+      if (performance.now() < this.st.settleUntil) return;     // clock in doubt, see tick()
       if (w.tok !== this.token) { this.waiter = null; w.res(false); return; }
       const rem = w.epoch - Clock.now();
       if (rem < -400) { this.waiter = null; w.res('late'); return; }   // e.g. the PC slept through the mark
@@ -613,7 +660,7 @@
 
     finish() {
       this.token++;
-      this.waiter = null;
+      this.dropWaiter();
       if (!video.paused) video.pause();
       video.playbackRate = 1;
       this.logEvent('The movie finished');
@@ -631,7 +678,7 @@
     slip(reason) {
       if (this.mode !== 'armed' || this.phase === 'slipped' || this.phase === 'idle') return;
       this.token++;
-      this.waiter = null;
+      this.dropWaiter();
       if (video.playbackRate !== 1) video.playbackRate = 1;
       this.st.rate = 1;
       this.st.slipReason = reason;
@@ -689,7 +736,9 @@
         }
         if (this.locked()) return;
         if (this.phase === 'synced') { video.pause(); this.slip('pause'); return; }
-        if (this.phase === 'standby' || this.phase === 'cueing') { this.slip('early'); video.play().catch(() => {}); }
+        // While the film is being re-cued (a fraction of a second) the key is ignored, so a double tap
+        // on Space does not undo the recalibration it just asked for.
+        if (this.phase === 'standby') { this.slip('early'); video.play().catch(() => {}); }
         return;
       }
       if (video.paused) video.play().catch(() => {}); else video.pause();
@@ -741,7 +790,7 @@
       }
 
       this.token++;
-      this.waiter = null;
+      this.dropWaiter();
       Clock.testOffsetMs = simNow - realNow;
       this.test = {
         kind: kind, title: title, t0: simNow, eventEpoch: eventEpoch, endEpoch: endEpoch,
@@ -803,7 +852,7 @@
       const t = this.test;
       if (!t) return;
       this.token++;
-      this.waiter = null;
+      this.dropWaiter();
       Clock.testOffsetMs = 0;
       this.test = null;
       Celebration.stop();
@@ -847,11 +896,15 @@
       this.st.lastWall = wall;
       this.st.lastPerf = perf;
       Frames.watchdog();
+      // The clock is in doubt until the time servers have answered (at most 4 s): decide nothing
+      // on it. A badly wrong clock could otherwise make the film look finished and disarm it.
+      if (perf < this.st.settleUntil) return;
 
       const now = Clock.now();
       if (this.mode !== 'armed') {
         this.session = this.computeFree();
         this.trackAudio();
+        if (!this.test) Media.retryWhileArmed(perf);
         return;
       }
       this.pump();
@@ -1013,8 +1066,10 @@
         const r = await native.measureTime();
         if (r) {
           ok = !!r.ok;
-          // Keep the last good answer if this attempt failed (for example the Wi-Fi dropped).
-          if (r.ok || !this.usable()) this.result = r;
+          // Keep the last good answer unless the new one is just as trustworthy: a failed attempt
+          // (the Wi-Fi dropped) or a vague one (only a coarse fallback answered) must not undo it.
+          const good = r.ok && Number.isFinite(r.offsetMs) && r.uncertaintyMs <= 250;
+          if (good || !this.usable()) this.result = r;
           if (r.ok) Engine.logEvent('Internet time: PC clock is ' + this.describe(r.offsetMs) + ' (±' + Math.round(r.uncertaintyMs) + ' ms, ' + r.method + ')');
           else if (manual) toast('Could not reach a time server', 'bad');
         }
@@ -1048,10 +1103,14 @@
       const delta = want - Clock.netOffsetMs;
       if (Math.abs(delta) < 1) return;
       if (Engine.test) return;                               // a rehearsal keeps its own clock
-      if (!manual && Engine.nearCritical()) return;          // never move the clock right before the big moments
+      // Right before the start and the snap a correction that is already in use is left alone.
+      // A first correction, or any correction while the film is still waiting, is always taken:
+      // being on true time matters more than not moving.
+      if (!manual && this.applied && Engine.phase !== 'standby' && Engine.nearCritical()) return;
       // Two measurements a few milliseconds apart are the same answer: do not make the film chase noise.
       if (!manual && want !== 0 && Clock.netOffsetMs !== 0 && Math.abs(delta) < 25) return;
       Clock.netOffsetMs = want;
+      if (want !== 0) this.applied = true;
       Engine.ctrl.reset();
       if (Engine.mode === 'free') Engine.session = Engine.computeFree();
       UI.dirty.all = true;
@@ -1427,7 +1486,7 @@
     stark: 'Golden dust sweeps in and assembles into HAPPY NEW YEAR, then blows away. The snap, in reverse.',
     fireworks: 'Classic fireworks with a gold title.',
     minimal: 'A small banner only. Nothing covers the scene.',
-    off: 'No animation. The calendar still flips to January 1.'
+    off: 'No animation. The date under the clock still rolls over to January 1.'
   };
 
   const setText = (node, text) => { if (node.__t !== text) { node.__t = text; node.textContent = text; } };
@@ -1722,8 +1781,9 @@
 
       // The instant of the snap: fire the celebration within one frame of it.
       if (s && Engine.mode === 'armed' && this.prevNow && this.prevNow < s.targetEpoch && now >= s.targetEpoch && now - s.targetEpoch < 4000) {
-        // Also when the film is a split second from locking on (the app was opened right before midnight).
-        if (Engine.phase === 'synced' || Engine.phase === 'cueing') Celebration.play(s.targetEpoch);
+        // Fired on the clock, not on the film: also when someone has just slipped, or the app was
+        // opened a split second before midnight. Only a film that has not started stays quiet.
+        if (Engine.phase !== 'standby' && Engine.phase !== 'idle') Celebration.play(s.targetEpoch);
         Engine.logEvent('Target moment reached' + (Engine.st.drift != null ? ', film ' + fmtMs(Engine.st.drift) + ' from the clock' : ''));
       }
       this.prevNow = now;
@@ -2299,6 +2359,9 @@
     el.btnStats.addEventListener('click', () => setCfg('showStats', !cfg.showStats));
     el.btnFs.addEventListener('click', () => UI.setFullscreen(!UI.isFs));
 
+    // A dropdown that keeps the focus would swallow R, Enter and Space: let go once a choice is made.
+    document.addEventListener('change', (e) => { if (e.target && e.target.tagName === 'SELECT') e.target.blur(); });
+
     // A click on a button must not leave it focused, or the next Space press would click it again.
     document.addEventListener('click', (e) => {
       const b = e.target.closest && e.target.closest('button');
@@ -2315,8 +2378,13 @@
       clearTimeout(clickTimer);
       clickTimer = setTimeout(() => Engine.userTogglePlay(), 220);
     });
+    // A double click toggles fullscreen only when BOTH clicks were on the picture. Otherwise a double
+    // click on Recalibrate (whose popup vanishes after the first click) would drop out of fullscreen.
+    const onPicture = (t) => t === video || t === el.standby || el.standby.contains(t);
+    let firstOnPicture = false;
+    el.stage.addEventListener('mousedown', (e) => { if (e.detail <= 1) firstOnPicture = onPicture(e.target); }, true);
     el.stage.addEventListener('dblclick', (e) => {
-      if (e.target !== video && e.target !== el.standby && !el.standby.contains(e.target)) return;
+      if (!onPicture(e.target) || !firstOnPicture) return;
       clearTimeout(clickTimer);
       UI.setFullscreen(!UI.isFs);
     });
@@ -2458,7 +2526,7 @@
         const ok = await Media.load(info);
         if (ok && wantFs) await UI.setFullscreen(true);
       } else if (cfg.armed) {
-        UI.importError('The countdown is armed, but the movie is no longer at <b>' + esc(cfg.moviePath) + '</b>. Choose it again.');
+        UI.importError('The countdown is armed, but the movie cannot be found at <b>' + esc(cfg.moviePath) + '</b>. Plug the drive back in or choose the movie again. The app keeps looking for it.');
       }
     }
     UI.booted = true;
