@@ -1,0 +1,37 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Celebration demo</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #111; font: 14px system-ui, sans-serif; color: #ddd; }
+  #stage { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
+  /* A deliberately busy, bright picture: if the words read on this, they read on the film. */
+  #bg { position: absolute; inset: 0;
+    background:
+      repeating-linear-gradient(115deg, rgba(255,255,255,.16) 0 14px, rgba(0,0,0,.14) 14px 31px),
+      radial-gradient(40% 55% at 30% 45%, #ffd9a8, transparent 70%),
+      radial-gradient(35% 50% at 72% 62%, #7ec8ff, transparent 70%),
+      linear-gradient(160deg, #c2552d, #e7b96a 40%, #5a7fb0 75%, #20304f); }
+  #bg.dark { background: radial-gradient(60% 60% at 50% 45%, #1c2638, #05070c); }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #bar { position: fixed; left: 8px; top: 8px; z-index: 5; display: flex; gap: 6px; }
+  button { font: inherit; padding: 6px 10px; }
+</style>
+<div id="stage"><div id="bg"></div><canvas id="fx"></canvas></div>
+<div id="bar">
+  <button data-style="stark">Stark</button>
+  <button data-style="fireworks">Fireworks</button>
+  <button id="toggle">Dark / bright</button>
+  <button id="stop">Stop</button>
+</div>
+<script src="../../src/fx.js"></script>
+<script>
+  const stage = document.getElementById('stage');
+  const fx = APFx.create(document.getElementById('fx'));
+  const fit = () => fx.resize(stage.clientWidth, stage.clientHeight, devicePixelRatio);
+  addEventListener('resize', fit);
+  fit();
+  document.querySelectorAll('[data-style]').forEach((b) => b.onclick = () => fx.play({ style: b.dataset.style, title: 'HAPPY NEW YEAR', year: '2027' }));
+  document.getElementById('toggle').onclick = () => document.getElementById('bg').classList.toggle('dark');
+  document.getElementById('stop').onclick = () => fx.stop();
+  window.demo = { fx, fit };
+</script>

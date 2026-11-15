@@ -1,0 +1,21 @@
+{
+  "name": "avengers-player",
+  "productName": "Avengers Player",
+  "version": "1.0.0",
+  "description": "New Year sync player: starts the movie by itself so the snap lands exactly on midnight.",
+  "main": "main/main.js",
+  "private": true,
+  "license": "MIT",
+  "author": "Avengers Player",
+  "scripts": {
+    "start": "electron .",
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "node --test tests/unit/*.test.cjs",
+    "test:e2e": "node tests/e2e/run.mjs",
+    "build:win": "node scripts/build-win.mjs"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "electron": "45.3.2"
+  }
+}

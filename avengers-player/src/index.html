@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en" data-theme="arc">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file:; style-src 'self' file: 'unsafe-inline'; media-src 'self' file: blob:; img-src 'self' file: data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'">
+<title>Avengers Player</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app" class="app" data-view="import" data-mode="free" data-phase="idle">
+
+<!-- ======================================================= IMPORT ======= -->
+<main id="importView" class="import">
+  <div class="import-grid" aria-hidden="true"></div>
+  <div class="import-inner">
+    <header class="brand">
+      <svg class="reactor" viewBox="0 0 120 120" aria-hidden="true">
+        <circle class="r1" cx="60" cy="60" r="54"/>
+        <circle class="r2" cx="60" cy="60" r="44"/>
+        <circle class="r3" cx="60" cy="60" r="31"/>
+        <circle class="r4" cx="60" cy="60" r="12"/>
+      </svg>
+      <div>
+        <h1>AVENGERS PLAYER</h1>
+        <p class="tagline">NEW YEAR SYNC EDITION</p>
+      </div>
+    </header>
+
+    <p class="lead">Import the movie, press <b>Start the Countdown</b>, go fullscreen and wait.
+      The film starts itself at <b id="imStart">9:29:30 PM</b> on December 31 so the snap lands on the first second of the new year.</p>
+
+    <div id="resumeCard" class="resume" hidden>
+      <div class="resume-title">Countdown is still armed</div>
+      <p id="resumeText">Open the movie again and playback jumps straight to where the clock says it should be.</p>
+      <div class="resume-actions">
+        <button id="resumeBtn" class="btn btn-primary" type="button">Resume</button>
+        <button id="resumeDiscard" class="btn btn-ghost" type="button">Discard the countdown</button>
+      </div>
+    </div>
+
+    <button id="dropZone" class="dropzone" type="button">
+      <svg viewBox="0 0 48 48" aria-hidden="true"><rect x="6" y="9" width="36" height="30" rx="4"/><path d="M6 17h36M6 31h36M14 9v8M24 9v8M34 9v8M14 31v8M24 31v8M34 31v8"/><path class="play" d="M21 20.5v7l6-3.5z"/></svg>
+      <span class="dz-title">Import the movie</span>
+      <span class="dz-sub">Drop your MP4 here, or click to browse</span>
+      <span class="dz-note">The file stays on this computer. It is played at its native quality, untouched.</span>
+    </button>
+    <input id="fileInput" type="file" accept="video/*,.mp4,.m4v,.mkv,.mov,.webm" hidden>
+    <input id="subInput" type="file" accept=".srt,.vtt,.ass,.ssa" hidden>
+    <div id="importBusy" class="import-busy" hidden><i class="spin"></i><span>Opening the movie…</span></div>
+    <div id="importError" class="import-error" hidden></div>
+
+    <div class="import-clock">
+      <div class="ic-cell"><span class="ic-lbl">NOW</span><span class="ic-val" id="imClock">--:--:--</span><span class="ic-sub" id="imDate">&nbsp;</span></div>
+      <div class="ic-cell"><span class="ic-lbl">MOVIE STARTS IN</span><span class="ic-val" id="imToStart">--:--:--</span><span class="ic-sub" id="imStartAt">&nbsp;</span></div>
+      <div class="ic-cell"><span class="ic-lbl" id="imSnapLbl">NEW YEAR IN</span><span class="ic-val" id="imToSnap">--:--:--</span><span class="ic-sub" id="imSnapAt">&nbsp;</span></div>
+    </div>
+    <p class="import-foot"><span id="appVersion">Avengers Player</span> · works offline · your settings are saved automatically</p>
+  </div>
+</main>
+
+<!-- ======================================================= PLAYER ======= -->
+<section id="playerView" class="player" hidden>
+
+  <div id="stage" class="stage">
+    <video id="video" playsinline preload="auto" disablepictureinpicture disableremoteplayback></video>
+    <canvas id="fx" class="fx"></canvas>
+
+    <!-- pre-show screen while waiting for the start time -->
+    <div id="standby" class="standby" hidden>
+      <svg class="reactor big" viewBox="0 0 120 120" aria-hidden="true">
+        <circle class="r1" cx="60" cy="60" r="54"/><circle class="r2" cx="60" cy="60" r="44"/><circle class="r3" cx="60" cy="60" r="31"/><circle class="r4" cx="60" cy="60" r="12"/>
+      </svg>
+      <div class="sb-label">STANDING BY · THE MOVIE STARTS IN</div>
+      <div class="sb-count" id="sbCount">--:--:--</div>
+      <div class="sb-line" id="sbLine">&nbsp;</div>
+      <div class="sb-clock" id="sbClock">&nbsp;</div>
+    </div>
+
+    <!-- subtitles -->
+    <div id="subs" class="subs" aria-live="off"></div>
+
+    <!-- clock / calendar / countdown overlay -->
+    <div id="overlay" class="overlay pos-tr size-m" hidden>
+      <div class="ov-clock" id="ovClock"><span class="t" id="ovTime">--:--:--</span><span class="ampm" id="ovAmpm"></span></div>
+      <div class="ov-date" id="ovDate">&nbsp;</div>
+      <div class="ov-count" id="ovCount"><span class="lbl" id="ovCountLbl">NEW YEAR IN</span><span class="val" id="ovCountVal">--:--:--</span></div>
+      <div class="ov-sync" id="ovSync"><i></i><span id="ovSyncTxt">IN SYNC</span></div>
+    </div>
+
+    <!-- 10, 9, 8 … for the last ten seconds -->
+    <div id="bigCount" class="bigcount" hidden><span id="bigNum">10</span></div>
+
+    <!-- small celebration banner (minimal style) -->
+    <div id="banner" class="banner" hidden><span id="bannerText">HAPPY NEW YEAR</span></div>
+
+    <!-- snap point marker shown while calibrating -->
+    <div id="snapCue" class="snapcue" hidden>SNAP POINT</div>
+
+    <!-- test run HUD -->
+    <div id="testHud" class="testhud" hidden>
+      <span class="th-chip">TEST RUN</span>
+      <span class="th-title" id="thTitle">Snap test</span>
+      <span class="th-clock" id="thClock">--:--:--</span>
+      <div class="th-bar" id="thBar"><i id="thFill"></i><b id="thMark"></b></div>
+      <span class="th-note" id="thNote">&nbsp;</span>
+      <button id="thEnd" class="th-end" type="button">End test</button>
+    </div>
+
+    <!-- slip recovery -->
+    <div id="slip" class="slip" role="alertdialog" aria-labelledby="slipTitle" hidden>
+      <div class="slip-icon" aria-hidden="true"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="19"/><path d="M24 13v12l8 5"/></svg></div>
+      <div class="slip-title" id="slipTitle">You slipped</div>
+      <div class="slip-body" id="slipBody">The movie is out of sync with the clock.</div>
+      <button id="slipBtn" class="btn btn-primary slip-btn" type="button">RECALIBRATE</button>
+      <div class="slip-auto" id="slipAuto">Press R, Enter or Space</div>
+      <button id="slipStay" class="slip-stay" type="button">Stay out of sync</button>
+    </div>
+    <button id="slipPill" class="slip-pill" type="button" hidden>OUT OF SYNC · click or press R to recalibrate</button>
+
+    <button id="blocked" class="blocked" type="button" hidden>Click to start playback</button>
+    <div id="audioWarn" class="audio-warn" hidden></div>
+    <pre id="statsHud" class="stats" hidden></pre>
+    <div id="toasts" class="toasts" aria-live="polite"></div>
+
+    <!-- transport -->
+    <div id="controls" class="controls">
+      <div id="seek" class="seek" role="slider" aria-label="Timeline" tabindex="-1">
+        <div class="seek-track" id="seekTrack">
+          <div class="seek-fill" id="seekFill"></div>
+          <div class="seek-snap" id="seekSnap" title="Snap point"></div>
+          <div class="seek-live" id="seekLive" title="Where the clock says the movie should be"></div>
+          <div class="seek-thumb" id="seekThumb"></div>
+        </div>
+        <div class="seek-tip" id="seekTip" hidden>0:00</div>
+      </div>
+      <div class="bar">
+        <button id="btnPlay" class="ib" type="button" title="Play / pause (Space)" data-icon="play"></button>
+        <button id="btnBack" class="ib sm" type="button" title="Back 10 s (←)" data-icon="back"></button>
+        <button id="btnFwd" class="ib sm" type="button" title="Forward 10 s (→)" data-icon="fwd"></button>
+        <button id="btnMute" class="ib sm" type="button" title="Mute (M)" data-icon="vol"></button>
+        <input id="vol" class="vol" type="range" min="0" max="1" step="0.01" value="1" aria-label="Volume">
+        <span id="timeLabel" class="time">0:00 / 0:00</span>
+        <span class="grow"></span>
+        <span id="syncChip" class="chip" data-state="free"><i></i><span id="syncChipTxt">FREE PLAY</span></span>
+        <button id="btnSubs" class="ib sm" type="button" title="Subtitles (C)" data-icon="cc"></button>
+        <button id="btnOverlay" class="ib sm" type="button" title="Clock overlay (O)" data-icon="clock"></button>
+        <button id="btnLock" class="ib sm" type="button" title="Lock controls (L)" data-icon="unlock"></button>
+        <button id="btnStats" class="ib sm" type="button" title="Playback stats (I)" data-icon="stats"></button>
+        <button id="btnFs" class="ib" type="button" title="Fullscreen (F)" data-icon="fs"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================================================== MISSION PANEL == -->
+  <aside id="panel" class="panel">
+    <header class="panel-head">
+      <svg class="reactor sm" viewBox="0 0 120 120" aria-hidden="true">
+        <circle class="r1" cx="60" cy="60" r="54"/><circle class="r2" cx="60" cy="60" r="44"/><circle class="r3" cx="60" cy="60" r="31"/><circle class="r4" cx="60" cy="60" r="12"/>
+      </svg>
+      <div class="ph-text"><b>AVENGERS PLAYER</b><span>MISSION CONTROL</span></div>
+      <div class="ph-clock"><b id="phClock">--:--:--</b><span id="phDate">&nbsp;</span></div>
+    </header>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab on" data-tab="mission" type="button" role="tab">Mission</button>
+      <button class="tab" data-tab="sync" type="button" role="tab">Sync</button>
+      <button class="tab" data-tab="test" type="button" role="tab">Test</button>
+      <button class="tab" data-tab="display" type="button" role="tab">Display</button>
+      <button class="tab" data-tab="subs" type="button" role="tab">Subs</button>
+      <button class="tab" data-tab="setup" type="button" role="tab">Setup</button>
+    </nav>
+
+    <div class="panes">
+
+      <!-- ---------------------------------------------------- mission -->
+      <section class="pane on" id="pane-mission">
+        <div class="status" id="statusCard" data-state="idle">
+          <div class="st-label" id="stLabel">READY</div>
+          <div class="st-big" id="stBig">--:--:--</div>
+          <div class="st-sub" id="stSub">until the movie starts</div>
+        </div>
+
+        <div class="kt">
+          <div><span>Movie starts by itself</span><b id="ktStart">—</b></div>
+          <div><span id="ktSnapLbl">The snap lands</span><b id="ktSnap">—</b></div>
+          <div><span>Snap point in your file</span><b id="ktPoint">2:30:30</b></div>
+        </div>
+
+        <button id="armBtn" class="btn btn-primary btn-xl" type="button">START THE COUNTDOWN</button>
+        <p class="hint" id="armHint">Press it any day: the movie waits for December 31 and starts itself. Use the <b>Test</b> tab to rehearse right now.</p>
+        <button id="fsBtn" class="btn btn-ghost btn-wide" type="button">ENTER FULLSCREEN <kbd>F</kbd></button>
+
+        <h3 class="sec">Pre-flight check</h3>
+        <ul class="preflight" id="preflight"></ul>
+
+        <h3 class="sec">Movie</h3>
+        <div class="filecard">
+          <div class="fc-name" id="fileName">—</div>
+          <div class="fc-meta" id="fileMeta">&nbsp;</div>
+          <div class="row">
+            <button id="changeMovie" class="btn btn-ghost btn-sm" type="button">Change movie</button>
+            <button id="fixAudioBtn" class="btn btn-warn btn-sm" type="button" hidden>Fix the sound</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ------------------------------------------------------- sync -->
+      <section class="pane" id="pane-sync">
+        <div class="meter" id="syncMeter" data-state="free">
+          <div class="m-state" id="syState">NOT ARMED</div>
+          <div class="m-val" id="syDrift">—</div>
+          <div class="m-scale"><i id="syNeedle"></i><span class="z"></span></div>
+          <div class="m-legend"><span>behind</span><span>in sync</span><span>ahead</span></div>
+        </div>
+        <canvas id="syGraph" class="graph" width="720" height="200"></canvas>
+        <dl class="kv">
+          <dt>Movie position</dt><dd id="syPos">—</dd>
+          <dt>Clock says it should be</dt><dd id="syExp">—</dd>
+          <dt>Playback speed</dt><dd id="syRate">1.000×</dd>
+          <dt>Time source</dt><dd id="sySource">PC clock</dd>
+          <dt>PC clock error</dt><dd id="syOffset">not measured</dd>
+          <dt>Recalibrations</dt><dd id="syRecals">0</dd>
+          <dt>Learned start delay</dt><dd id="syLat">—</dd>
+        </dl>
+        <div class="row">
+          <button id="recalBtn" class="btn btn-ghost btn-sm" type="button">Recalibrate now <kbd>R</kbd></button>
+          <button id="netBtn" class="btn btn-ghost btn-sm" type="button">Check internet time</button>
+        </div>
+        <label class="sw"><input type="checkbox" id="optNetTime"><i></i><span>Correct the PC clock with internet time<small>Asks time servers what time it really is, so midnight is real midnight.</small></span></label>
+        <h3 class="sec">Event log</h3>
+        <div class="log" id="evLog"></div>
+        <button id="openLog" class="link" type="button">Open the full log file</button>
+      </section>
+
+      <!-- ------------------------------------------------------- test -->
+      <section class="pane" id="pane-test">
+        <p class="hint">A test run moves the app's clock, not your PC clock. The real countdown stays armed and comes back when the test ends.</p>
+        <div class="tcard">
+          <h4><span>1</span>Auto-start test</h4>
+          <p>Jumps to just before the start time and checks that the movie starts by itself, on the dot.</p>
+          <div class="row">
+            <select id="tsLeadStart" aria-label="Seconds before the start"><option value="10">10 s before</option><option value="20">20 s before</option><option value="45">45 s before</option></select>
+            <button class="btn btn-primary btn-sm" data-test="start" type="button">Run</button>
+          </div>
+        </div>
+        <div class="tcard">
+          <h4><span>2</span>Snap test</h4>
+          <p>Jumps to just before midnight. Watch the snap land on 12:00:00, the calendar flip and the celebration.</p>
+          <div class="row">
+            <select id="tsLeadSnap" aria-label="Seconds before the snap"><option value="20">20 s before</option><option value="40" selected>40 s before</option><option value="75">75 s before</option><option value="150">2½ min before</option></select>
+            <button class="btn btn-primary btn-sm" data-test="snap" type="button">Run</button>
+          </div>
+        </div>
+        <div class="tcard">
+          <h4><span>3</span>Slip and recovery drill</h4>
+          <p>Plays mid-movie, then knocks the film out of sync on purpose so you can practise pressing Recalibrate.</p>
+          <div class="row"><button class="btn btn-primary btn-sm" data-test="slip" type="button">Run</button></div>
+        </div>
+        <div class="tcard">
+          <h4><span>4</span>Crash recovery</h4>
+          <p>With the countdown armed, close Avengers Player and open it again: it reloads the movie and jumps to the right spot by itself.</p>
+        </div>
+        <h3 class="sec">Results</h3>
+        <div class="results" id="testResults"><div class="empty">No test run yet.</div></div>
+      </section>
+
+      <!-- ---------------------------------------------------- display -->
+      <section class="pane" id="pane-display">
+        <h3 class="sec first">App theme</h3>
+        <div class="themes" id="themeGrid"></div>
+        <div class="grid2">
+          <label class="fld"><span>Control panel side</span><select id="optPanel"><option value="left">Left</option><option value="right">Right</option></select></label>
+        </div>
+
+        <h3 class="sec">On-screen clock</h3>
+        <label class="sw"><input type="checkbox" id="optOverlay"><i></i><span>Show the overlay <kbd>O</kbd><small>Turn off if everyone is watching their phones anyway.</small></span></label>
+        <label class="sw sub"><input type="checkbox" id="optClock"><i></i><span>Live clock</span></label>
+        <label class="sw sub"><input type="checkbox" id="optDate"><i></i><span>Date under the clock<small>Rolls over from December 31 to January 1 at midnight.</small></span></label>
+        <label class="sw sub"><input type="checkbox" id="optCount"><i></i><span>Countdown mode <kbd>N</kbd><small>A countdown to the snap, under the clock and date.</small></span></label>
+        <label class="sw sub"><input type="checkbox" id="optSyncBadge"><i></i><span>Sync badge</span></label>
+        <div class="grid2">
+          <label class="fld"><span>Position</span><select id="optPos"><option value="tr">Top right</option><option value="tl">Top left</option><option value="tc">Top centre</option><option value="br">Bottom right</option><option value="bl">Bottom left</option></select></label>
+          <label class="fld"><span>Size</span><select id="optSize"><option value="s">Small</option><option value="m">Medium</option><option value="l">Large</option><option value="xl">Extra large</option></select></label>
+          <label class="fld"><span>Clock format</span><select id="opt24h"><option value="12">12-hour</option><option value="24">24-hour</option></select></label>
+        </div>
+
+        <h3 class="sec">Final countdown</h3>
+        <label class="sw"><input type="checkbox" id="optFinal"><i></i><span>10 · 9 · 8 countdown animation <kbd>T</kbd><small>Big numbers on screen for the last ten seconds before the snap.</small></span></label>
+
+        <h3 class="sec">Happy New Year animation</h3>
+        <div class="seg" id="optCelebration" role="radiogroup">
+          <button type="button" data-v="stark">Stark</button>
+          <button type="button" data-v="fireworks">Fireworks</button>
+          <button type="button" data-v="minimal">Minimal</button>
+          <button type="button" data-v="off">Off</button>
+        </div>
+        <p class="hint" id="celebHint">&nbsp;</p>
+        <button id="previewCelebration" class="btn btn-ghost btn-sm" type="button">Preview the animation</button>
+
+        <h3 class="sec">Waiting screen</h3>
+        <label class="sw"><input type="checkbox" id="optStandby"><i></i><span>Show the standby countdown before the movie starts</span></label>
+      </section>
+
+      <!-- ------------------------------------------------------- subs -->
+      <section class="pane" id="pane-subs">
+        <div class="substat" id="subStatus">No subtitles loaded.</div>
+        <div class="row">
+          <button id="subLoad" class="btn btn-primary btn-sm" type="button">Load subtitle file…</button>
+          <button id="subClear" class="btn btn-ghost btn-sm" type="button" hidden>Remove</button>
+        </div>
+        <label class="sw"><input type="checkbox" id="subToggle"><i></i><span>Show subtitles <kbd>C</kbd></span></label>
+
+        <div id="subFoundWrap" hidden>
+          <h3 class="sec">Found next to the movie</h3>
+          <div class="list" id="subFound"></div>
+        </div>
+        <div id="subEmbeddedWrap" hidden>
+          <h3 class="sec">Inside the movie file</h3>
+          <div class="list" id="subEmbedded"></div>
+        </div>
+
+        <h3 class="sec">Appearance</h3>
+        <div class="grid2">
+          <label class="fld"><span>Size</span><select id="subSize"><option value="s">Small</option><option value="m">Medium</option><option value="l">Large</option><option value="xl">Extra large</option></select></label>
+          <label class="fld"><span>Background</span><select id="subBg"><option value="shadow">Outline</option><option value="box">Dark box</option><option value="none">None</option></select></label>
+          <label class="fld"><span>Colour</span><select id="subColor"><option value="white">White</option><option value="yellow">Yellow</option></select></label>
+          <label class="fld"><span>Height</span><select id="subPos"><option value="low">Low</option><option value="mid">Raised</option><option value="high">High</option></select></label>
+        </div>
+
+        <h3 class="sec">Timing</h3>
+        <div class="stepper">
+          <button id="subDelayMinus" class="btn btn-ghost btn-sm" type="button" title="Subtitles earlier (Z)">− 0.1 s</button>
+          <output id="subDelay">0.0 s</output>
+          <button id="subDelayPlus" class="btn btn-ghost btn-sm" type="button" title="Subtitles later (X)">+ 0.1 s</button>
+          <button id="subDelayReset" class="link" type="button">reset</button>
+        </div>
+        <p class="hint">Subtitles appearing too early? Add delay. Too late? Subtract.</p>
+
+        <h3 class="sec">Text encoding</h3>
+        <label class="fld"><span>If the letters look wrong, pick the file's language</span><select id="subEncoding"></select></label>
+      </section>
+
+      <!-- ------------------------------------------------------ setup -->
+      <section class="pane" id="pane-setup">
+        <h3 class="sec first">Snap point</h3>
+        <p class="hint">The exact moment in <i>your</i> file where the fingers snap. The usual copy is 2:30:30; another cut can differ by a second or two, so check it once.</p>
+        <div class="snaprow">
+          <input id="snapInput" class="inp mono" type="text" inputmode="numeric" spellcheck="false" aria-label="Snap point" value="2:30:30.000">
+          <button id="snapApply" class="btn btn-ghost btn-sm" type="button">Set</button>
+        </div>
+        <div class="snaptools" id="snapTools">
+          <button id="snapGoto" class="btn btn-ghost btn-sm" type="button">Play from 10 s before</button>
+          <div class="nudge">
+            <button id="snapSecBack" class="btn btn-ghost btn-sm" type="button">−1 s</button>
+            <button id="snapFrameBack" class="btn btn-ghost btn-sm" type="button">◀ frame</button>
+            <button id="snapFrameFwd" class="btn btn-ghost btn-sm" type="button">frame ▶</button>
+            <button id="snapSecFwd" class="btn btn-ghost btn-sm" type="button">+1 s</button>
+          </div>
+          <div class="snapnow">Now showing <b id="snapNow">0:00.000</b></div>
+          <button id="snapSetHere" class="btn btn-primary btn-sm" type="button">The snap is on this frame</button>
+          <button id="snapReset" class="link" type="button">back to 2:30:30</button>
+        </div>
+        <p class="hint" id="snapArmedNote" hidden>Stop the countdown to calibrate the snap point.</p>
+
+        <h3 class="sec">Target moment</h3>
+        <label class="rad"><input type="radio" name="tg" id="tgNewYear" value="newyear"><span>New Year's midnight (this computer's time zone)</span></label>
+        <label class="rad"><input type="radio" name="tg" id="tgCustom" value="custom"><span>Another date and time</span></label>
+        <input id="tgCustomInput" class="inp" type="datetime-local" step="1" aria-label="Custom target">
+
+        <h3 class="sec">Slip recovery</h3>
+        <label class="sw"><input type="checkbox" id="optAutoRecover"><i></i><span>Recalibrate by itself if nobody presses the button<small>After <select id="optAutoRecoverSec" class="inline"><option value="5">5</option><option value="10">10</option><option value="20">20</option><option value="30">30</option></select> seconds.</small></span></label>
+        <label class="sw"><input type="checkbox" id="optLock"><i></i><span>Lock the controls while armed <kbd>L</kbd><small>Play, pause and the timeline ignore clicks and keys, so a slip cannot happen.</small></span></label>
+
+        <h3 class="sec">Shortcuts</h3>
+        <dl class="keys">
+          <dt><kbd>Space</kbd></dt><dd>Play / pause</dd>
+          <dt><kbd>F</kbd> <kbd>F11</kbd></dt><dd>Fullscreen</dd>
+          <dt><kbd>R</kbd></dt><dd>Recalibrate</dd>
+          <dt><kbd>O</kbd></dt><dd>Clock overlay</dd>
+          <dt><kbd>N</kbd></dt><dd>Countdown mode</dd>
+          <dt><kbd>T</kbd></dt><dd>10 · 9 · 8 animation</dd>
+          <dt><kbd>C</kbd></dt><dd>Subtitles</dd>
+          <dt><kbd>Z</kbd> <kbd>X</kbd></dt><dd>Subtitle timing</dd>
+          <dt><kbd>H</kbd></dt><dd>New Year animation</dd>
+          <dt><kbd>L</kbd></dt><dd>Lock controls</dd>
+          <dt><kbd>M</kbd> <kbd>↑</kbd> <kbd>↓</kbd></dt><dd>Mute, volume</dd>
+          <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Skip 10 s</dd>
+          <dt><kbd>I</kbd></dt><dd>Playback stats</dd>
+        </dl>
+
+        <h3 class="sec">About</h3>
+        <div class="about" id="aboutInfo">Avengers Player</div>
+        <button id="resetAll" class="link danger" type="button">Reset all settings</button>
+      </section>
+    </div>
+  </aside>
+</section>
+
+<!-- ======================================================== MODAL ======= -->
+<div id="modal" class="modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-title" id="modalTitle">Title</div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-progress" id="modalProgress" hidden><i id="modalBar"></i></div>
+    <div class="modal-note" id="modalNote" hidden></div>
+    <div class="modal-actions" id="modalActions"></div>
+  </div>
+</div>
+
+</div>
+<script src="core.js"></script>
+<script src="subs-core.js"></script>
+<script src="fx.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
