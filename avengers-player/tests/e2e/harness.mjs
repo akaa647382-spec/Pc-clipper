@@ -43,14 +43,17 @@ export function newProfile() {
  */
 export async function launch(profile, extraEnv) {
   const { _electron } = loadPlaywright();
-  const electronPath = require(path.join(ROOT, 'node_modules', 'electron'));
-  const args = [ROOT];
+  // AP_APP_EXE runs the tests against a packaged build instead of the source tree.
+  const packaged = process.env.AP_APP_EXE || '';
+  const electronPath = packaged || require(path.join(ROOT, 'node_modules', 'electron'));
+  const args = packaged ? [] : [ROOT];
   if (process.platform === 'linux') args.push('--no-sandbox');
   const app = await _electron.launch({
     executablePath: electronPath,
     args,
     cwd: ROOT,
-    env: { ...process.env, AP_TEST: '1', AP_USER_DATA: profile, ...(extraEnv || {}) }
+    // ELECTRON_DISABLE_SANDBOX lets an instance restarted by the crash watchdog start as root on Linux too.
+    env: { ...process.env, AP_TEST: '1', AP_USER_DATA: profile, ...(process.platform === 'linux' ? { ELECTRON_DISABLE_SANDBOX: '1' } : {}), ...(extraEnv || {}) }
   });
   const page = await app.firstWindow();
   const errors = [];

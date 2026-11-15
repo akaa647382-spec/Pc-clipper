@@ -3,3 +3,4 @@ out/
 tests/media/
 tests/artifacts/
 *.log
+out-linux/
