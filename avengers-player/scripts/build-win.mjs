@@ -57,7 +57,10 @@ const MAX_INSTALLER_BYTES = 95 * 1024 * 1024;
 // scripts, build inputs, node_modules, README, ...) stays out of the package.
 const RUNTIME_DIRS = ['/main', '/src'];
 const RUNTIME_FILES = ['/package.json', '/build/icon.png', '/build/icon.ico'];
-const REQUIRED_APP_FILES = ['main/main.js', 'main/preload.js', 'src/index.html'];
+const REQUIRED_APP_FILES = [
+  'main/main.js', 'main/preload.js', 'main/store.js', 'main/ntp.js', 'main/ffmpeg.js', 'main/watchdog.js',
+  'src/index.html', 'src/styles.css', 'src/core.js', 'src/subs-core.js', 'src/fx.js', 'src/app.js',
+];
 
 // Files of the Electron distribution the app cannot do without. Checked after
 // trimming so a mistake there is caught here and not on New Year's Eve.

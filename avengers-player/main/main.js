@@ -6,7 +6,7 @@
  * cannot do reliably on its own: native file access, true fullscreen, keeping the PC awake,
  * real network time (NTP), crash recovery, settings that survive a crash, and the FFmpeg helper.
  */
-const { app, BrowserWindow, Menu, dialog, ipcMain, powerSaveBlocker, shell } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, powerSaveBlocker, shell, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
@@ -77,6 +77,7 @@ let unresponsiveTimer = null;
 let watchdog = null;
 const CLEAN_EXIT = path.join(USER_DATA, 'clean-exit');     // present only after the app was closed on purpose
 const RECOVERED = process.argv.includes('--recovered');     // this instance was started by the crash watchdog
+const LOGIN_ITEM = 'AvengersPlayer';                        // name of the start-at-login entry (see installer.nsi)
 
 /**
  * Crash recovery beyond a page reload: while the countdown is armed, a tiny second process watches
@@ -117,7 +118,8 @@ function stopWatchdog() {
 function setStartAtLogin(on) {
   if (process.platform !== 'win32' || !app.isPackaged) return;
   try {
-    if (app.getLoginItemSettings().openAtLogin !== !!on) app.setLoginItemSettings({ openAtLogin: !!on });
+    // A fixed name, so the uninstaller knows exactly which entry to remove.
+    if (app.getLoginItemSettings({ name: LOGIN_ITEM }).openAtLogin !== !!on) app.setLoginItemSettings({ openAtLogin: !!on, name: LOGIN_ITEM });
   } catch (e) {
     log('main', 'start-at-login could not be changed: ' + (e && e.message));
   }
@@ -143,10 +145,38 @@ function setKeepAwake(on) {
   }
 }
 
+/** The saved window position, but only if that spot is still on a connected screen (the TV may be off). */
+function savedPosition(b) {
+  if (!Number.isFinite(b.x) || !Number.isFinite(b.y)) return {};
+  try {
+    const w = Number.isFinite(b.width) ? b.width : 1440;
+    const h = Number.isFinite(b.height) ? b.height : 900;
+    const visible = screen.getAllDisplays().some((d) => {
+      const a = d.workArea;
+      const overlapX = Math.min(b.x + w, a.x + a.width) - Math.max(b.x, a.x);
+      const overlapY = Math.min(b.y + h, a.y + a.height) - Math.max(b.y, a.y);
+      return overlapX > 200 && overlapY > 150;
+    });
+    return visible ? { x: Math.round(b.x), y: Math.round(b.y) } : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+let boundsTimer = null;
+/** Remembers where the window is, so a restart after a crash comes back on the same screen. */
+function rememberBounds() {
+  clearTimeout(boundsTimer);
+  boundsTimer = setTimeout(() => {
+    if (!win || win.isDestroyed() || win.isMinimized()) return;
+    try { store.merge({ window: { bounds: win.getNormalBounds(), maximized: win.isMaximized() } }); } catch (e) { /* a convenience only */ }
+  }, 600);
+}
+
 function createWindow() {
   const saved = store.get().window || {};
   const b = saved.bounds || {};
-  win = new BrowserWindow({
+  win = new BrowserWindow(Object.assign(savedPosition(b), {
     width: Number.isFinite(b.width) ? Math.max(1024, b.width) : 1440,
     height: Number.isFinite(b.height) ? Math.max(640, b.height) : 900,
     minWidth: 1024,
@@ -164,7 +194,7 @@ function createWindow() {
       backgroundThrottling: false,
       spellcheck: false
     }
-  });
+  }));
   Menu.setApplicationMenu(null);
   if (saved.maximized) win.maximize();
 
@@ -175,11 +205,16 @@ function createWindow() {
   win.webContents.on('will-navigate', (e) => e.preventDefault());
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
+  win.on('move', rememberBounds);
+  win.on('resize', rememberBounds);
   win.on('enter-full-screen', () => send('win:fullscreen-changed', true));
   win.on('leave-full-screen', () => send('win:fullscreen-changed', false));
 
   win.webContents.on('before-input-event', (e, input) => {
     if (input.type !== 'keyDown') return;
+    // Developer tools are for development builds: in the installed app F12 sits right next to F11
+    // (fullscreen) and a stray press would shrink the picture and swallow the keyboard.
+    if (app.isPackaged && process.env.AP_DEVTOOLS !== '1') return;
     const devtools = input.key === 'F12' || (input.control && input.shift && input.key.toLowerCase() === 'i');
     if (devtools) { win.webContents.toggleDevTools(); e.preventDefault(); }
   });
@@ -218,6 +253,7 @@ function createWindow() {
     }
     quitting = true;
     markCleanExit();                 // closed on purpose: the watchdog must not bring the app back
+    setStartAtLogin(false);          // ...and neither must the next sign-in
     try {
       store.merge({ window: { bounds: win.getNormalBounds(), maximized: win.isMaximized() } });
     } catch (err) { /* window state is a convenience only */ }
@@ -370,7 +406,7 @@ function registerIpc() {
   /* ---- FFmpeg helper (optional) ---- */
   let ffAbort = null;
   const ffPath = async () => {
-    if (!ffmpeg) return null;
+    if (!ffmpeg || (IS_TEST && process.env.AP_NO_FFMPEG === '1')) return null;
     return ffmpeg.locate({ extra: [store.get().ffmpegPath].filter(Boolean), userDataDir: USER_DATA });
   };
   const ffError = (err) => ({ error: (err && err.message) || 'Something went wrong.', aborted: !!(err && err.name === 'AbortError') });

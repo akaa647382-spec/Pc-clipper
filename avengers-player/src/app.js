@@ -74,7 +74,7 @@
     snapSec: C.DEFAULT_SNAP_SEC,
     targetMode: 'newyear', customTarget: '',
     use24h: false,
-    showOverlay: true, showClock: true, showDate: true, showCount: true, showSyncBadge: true, finalTen: true,
+    showOverlay: true, showClock: true, showDate: true, showCount: true, showSyncBadge: false, finalTen: true,
     overlayPos: 'tl', overlaySize: 'm',
     celebration: 'stark',
     standbyScreen: true,
@@ -252,6 +252,8 @@
       native.openMovie(cfg.moviePath).then((info) => {
         if (info && !this.ready && !this.loading && cfg.armed) return this.load(info, { retry: true });
         return false;
+      }).then((ok) => {
+        if (ok && cfg.wasFullscreen && !UI.isFs) UI.setFullscreen(true);
       }).catch(() => {});
     },
 
@@ -336,7 +338,8 @@
         const hevcOk = !!video.canPlayType('video/mp4; codecs="hvc1.1.6.L120.90"');
         r = await native.ffProbe(this.info.path, hevcOk);
       } catch (e) { r = null; }
-      if (token !== this.loadToken || !r || !r.probe) { UI.dirty.preflight = true; return; }
+      if (token !== this.loadToken) return;
+      if (!r || !r.probe) { UI.dirty.preflight = true; this.soundCheck(token); return; }
       this.probe = r.probe;
       this.assess = r.assess || null;
       if (r.assess) {
@@ -347,6 +350,32 @@
       SubsUI.renderEmbedded();
       UI.dirty.preflight = true;
       UI.renderFileCard();
+    },
+
+    /**
+     * Without FFmpeg nothing can say in advance whether the sound is playable, and finding out
+     * at 9:29:32 PM is too late. So right after import the first two seconds are played without
+     * sound, just long enough to see whether any sound gets decoded, then the film is put back.
+     */
+    async soundCheck(token) {
+      if (this.hasAudio != null || Engine.mode !== 'free' || Engine.test || !video.paused) return;
+      const mine = () => token === this.loadToken && Engine.mode === 'free' && !Engine.test;
+      this.checking = true;
+      UI.dirty.preflight = true;
+      const t0 = performance.now();
+      video.muted = true;
+      try {
+        await video.play();
+        while (performance.now() - t0 < 4500 && this.hasAudio == null && mine() && !video.paused) await sleep(100);
+      } catch (e) { /* cannot play at all: the sound stays unknown */ }
+      const stillMine = mine();
+      this.checking = false;
+      if (stillMine) {
+        if (!video.paused) video.pause();
+        try { video.currentTime = 0; } catch (e) { /* not seekable */ }
+      }
+      applyVolume();                 // whatever happened, the user's own mute and volume come back
+      UI.dirty.preflight = true;
     },
 
     setAudio(has, reason) {
@@ -360,7 +389,7 @@
       const fixable = !this.probe || (this.probe.audio && this.probe.audio.length > 0);
       UI.audioWarning((reason || 'No sound could be decoded from this file.') + (fixable ? ' Use “Fix the sound” in the Mission tab.' : ''));
       Engine.logEvent('Sound problem: ' + (reason || 'no sound decoded'));
-      if (fixable && Engine.mode === 'free' && !Engine.test) AudioFix.offer();
+      if (fixable && Engine.mode === 'free' && !Engine.test && !Modal.isOpen) AudioFix.offer();
     },
 
     async explainFailure(info, loaded, hadVideo) {
@@ -454,6 +483,45 @@
     async arm(opts) {
       opts = opts || {};
       if (!Media.ready || this.test) return;
+      if (!opts.restore) {
+        // A fresh start of the countdown: stop the mistakes that would only show at midnight.
+        const len = video.duration;
+        if (len < cfg.snapSec + 2) {
+          Modal.open({
+            title: 'This file ends before the snap',
+            html: 'The file is <b>' + esc(C.fmtDuration(len)) + '</b> long, but the snap point is set to <b>' + esc(C.fmtDuration(cfg.snapSec, { forceHours: true })) +
+              '</b>, so the snap would never happen. Either this is the wrong file (a sample, another film, a download that was cut short), or the snap point needs changing in Setup.',
+            actions: [
+              { label: 'Open Setup', onClick: () => { Modal.close(); UI.showTab('setup'); } },
+              { label: 'OK', primary: true, onClick: () => Modal.close() }
+            ],
+            onEscape: () => Modal.close()
+          });
+          return;
+        }
+        if (Media.hasAudio === false && !opts.silentOk) {
+          const fixable = Media.info && Media.info.path && native.isNative && (!Media.probe || (Media.probe.audio || []).length > 0);
+          Modal.open({
+            title: 'This movie would play without sound',
+            html: esc(Media.audioReason || 'No sound could be decoded from this file.') + '<br><br>Start the countdown anyway?',
+            actions: [
+              { label: 'Cancel', onClick: () => Modal.close() },
+              { label: 'Start anyway', onClick: () => { Modal.close(); this.arm({ silentOk: true }); } }
+            ].concat(fixable ? [{ label: 'Fix the sound', primary: true, onClick: () => { Modal.close(); AudioFix.offer(); } }] : []),
+            onEscape: () => Modal.close()
+          });
+          return;
+        }
+        if (cfg.muted || cfg.volume < 0.05) {
+          // A mute left over from a rehearsal would make the whole film silent.
+          cfg.muted = false;
+          if (cfg.volume < 0.05) cfg.volume = 1;
+          save();
+          applyVolume();
+          UI.renderSettings();
+          toast('The player was muted: sound is back on');
+        }
+      }
       let target = opts.restore && Number.isFinite(cfg.armedTarget) ? cfg.armedTarget : this.computeFree().targetEpoch;
       let s = this.sessionFor(target);
       if (s.endEpoch != null && Clock.now() >= s.endEpoch - 1000) {
@@ -915,6 +983,7 @@
       switch (this.phase) {
         case 'synced':
           if (v.ended || this.expected(now) >= v.duration - 0.05) { this.finish(); break; }
+          if (v.error) break;                       // the error handler is already reloading the movie
           if (v.paused) { this.slip('pause'); break; }
           this.control(now);
           break;
@@ -983,7 +1052,8 @@
   /* ---- video events: anything the engine did not do itself is a slip ---- */
 
   video.addEventListener('pause', () => {
-    if (Engine.mode === 'armed' && Engine.phase === 'synced' && !video.ended && Media.ready) {
+    // A decoder error also pauses the video: that is the error handler's business, not a slip.
+    if (Engine.mode === 'armed' && Engine.phase === 'synced' && !video.ended && !video.error && Media.ready) {
       if (Engine.expected() >= video.duration - 0.3) Engine.finish(); else Engine.slip('pause');
     }
     UI.dirty.transport = true;
@@ -996,7 +1066,7 @@
     // Only the engine may change the speed while armed.
     if (Engine.mode === 'armed' && Engine.phase === 'synced' && Math.abs(video.playbackRate - Engine.st.rate) > 0.001) video.playbackRate = Engine.st.rate;
   });
-  video.addEventListener('volumechange', () => { UI.dirty.transport = true; });
+  video.addEventListener('volumechange', () => { UI.dirty.transport = true; UI.dirty.preflight = true; });
   video.addEventListener('error', () => {
     if (!Media.ready) return;
     Engine.logEvent('Video error: ' + (video.error ? video.error.message || video.error.code : 'unknown'));
@@ -1004,9 +1074,17 @@
     Media.errorTimes = (Media.errorTimes || []).filter((t) => nowP - t < 60000);
     Media.errorTimes.push(nowP);
     const info = Media.info;
-    if (Media.errorTimes.length > 3 || !info) { toast('The video keeps failing to play', 'bad'); return; }
-    toast('The video reported an error. Recovering…', 'bad');
-    setTimeout(() => { if (Media.info === info) Media.load(info); }, 800);
+    if (!info) return;
+    // Never give up while a movie is loaded. A damaged stretch of the file fails again and again
+    // while the clock is inside it, but the clock moves on: a later reload lands past the damage.
+    const many = Media.errorTimes.length > 3;
+    if (Media.errorTimes.length === 4) {
+      toast('This part of the file is damaged. Playback resumes as soon as the clock is past it.', 'bad');
+      Engine.logEvent('The file seems damaged here: retrying every 5 seconds until the clock is past it');
+    } else if (!many) {
+      toast('The video reported an error. Recovering…', 'bad');
+    }
+    setTimeout(() => { if (Media.info === info && !Media.loading) Media.load(info, { afterError: true }); }, many ? 5000 : 800);
   });
 
   // Frame-accurate drift samples: which film frame is on screen at which instant.
@@ -1238,7 +1316,10 @@
 
     /** Runs every frame; touches the DOM only when the set of visible lines changes. */
     render() {
-      if (!this.index || !cfg.subsOn || !Media.ready) {
+      // While the film waits at 0:00 a first line (often a credit for the subtitle site) would sit
+      // on the standby screen for hours: subtitles only show once the film runs.
+      const waiting = Engine.mode === 'armed' && Engine.phase === 'standby';
+      if (!this.index || !cfg.subsOn || !Media.ready || waiting) {
         if (this.shown !== false) { el.subs.textContent = ''; this.shown = false; }
         return;
       }
@@ -1727,7 +1808,9 @@
         items.push([true, 'Movie loaded and decoding', v.videoWidth + '×' + v.videoHeight + ' · ' + C.fmtDuration(v.duration)]);
         if (Media.hasAudio === true) items.push([true, 'Sound is playable', Media.probe && Media.probe.audio && Media.probe.audio[0] ? String(Media.probe.audio[0].codec).toUpperCase() : '']);
         else if (Media.hasAudio === false) items.push([false, 'No playable sound in this file', 'Use “Fix the sound” below.']);
+        else if (Media.checking) items.push([null, 'Checking the sound…', 'Playing the first two seconds silently.']);
         else items.push([null, 'Sound not verified yet', 'It is checked the moment the movie plays. Run a test.']);
+        if (cfg.muted || cfg.volume < 0.05) items.push([false, 'The player is muted', 'Press M or raise the volume. Starting the countdown switches the sound back on.']);
         if (v.duration >= cfg.snapSec + 2) items.push([true, 'The file reaches the snap point', 'Snap at ' + C.fmtDuration(cfg.snapSec, { ms: cfg.snapSec % 1 !== 0 })]);
         else items.push([false, 'The file ends before the snap point', 'It is only ' + C.fmtDuration(v.duration) + ' long. Wrong file, or set the snap point in Setup.']);
       } else {
@@ -1737,7 +1820,7 @@
       if (NetTime.usable() && cfg.useNetTime) items.push([true, 'Clock checked against internet time', 'PC clock is ' + NetTime.describe(r.offsetMs) + (Math.abs(r.offsetMs) >= 20 ? ', corrected' : '')]);
       else if (NetTime.usable()) items.push([Math.abs(r.offsetMs) < 500 ? null : false, 'PC clock is ' + NetTime.describe(r.offsetMs), 'Correction is switched off in the Sync tab.']);
       else items.push([null, NetTime.busy ? 'Checking internet time…' : 'Internet time not available', 'Using the PC clock as it is. Make sure Windows shows the right time.']);
-      items.push([native.isNative ? true : null, 'The PC stays awake while armed', native.isNative ? '' : 'Not available in the browser build.']);
+      items.push([native.isNative ? true : null, 'The PC will not fall asleep by itself while armed', native.isNative ? 'Closing the lid or pressing the power button still puts it to sleep.' : 'Not available in the browser build.']);
       const reh = cfg.rehearsed || {};
       if (reh.start && reh.snap) items.push([true, 'Rehearsed', 'Auto-start and snap tests passed' + (reh.slip ? ', recovery drill too' : '') + '.']);
       else items.push([null, 'Not rehearsed yet', 'Run the auto-start and snap tests in the Test tab.']);
@@ -2270,7 +2353,7 @@
     bindToggle(el.optClock, 'showClock');
     bindToggle(el.optDate, 'showDate');
     bindToggle(el.optCount, 'showCount');
-    bindToggle(el.optFinal, 'finalTen');
+    bindToggle(el.optFinal, 'finalTen', () => { if (cfg.finalTen && !cfg.showOverlay) setCfg('showOverlay', true); });
     bindToggle(el.optSyncBadge, 'showSyncBadge');
     bindToggle(el.optStandby, 'standbyScreen');
     bindSelect(el.optPanel, 'panelSide', null, () => Celebration.resize());
@@ -2437,12 +2520,13 @@
       const t = e.target;
       const typing = t && (t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || (t.tagName === 'INPUT' && !['checkbox', 'radio', 'range'].includes(t.type)));
       if (typing) return;
-      if (el.app.dataset.view !== 'player') return;
       const lower = k.length === 1 ? k.toLowerCase() : k;
-      const slipped = Engine.mode === 'armed' && Engine.phase === 'slipped' && !Engine.st.slipHold;
-
+      // The fullscreen keys work on every screen: a fullscreen window must always have a way out.
       if (lower === 'f' || k === 'F11') { e.preventDefault(); if (!e.repeat) UI.setFullscreen(!UI.isFs); return; }
       if (k === 'Escape') { if (UI.isFs) UI.setFullscreen(false); return; }
+      if (el.app.dataset.view !== 'player') return;
+      const slipped = Engine.mode === 'armed' && Engine.phase === 'slipped' && !Engine.st.slipHold;
+
       if (k === ' ' || lower === 'k') {
         e.preventDefault();
         if (!e.repeat) Engine.userTogglePlay();
@@ -2459,7 +2543,7 @@
         case 'ArrowDown': e.preventDefault(); cfg.volume = clamp(Math.round((cfg.volume - 0.05) * 100) / 100, 0, 1); save(); applyVolume(); UI.renderSettings(); toast('Volume ' + Math.round(cfg.volume * 100) + '%'); break;
         case 'm': cfg.muted = !cfg.muted; save(); applyVolume(); toast(cfg.muted ? 'Muted' : 'Sound on'); break;
         case 'o': setCfg('showOverlay', !cfg.showOverlay); toast(cfg.showOverlay ? 'Clock overlay on' : 'Clock overlay hidden'); break;
-        case 't': setCfg('finalTen', !cfg.finalTen); toast(cfg.finalTen ? '10 · 9 · 8 animation on' : '10 · 9 · 8 animation off'); break;
+        case 't': setCfg('finalTen', !cfg.finalTen); if (cfg.finalTen && !cfg.showOverlay) setCfg('showOverlay', true); toast(cfg.finalTen ? '10 · 9 · 8 animation on' : '10 · 9 · 8 animation off'); break;
         case 'n': setCfg('showCount', !cfg.showCount); if (cfg.showCount && !cfg.showOverlay) setCfg('showOverlay', true); toast(cfg.showCount ? 'Countdown mode on' : 'Countdown mode off'); break;
         case 'c': SubsUI.toggle(); break;
         case 'z': SubsUI.nudge(-0.1); break;

@@ -290,6 +290,9 @@ Section "Uninstall"
   Delete "$SMPROGRAMS\${APP_NAME}.lnk"
   Delete "$DESKTOP\${APP_NAME}.lnk"
 
+  ; The app adds itself to "start at sign-in" while a countdown is armed: take that with it.
+  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "AvengersPlayer"
+  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run" "AvengersPlayer"
   DeleteRegKey HKCU "${UNINSTALL_KEY}"
 
   ; The user's settings in %APPDATA% are deliberately left alone, so an

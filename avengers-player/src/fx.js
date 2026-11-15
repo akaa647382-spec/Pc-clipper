@@ -42,10 +42,6 @@
     };
   }
 
-  function reducedMotion() {
-    try { return !!(root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; }
-  }
-
   /** A soft round glow, pre-rendered once per colour so particles can be stamped cheaply. */
   function makeSprite(color) {
     const size = 32;
@@ -580,7 +576,9 @@
         year: o.year == null ? '' : String(o.year),
         seed: typeof o.seed === 'number' ? o.seed : null
       };
-      simple = reducedMotion();
+      // The user picked this animation on purpose (Minimal and Off exist for those who want less),
+      // so it plays in full even when Windows has its own animations switched off.
+      simple = false;
       slow = 0;
       resetSim();
       prepare();

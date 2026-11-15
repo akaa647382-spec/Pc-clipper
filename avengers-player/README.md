@@ -53,7 +53,8 @@ middle of the screen (in fullscreen too):
 
 Click it, or press **R**, **Enter** or **Space**. The film jumps back to where the clock says it should be. If nobody
 reacts, it recalibrates by itself after 10 seconds (changeable in Setup). Stalls, a sleeping PC and decoder hiccups are
-corrected automatically, without a box. **L** locks the controls so a slip cannot happen at all.
+corrected automatically, without a box. If a stretch of the file is damaged, playback resumes by itself as soon as the
+clock is past it. **L** locks the controls so a slip cannot happen at all.
 
 ## On-screen clock
 
@@ -96,21 +97,29 @@ is 0.8 s slow, the app corrects for it and says so. Offline, it uses the PC cloc
 
 Video is played by Chromium at its native resolution, untouched: H.264 always, HEVC (H.265) when the graphics card
 supports it. **Dolby (AC-3 / E-AC-3) and DTS sound cannot be decoded.** The player notices this when you import the
-file and offers **Fix the sound**: the picture is copied bit for bit and only the sound is converted to AAC. That needs
-FFmpeg; the app finds the copy PC Clipper downloaded, or downloads it once (about 100 MB).
+file (on a PC without FFmpeg it plays the first two seconds silently to find out) and offers **Fix the sound**: the
+picture is copied bit for bit and only the sound is converted to AAC. That needs FFmpeg; the app finds the copy
+PC Clipper downloaded, or downloads it once (about 100 MB).
+
+**Start the Countdown** checks for the mistakes that would only show at midnight: it refuses a file that ends before
+the snap point, asks before arming a movie with no playable sound, and switches the sound back on if the player was
+left muted.
 
 ## The day before
 
 - Run the Auto-start and Snap tests with the real movie file. The pre-flight list in the Mission tab should be green.
-- Plug the laptop in. The app keeps the PC awake while armed, but it cannot stop the battery from running out.
+- Plug the laptop in and leave the lid open. While armed the app stops the PC from falling asleep by itself, but
+  closing the lid or pressing the power button still puts it to sleep, and a battery still runs out.
 - Leave Windows Update alone until January 1.
 - Start the countdown early in the evening and leave the app open.
 
 ## Honest limits
 
 - The app was developed and tested on Linux with the same code (unit tests plus end-to-end tests that drive the real
-  app). The Windows installer is built and verified on Linux but has not been run on a Windows PC by the author. Run
-  the two tests above before you rely on it.
+  app). The Windows installer and uninstaller were run under Wine. The player window itself has not been run on a real
+  Windows PC by the author, so run the Auto-start and Snap tests before you rely on it.
+- The internet time check was tested against stand-in time servers only. If it cannot reach a real one on your PC, the
+  pre-flight list says so and the app uses the PC clock as it is.
 - 9:29:30 PM is the commonly quoted start time. It depends on your copy of the film; that is what the snap point check
   is for.
 - Sound through Bluetooth speakers or a TV can lag behind the picture by a tenth of a second or more. That delay

@@ -700,7 +700,7 @@ const scenarios = {
     const dir = newProfile();
     const film = path.join(dir, 'film.mp4');
     const away = path.join(dir, 'film.away');
-    fs.copyFileSync(path.join(MEDIA, 'silent.mp4'), film);
+    fs.copyFileSync(MOVIE, film);
     const s = await launch(newProfile());
     try {
       await loadMovie(s.page, film);
@@ -779,6 +779,124 @@ const scenarios = {
       check('paused seconds before midnight', (await state(s.page)).phase === 'slipped');
       check('the celebration still fires at midnight', await waitFor(s.page, () => window.__AP.Celebration.fx.running, null, 9000));
       check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally { await s.close(); }
+  },
+
+  async nosound() {
+    // A PC without FFmpeg: the sound has to be checked at import all the same.
+    const s = await launch(newProfile(), { AP_NO_FFMPEG: '1' });
+    try {
+      check('no FFmpeg on this run', (await s.page.evaluate(() => window.apNative.ffLocate())) === null);
+      await loadMovie(s.page, path.join(MEDIA, 'dolby.mp4'));
+      check('Dolby sound is noticed right after import, before anything is armed', await waitFor(s.page, () => window.__AP.Media.hasAudio === false, null, 8000));
+      check('with a warning and an offer to fix it', await s.page.isVisible('#modal') && /without sound/i.test(await s.page.textContent('#modalTitle')));
+      await sleep(600);
+      let v = await s.page.evaluate(() => { const v = document.getElementById('video'); return { paused: v.paused, t: v.currentTime, muted: v.muted, volume: v.volume }; });
+      check('the film is put back at the start with the sound switched on', v.paused && v.t < 0.1 && !v.muted && v.volume === 1, JSON.stringify(v));
+      await s.page.click('#modalActions button');
+      await s.page.click('#armBtn');
+      check('starting the countdown on a silent movie asks first', await s.page.isVisible('#modal') && (await state(s.page)).mode === 'free');
+      await s.page.keyboard.press('Escape');
+
+      await loadMovie(s.page, MOVIE);
+      check('a movie with normal sound is confirmed at import too', await waitFor(s.page, () => window.__AP.Media.hasAudio === true && !window.__AP.Media.checking, null, 8000));
+      await sleep(400);
+      v = await s.page.evaluate(() => { const v = document.getElementById('video'); return { paused: v.paused, t: v.currentTime, muted: v.muted }; });
+      check('and it is back at the start, not muted, no warning', v.paused && v.t < 0.1 && !v.muted && await s.page.isHidden('#modal') && await s.page.isHidden('#audioWarn'), JSON.stringify(v));
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally { await s.close(); }
+  },
+
+  async guards() {
+    const s = await launch(newProfile());
+    try {
+      // The wrong file: shorter than the snap point (default 2:30:30, the clip is 3:20 long).
+      await loadMovie(s.page, MOVIE);
+      await s.page.click('#armBtn');
+      check('a file that ends before the snap point is refused', await s.page.isVisible('#modal') && /ends before the snap/i.test(await s.page.textContent('#modalTitle')) && (await state(s.page)).mode === 'free');
+      check('the message names both lengths', /3:20/.test(await s.page.textContent('#modalBody')) && /2:30:30/.test(await s.page.textContent('#modalBody')), await s.page.textContent('#modalBody'));
+      await s.page.click('#modalActions .btn-primary');
+
+      // A mute left over from a rehearsal.
+      await setSnap(s.page, SNAP);
+      await s.page.keyboard.press('m');
+      check('the pre-flight list flags a muted player', await waitFor(s.page, () => /The player is muted/.test(document.getElementById('preflight').textContent), null, 3000));
+      await armIn(s.page, 600);
+      await waitPhase(s.page, 'standby', 5000);
+      const v = await s.page.evaluate(() => ({ muted: document.getElementById('video').muted, cfg: window.__AP.cfg.muted }));
+      check('starting the countdown switches the sound back on', !v.muted && !v.cfg, JSON.stringify(v));
+
+      // Subtitles must not sit on the waiting screen (the clip's first line starts at 0:00).
+      await waitFor(s.page, () => window.__AP.SubsUI.loaded, null, 6000);
+      await sleep(500);
+      check('no subtitle line on the standby screen', await s.page.evaluate(() => window.__AP.SubsUI.loaded && window.__AP.cfg.subsOn && document.getElementById('subs').textContent === '' && !document.getElementById('standby').hidden));
+
+      // The clock panel: clock, date, countdown and nothing else by default.
+      const rows = await s.page.evaluate(() => ['ovClock', 'ovDate', 'ovCount', 'ovSync'].filter((id) => !document.getElementById(id).hidden));
+      check('the clock panel shows exactly clock, date and countdown', rows.join(',') === 'ovClock,ovDate,ovCount', rows.join(','));
+
+      // T brings the panel back when it was hidden with O.
+      await s.page.keyboard.press('o');
+      await s.page.keyboard.press('t');
+      await s.page.keyboard.press('t');
+      check('switching the 10 · 9 · 8 animation on shows the clock panel again', await waitFor(s.page, () => !document.getElementById('overlay').hidden && window.__AP.cfg.finalTen, null, 2000));
+
+      // A fullscreen window always has a way out, also on the import screen.
+      await s.page.keyboard.press('f');
+      await waitFor(s.page, () => document.getElementById('app').classList.contains('is-fs'), null, 4000);
+      await s.page.evaluate(() => window.__AP.UI.showImport());
+      await s.page.keyboard.press('Escape');
+      check('Escape leaves fullscreen on the import screen too', await waitFor(s.page, () => !document.getElementById('app').classList.contains('is-fs'), null, 4000));
+      await s.page.evaluate(() => window.__AP.UI.showPlayer());
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally { await s.close(); }
+  },
+
+  async damaged() {
+    // Four seconds of the file are garbage (a bad download piece). The film must come back by itself.
+    const dir = newProfile();
+    const bad = path.join(dir, 'bad.mp4');
+    fs.copyFileSync(MOVIE, bad);
+    const { spawnSync } = await import('node:child_process');
+    const probe = spawnSync('ffprobe', ['-v', 'error', '-select_streams', 'v', '-show_entries', 'packet=pts_time,pos', '-of', 'csv=p=0', MOVIE], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    const at = (t) => { const m = new RegExp('^' + t.toFixed(6) + ',(\\d+)', 'm').exec(probe.stdout || ''); return m ? +m[1] : null; };
+    const from = at(50);
+    const to = at(54);
+    if (from == null || to == null) { console.log('  note  ffprobe not available: damaged-file scenario skipped'); return; }
+    const fd = fs.openSync(bad, 'r+');
+    const junk = Buffer.alloc(to - from);
+    for (let i = 0; i < junk.length; i++) junk[i] = (i * 2654435761) >>> 24;
+    fs.writeSync(fd, junk, 0, junk.length, from);
+    fs.closeSync(fd);
+    const s = await launch(newProfile());
+    try {
+      await loadMovie(s.page, bad);
+      await setSnap(s.page, SNAP);
+      await armIn(s.page, -44);
+      check('playing in sync just before the damaged stretch', await waitSynced(s.page, 10000));
+      const hit = await waitFor(s.page, () => (window.__AP.Media.errorTimes || []).length >= 1, null, 15000);
+      check('the damage is hit', hit, JSON.stringify(await s.page.evaluate(() => window.__AP.Engine.events.slice(-4).map((e) => e.text))));
+      const back = await waitFor(s.page, () => window.__AP.Engine.phase === 'synced' && window.__AP.Engine.st.drift != null && document.getElementById('video').currentTime > 55, null, 30000);
+      check('playback comes back by itself once the clock is past it', back, JSON.stringify(await s.page.evaluate(() => ({ phase: window.__AP.Engine.phase, t: document.getElementById('video').currentTime, ev: window.__AP.Engine.events.slice(-5).map((e) => e.text) }))));
+      await sleep(2000);
+      const st = await state(s.page);
+      check('in sync after the damaged stretch, no popup left', st.phase === 'synced' && Math.abs(st.drift) < 0.06 && Math.abs(st.t - st.expected) < 0.12 && await s.page.isHidden('#slip'), ms(st.drift));
+    } finally { await s.close(); }
+  },
+
+  async screen() {
+    // A restart must bring the window back where it was (the TV), not on the default spot.
+    const profile = newProfile();
+    let s = await launch(profile);
+    try {
+      await s.app.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0].setBounds({ x: 130, y: 70, width: 1180, height: 760 }); });
+      await sleep(1200);                    // the position is remembered while running, not only on close
+      const saved = JSON.parse(fs.readFileSync(path.join(profile, 'settings.json'), 'utf8')).window;
+      check('the window position is saved while the app runs', saved && saved.bounds.x === 130 && saved.bounds.y === 70, JSON.stringify(saved));
+      await s.close();
+      s = await launch(profile);
+      const b = await s.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBounds());
+      check('and restored on the next start', b.x === 130 && b.y === 70 && b.width === 1180 && b.height === 760, JSON.stringify(b));
     } finally { await s.close(); }
   },
 
