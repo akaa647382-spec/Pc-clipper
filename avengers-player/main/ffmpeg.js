@@ -96,6 +96,43 @@ function run(exe, args, opts) {
   });
 }
 
+/** Like run(), but what the process writes is kept as bytes, and it can be called off. Never rejects. */
+function runBytes(exe, args, opts) {
+  opts = opts || {};
+  return new Promise((resolve) => {
+    let child;
+    const chunks = [];
+    let size = 0;
+    let err = '';
+    let done = false;
+    let timer = null;
+    const onAbort = () => { killTree(child); finish({ code: -1, aborted: true }); };
+    const finish = (r) => {
+      if (done) return;
+      done = true;
+      if (timer) clearTimeout(timer);
+      if (opts.signal) opts.signal.removeEventListener('abort', onAbort);
+      resolve(Object.assign({ stdout: Buffer.concat(chunks), stderr: err }, r));
+    };
+    if (opts.signal && opts.signal.aborted) { finish({ code: -1, aborted: true }); return; }
+    try {
+      child = spawn(exe, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (e) {
+      finish({ code: -1, error: e });
+      return;
+    }
+    // Background work gives way to the film that may be playing.
+    if (opts.gentle && child.pid) { try { os.setPriority(child.pid, os.constants.priority.PRIORITY_BELOW_NORMAL); } catch (e) { /* not allowed: normal priority */ } }
+    const cap = opts.maxBytes || 64 * 1024 * 1024;
+    child.stdout.on('data', (d) => { if (size < cap) { chunks.push(d); size += d.length; } });
+    child.stderr.on('data', (d) => { if (err.length < 65536) err += d.toString('utf8'); });
+    child.on('error', (e) => finish({ code: -1, error: e }));
+    child.on('close', (code) => finish({ code: code == null ? -1 : code }));
+    if (opts.signal) opts.signal.addEventListener('abort', onAbort, { once: true });
+    if (opts.timeoutMs) timer = setTimeout(() => { killTree(child); finish({ code: -1, timedOut: true }); }, opts.timeoutMs);
+  });
+}
+
 function killTree(child) {
   if (!child || child.exitCode != null) return;
   try {
@@ -506,6 +543,59 @@ async function subtitleWindow(ffmpegPath, input, fromSec, durSec, opts) {
   return { srt: r.stdout, track: { index: track.index, lang: Core.trackLang(track), title: track.title || '' } };
 }
 
+/**
+ * How loud the speech band of the sound is, frame by frame, in stretches of the movie: what the
+ * app listens to when it puts a subtitle file on the voices. In a 5.1 or 7.1 mix the centre
+ * channel is taken, where the dialogue is; otherwise everything is mixed down to one channel.
+ *
+ *   opts.audioIndex  the sound track (default: the one in preferLang, English unless given)
+ *   opts.windows     [{ from, dur }] in seconds
+ *   opts.hz          frames a second (50)
+ * Returns { hz, windows: [{ from, dur, energy: Float32Array }], track }.
+ */
+async function speechEnergy(ffmpegPath, input, opts) {
+  opts = opts || {};
+  const info = await probe(ffmpegPath, input);
+  if (!info.audio.length) throw new Error('This file has no sound track.');
+  const wanted = Number.isInteger(opts.audioIndex) ? info.audio.find((a) => a.index === opts.audioIndex) : null;
+  const track = wanted || info.audio[Core.pickAudioTrack(info.audio, opts.preferLang)] || info.audio[0];
+  const hz = opts.hz > 0 ? opts.hz : 50;
+  const rate = 8000;
+  const per = Math.round(rate / hz);
+  // Channel 2 of a surround mix is the centre: FL FR FC LFE ...
+  const filter = ((track.channels || 2) >= 6 ? 'pan=mono|c0=c2,' : '') + 'highpass=f=200,lowpass=f=3400';
+  const list = (opts.windows || []).slice(0, 40);
+  const out = [];
+  for (let i = 0; i < list.length; i++) {
+    if (opts.signal && opts.signal.aborted) throw abortError();
+    const from = Math.max(0, Number(list[i].from) || 0);
+    const dur = Math.max(1, Math.min(3600, Number(list[i].dur) || 0));
+    const r = await runBytes(ffmpegPath, ['-hide_banner', '-nostdin', '-loglevel', 'error', '-ss', String(from), '-t', String(dur), '-i', input,
+      '-map', '0:a:' + track.index, '-af', filter, '-ar', String(rate), '-ac', '1', '-f', 's16le', '-'],
+    { timeoutMs: 180000, signal: opts.signal, gentle: true, maxBytes: Math.ceil(dur * rate * 2 * 1.2) + 65536 });
+    if (r.aborted) throw abortError();
+    if (r.error) throw new Error('FFmpeg could not be started: ' + r.error.message);
+    if (r.timedOut) throw new Error('Listening to the film took too long.');
+    if (r.code !== 0 && !r.stdout.length) throw new Error('The sound could not be read: ' + (lastLines(r.stderr, 2) || 'unknown error'));
+    const bytes = r.stdout;
+    const n = Math.floor(bytes.length / 2 / per);
+    const energy = new Float32Array(n);
+    for (let f = 0; f < n; f++) {
+      let sum = 0;
+      for (let k = 0; k < per; k++) {
+        const v = bytes.readInt16LE((f * per + k) * 2) / 32768;
+        sum += v * v;
+      }
+      energy[f] = sum / per;
+    }
+    out.push({ from: from, dur: dur, energy: energy });
+    if (typeof opts.onProgress === 'function') {
+      try { opts.onProgress({ fraction: (i + 1) / list.length }); } catch (e) { /* the caller's problem */ }
+    }
+  }
+  return { hz: hz, windows: out, track: { index: track.index, channels: track.channels || 0, lang: Core.trackLang(track) } };
+}
+
 /* ---------------------------------------------------------------- download */
 
 // The same pinned builds PC Clipper uses: fixed URLs with known SHA-256 fingerprints.
@@ -762,6 +852,7 @@ module.exports = {
   suggestOutputPath: suggestOutputPath,
   extractSubtitle: extractSubtitle,
   subtitleWindow: subtitleWindow,
+  speechEnergy: speechEnergy,
   download: download,
   extractFfmpegFromZip: extractFfmpegFromZip,
   SOURCES: SOURCES

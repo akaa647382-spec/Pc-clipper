@@ -407,6 +407,7 @@ function registerIpc() {
 
   /* ---- FFmpeg helper (optional) ---- */
   let ffAbort = null;
+  let speechAbort = null;
   const ffPath = async () => {
     if (!ffmpeg || (IS_TEST && process.env.AP_NO_FFMPEG === '1')) return null;
     return ffmpeg.locate({ extra: [store.get().ffmpegPath].filter(Boolean), userDataDir: USER_DATA });
@@ -515,6 +516,30 @@ function registerIpc() {
       return ffError(err);
     }
   });
+
+  // The sound of stretches of the movie, for putting a subtitle file on the voices. It has its own
+  // off switch, so it never stands in the way of a conversion or a download.
+  ipcMain.handle('ff:speech', async (e, file, audioIndex, windows, preferLang) => {
+    if (!own(e) || !ffmpeg || typeof file !== 'string') return { error: 'FFmpeg helper unavailable.' };
+    if (speechAbort) speechAbort.abort();
+    const mine = speechAbort = new AbortController();
+    try {
+      const exe = await ffPath();
+      if (!exe) return { error: 'FFmpeg not found.', missing: true };
+      return await ffmpeg.speechEnergy(exe, file, {
+        audioIndex: Number.isInteger(audioIndex) ? audioIndex : undefined,
+        windows: Array.isArray(windows) ? windows : [],
+        preferLang: typeof preferLang === 'string' ? preferLang : '',
+        signal: mine.signal,
+        onProgress: (p) => send('ff:progress', Object.assign({ phase: 'listen' }, p))
+      });
+    } catch (err) {
+      return ffError(err);
+    } finally {
+      if (speechAbort === mine) speechAbort = null;
+    }
+  });
+  ipcMain.handle('ff:speech-cancel', () => { if (speechAbort) speechAbort.abort(); return true; });
 
   ipcMain.handle('ff:extract-sub', async (e, file, subIndex) => {
     if (!own(e) || !ffmpeg || typeof file !== 'string') return { error: 'FFmpeg helper unavailable.' };

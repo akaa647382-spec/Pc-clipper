@@ -153,6 +153,24 @@ Position, size, 12/24-hour clock, six app themes and which side the control pane
 in the same folder, is loaded by itself. If the letters look wrong (older Arabic, Cyrillic, Greek, … files), pick the
 language under *Text encoding*. Size, colour, outline or box, height and timing are adjustable.
 
+**Subtitles that come early or late are put right by the app.** A subtitle file from the internet was usually made
+for another copy of the film, so its lines come a second or two (or half a minute) early or late, or drift further
+off the longer the film runs because that copy had another frame rate. When a subtitle file is loaded, the app
+listens to up to an hour of the film's sound, taken from all over it (in a surround mix the centre channel, where the
+dialogue is), works out where people are speaking, and moves the lines there: the shift, and the speed too if that
+is wrong. If the movie file carries subtitles of its own, the lines are compared with those as well, which is more
+exact than sound. It takes a few seconds to a minute, needs FFmpeg (the same free tool as *Fix the sound*), and the
+Subs tab says what was done, for example *"The subtitles came 2.38 s early. They are now in sync with the voices."*
+
+- **Undo** puts the lines back with one click. **Sync with the voices** runs the check again whenever you like.
+- The switch *Check every new subtitle file by itself* turns the automatic check off; the button still works.
+- The app moves subtitles only when the answer is clear. If the lines belong to another film, or the sound has too
+  little clear speech, it says so and changes nothing; the **−** and **+** buttons (keys **Z** and **X**) move the
+  lines by hand.
+- A file made for a different cut of the film fits in some parts and not in others. The app says so, and where.
+- While the countdown film is running, the app never starts a check by itself, and the button refuses in the two
+  and a half minutes before the snap: nothing is allowed to disturb the film there.
+
 ## What "in sync" means here
 
 The film position is always computed from the clock: *position = now − start time*. The player measures, frame by
@@ -211,6 +229,14 @@ want, and switches the sound back on if the player was left muted.
 - Around the snap the film is held to within about a hundredth of a second of the clock. On a 60 Hz screen a film
   frame can only come on screen at one of 60 moments a second, so a few milliseconds either way are the limit of
   any player; the strip shows the figure that was measured.
+- The subtitle sync was tested on clips made for the purpose and on half-hour "films" put together from real
+  recordings (real voices, real music, real sound effects, mixed into one channel, with the voices anywhere from
+  clearly louder than the rest to 6 dB quieter than it). There it put the lines within 0.16 s of the right place in
+  16 cases out of 16 and refused every subtitle file that did not belong (20 out of 20). It has not been tested on
+  the film itself. From sound alone it is good to a tenth or two of a second, not to the frame: subtitles stay on
+  screen a little after the last word, by an amount no two files agree on. Against subtitles inside the movie file
+  it is good to a few hundredths of a second. When the voices are buried under the rest of the sound, it says it
+  cannot tell and moves nothing.
 - The internet time check was tested against stand-in time servers only. If it cannot reach a real one on your PC, the
   pre-flight list says so and the app uses the PC clock as it is.
 - Sound through Bluetooth speakers or a TV can lag behind the picture by a tenth of a second or more. That delay

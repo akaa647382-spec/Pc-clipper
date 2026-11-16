@@ -349,6 +349,17 @@
         </div>
         <label class="sw"><input type="checkbox" id="subToggle"><i></i><span>Show subtitles <kbd>C</kbd></span></label>
 
+        <div id="subSyncWrap">
+          <h3 class="sec">Early or late?</h3>
+          <div class="substat syncnote" id="subSyncNote" hidden></div>
+          <div class="row">
+            <button id="subSync" class="btn btn-primary btn-sm" type="button" disabled>Sync with the voices</button>
+            <button id="subSyncUndo" class="btn btn-ghost btn-sm" type="button" hidden>Undo</button>
+          </div>
+          <p class="hint">Subtitle files are often made for another copy of the film and come early or late. The app listens to the film and moves them to where the voices are.</p>
+          <label class="sw"><input type="checkbox" id="optSubAuto" checked><i></i><span>Check every new subtitle file by itself<small>A file that is off is synced without asking. Undo is one click.</small></span></label>
+        </div>
+
         <div id="subFoundWrap" hidden>
           <h3 class="sec">Found next to the movie</h3>
           <div class="list" id="subFound"></div>
@@ -366,13 +377,14 @@
           <label class="fld"><span>Height</span><select id="subPos"><option value="low">Low</option><option value="mid">Raised</option><option value="high">High</option></select></label>
         </div>
 
-        <h3 class="sec">Timing</h3>
+        <h3 class="sec">Timing by hand</h3>
         <div class="stepper">
           <button id="subDelayMinus" class="btn btn-ghost btn-sm" type="button" title="Subtitles earlier (Z)">− 0.1 s</button>
           <output id="subDelay">0.0 s</output>
           <button id="subDelayPlus" class="btn btn-ghost btn-sm" type="button" title="Subtitles later (X)">+ 0.1 s</button>
           <button id="subDelayReset" class="link" type="button">reset</button>
         </div>
+        <p class="hint" id="subSpeed" hidden></p>
         <p class="hint">Subtitles appearing too early? Add delay. Too late? Subtract.</p>
 
         <h3 class="sec">Text encoding</h3>

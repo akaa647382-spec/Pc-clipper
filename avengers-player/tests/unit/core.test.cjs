@@ -349,3 +349,214 @@ test('sound track choice: English by default, whatever the file calls its main t
   assert.equal(pick([]), -1);
   assert.equal(pick(null), -1);
 });
+
+// ---- subtitles and voices: simulated films, since no real one can be shipped with the tests
+function rng(seed) { let x = seed >>> 0; return () => { x = (x * 1664525 + 1013904223) >>> 0; return x / 4294967296; }; }
+function filmCues(rand, dur) {                         // stretches of dialogue, action scenes in between
+  const cues = [];
+  let t = 30;
+  while (t < dur - 600) {
+    const end = t + 20 + rand() * 120;
+    while (t < end) { const d = 0.8 + rand() * 3.2; cues.push({ start: t, end: t + d }); t += d + 0.1 + rand() * 2.5; }
+    t += rand() < 0.25 ? 30 + rand() * 240 : rand() * 20;
+  }
+  return cues;
+}
+function filmSound(rand, cues, from, dur, hz, o) {     // speech inside most lines, other loud things elsewhere
+  const n = Math.round(dur * hz);
+  const e = new Float32Array(n);
+  for (let i = 0; i < n; i++) e[i] = 1e-5 * (0.5 + rand());
+  for (const c of cues) {
+    if (rand() < o.miss) continue;
+    for (let t = c.start + rand() * 0.3; t < c.end - rand() * 0.6; t += 1 / hz) {
+      const i = Math.round((t - from) * hz);
+      if (i >= 0 && i < n) e[i] += 1e-2 * (0.3 + rand()) * (Math.sin(t * 25) > -0.6 ? 1 : 0.05);
+    }
+  }
+  for (let t = from; t < from + dur; t += 1 + rand() * 6) {
+    if (rand() >= o.noise) continue;
+    const d = 0.5 + rand() * 6;
+    for (let x = t; x < t + d; x += 1 / hz) { const i = Math.round((x - from) * hz); if (i >= 0 && i < n) e[i] += 2e-2 * rand(); }
+    t += d;
+  }
+  return e;
+}
+
+test('speechPlan: a short film whole, a long one in stretches where the talking is', () => {
+  assert.deepEqual(C.speechPlan(200, []), [{ from: 0, dur: 200 }]);
+  assert.deepEqual(C.speechPlan(5, []), []);
+  assert.deepEqual(C.speechPlan(NaN, []), []);
+  const cues = filmCues(rng(7), 10871);
+  const plan = C.speechPlan(10871, cues);
+  assert.equal(plan.length, 15);
+  for (let i = 0; i < plan.length; i++) {
+    assert.equal(plan[i].dur, 240);
+    assert.ok(plan[i].from >= 0 && plan[i].from + 240 < 10871);
+    if (i) assert.ok(plan[i].from >= plan[i - 1].from + 240, 'stretches do not overlap');
+  }
+  const total = plan.reduce((sum, w) => sum + w.dur, 0);
+  assert.ok(total <= 60 * 60, 'no more than an hour of a three-hour film');
+  // Each stretch sits where there are lines, not in an action scene.
+  const covered = (w) => cues.reduce((sum, c) => sum + Math.max(0, Math.min(c.end, w.from + w.dur) - Math.max(c.start, w.from)), 0);
+  assert.ok(plan.filter((w) => covered(w) > 45).length >= 13);
+  // A film of twenty-odd minutes: the stretches shrink rather than overlap.
+  const short = C.speechPlan(1250, cues);
+  for (let i = 1; i < short.length; i++) assert.ok(short[i].from >= short[i - 1].from + short[i - 1].dur, 'no overlap in a short film');
+  // A huge file is slow to read: with ten minutes of listening allowed, fewer and shorter stretches.
+  const lean = C.speechPlan(10871, cues, 600);
+  assert.equal(lean.length, 10);
+  assert.ok(lean.every((w) => w.dur === 60));
+  assert.ok(lean.reduce((sum, w) => sum + w.dur, 0) <= 600);
+  const mid = C.speechPlan(10871, cues, 1500);
+  assert.equal(mid.length, 15);
+  assert.ok(mid.every((w) => w.dur === 100));
+  assert.ok(C.speechPlan(10871, cues, 99999).every((w) => w.dur === 240), 'never more than four minutes at a stretch');
+  assert.ok(C.speechPlan(10871, cues, 100).length >= 4, 'never fewer than four stretches');
+});
+
+test('betterFit: the likeliest speeds are tried first and a later one has to be clearly better', () => {
+  assert.equal(C.SUB_SCALES[0], 1);
+  assert.ok(Math.abs(C.SUB_SCALES[1] - 25000 / 23976) < 1e-12 && Math.abs(C.SUB_SCALES[2] - 23976 / 25000) < 1e-12);
+  const own = { scale: 1, peak: 100 };
+  assert.equal(C.betterFit(null, own), own);
+  assert.equal(C.betterFit(own, null), own);
+  // On a short film another speed fits a hair better by chance: the file's own speed stays.
+  assert.equal(C.betterFit(own, { scale: 1.001, peak: 102 }), own);
+  const pal = { scale: 25000 / 23976, peak: 140 };
+  assert.equal(C.betterFit(own, pal), pal);
+  // 25/24 and 25000/23976 are a tenth of a percent apart: the commoner one wins a near tie.
+  assert.equal(C.betterFit(pal, { scale: 25 / 24, peak: 141 }), pal);
+  const near = { scale: 25 / 24, peak: 143 };
+  assert.equal(C.betterFit(pal, near), near);
+});
+
+test('alignCues: shift and speed of a subtitle file, found from the voices', () => {
+  const DUR = 10871;
+  const HZ = 50;
+  const rand = rng(101);
+  const film = filmCues(rand, DUR);
+  const heard = (e, from) => { const sc = C.speechScore(e, HZ); return { from: from, hz: HZ, score: sc.score, sharp: sc.sharp }; };
+  const hear = (o) => C.speechPlan(DUR, film).map((w) => heard(filmSound(rand, film, w.from, w.dur, HZ, o), w.from));
+  const asFile = (off, scale) => film.map((c) => ({ start: (c.start - off) / scale, end: (c.end - off) / scale })).filter((c) => c.start > 0);
+  const clean = hear({ miss: 0.1, noise: 0.2 });
+  const noisy = hear({ miss: 0.3, noise: 0.5 });
+  for (const [wins, name] of [[clean, 'clean'], [noisy, 'noisy']]) {
+    for (const [off, scale] of [[0, 1], [2.4, 1], [-37.3, 1], [61, 1], [1.2, 25000 / 23976], [-0.8, 23976 / 24000]]) {
+      // Against sound the answer is good to a few tenths of a second: lines stay on screen after
+      // the voice has stopped, by an amount no two subtitle files agree on.
+      const r = C.alignCues(wins, asFile(off, scale), { linger: 0.25 });
+      assert.ok(Math.abs(r.offset - off) < 0.3, name + ': offset ' + r.offset + ' for ' + off);
+      assert.ok(Math.abs(r.scale - scale) < 1e-4, name + ': speed ' + r.scale + ' for ' + scale);
+      assert.ok(r.z > 6 && r.strength > 0.25, name + ': z ' + r.z.toFixed(1) + ', strength ' + r.strength.toFixed(2));
+      assert.ok(r.contrast > 0.2 && r.lines > 100, name + ': contrast ' + r.contrast.toFixed(2) + ', lines ' + r.lines);
+      assert.equal(r.confident, true, name + ' ' + off + '/' + scale);
+      assert.equal(r.mixed, false);
+    }
+  }
+  // The subtitles of another film: whatever comes out is not believed.
+  for (const seed of [900, 901, 902]) {
+    const other = C.alignCues(clean, filmCues(rng(seed), DUR), { linger: 0.25 });
+    assert.equal(other.confident, false, 'another film: z ' + other.z.toFixed(1) + ', strength ' + other.strength.toFixed(2));
+  }
+  // Subtitles made for another cut: the first half fits at +2 s, the second at +14 s.
+  const cut = film.map((c) => { const off = c.start < DUR / 2 ? 2 : 14; return { start: c.start - off, end: c.end - off }; });
+  const split = C.alignCues(clean, cut, { linger: 0.25 });
+  assert.equal(split.mixed, true);
+  // Which half won is a toss-up; what counts is that the other half is named with its own shift.
+  const [main, rest] = Math.abs(split.offset - 2) < 0.3 ? [2, 14] : [14, 2];
+  assert.ok(Math.abs(split.offset - main) < 0.3, 'one half fits at ' + split.offset);
+  assert.ok(Math.abs(split.other.offset - rest) <= 0.4 && split.other.count >= 3, 'and the other half would fit at ' + JSON.stringify(split.other));
+  assert.ok(main === 2 ? split.other.from > DUR / 2 - 200 : split.other.from < DUR / 2);
+  // A film where a few stretches are drowned in noise is not "another cut": nothing else fits there either.
+  const drowned = clean.map((w, i) => (i % 5 === 2 ? heard(filmSound(rng(5000 + i), [], w.from, 240, HZ, { miss: 1, noise: 0.9 }), w.from) : w));
+  const patchy = C.alignCues(drowned, asFile(2.4, 1), { linger: 0.25 });
+  assert.ok(Math.abs(patchy.offset - 2.4) < 0.3 && patchy.confident, 'still found: ' + patchy.offset);
+  assert.equal(patchy.mixed, false, JSON.stringify(patchy.other));
+  // Nothing to go by.
+  assert.equal(C.alignCues([], film), null);
+  assert.equal(C.alignCues(clean, []), null);
+  assert.equal(C.alignCues(null, null), null);
+  // A reference that is itself a set of subtitles (the movie's own): ones and zeros instead of sound.
+  const ref = C.speechPlan(DUR, film).map((w) => {
+    const score = new Float32Array(w.dur * HZ);
+    for (const c of film) for (let i = Math.max(0, Math.round((c.start - w.from) * HZ)); i < Math.min(score.length, Math.round((c.end - w.from) * HZ)); i++) score[i] = 1;
+    return { from: w.from, hz: HZ, score: score };
+  });
+  const viaSubs = C.alignCues(ref, asFile(-3.5, 1));
+  assert.ok(Math.abs(viaSubs.offset + 3.5) < 0.05 && viaSubs.confident && viaSubs.strength > 0.9, JSON.stringify({ o: viaSubs.offset, s: viaSubs.strength }));
+});
+
+test('alignCues: a film without speech gives no answer, whatever its sound does', () => {
+  const HZ = 50;
+  const few = [[93, 95], [96.5, 97.4], [97.6, 98.3], [99.1, 100.6], [140, 142]].map(([a, b]) => ({ start: a, end: b }));
+  const many = filmCues(rng(3), 1500).filter((c) => c.end < 158);
+  assert.ok(many.length >= 12, 'enough lines for the test: ' + many.length);
+  const sounds = {
+    // One steady tone with a click where the recording starts and one in the middle.
+    hum: () => { const e = new Float32Array(160 * HZ).fill(1e-2); for (let i = 0; i < 20; i++) { e[i] = 0.2; e[3000 + i] = 0.2; } return e; },
+    // Digital silence.
+    silence: () => new Float32Array(160 * HZ),
+    // Music that swells and fades on a beat of its own.
+    music: () => { const e = new Float32Array(160 * HZ); for (let i = 0; i < e.length; i++) e[i] = 1e-3 * (1.2 + Math.sin(i / 37) + 0.5 * Math.sin(i / 11)) ** 2; return e; },
+    // Noise.
+    noise: () => { const r = rng(41); const e = new Float32Array(160 * HZ); for (let i = 0; i < e.length; i++) e[i] = 1e-3 * (0.2 + r()); return e; }
+  };
+  for (const [name, make] of Object.entries(sounds)) {
+    const sc = C.speechScore(make(), HZ);
+    const wins = [{ from: 0, hz: HZ, score: sc.score, sharp: sc.sharp }];
+    for (const [cues, what] of [[few, 'five lines'], [many, 'many lines']]) {
+      const r = C.alignCues(wins, cues, { linger: 0.25 });
+      assert.ok(r === null || r.confident === false, name + ', ' + what + ': ' + JSON.stringify(r && { o: r.offset, z: r.z, s: r.strength, c: r.contrast, l: r.lines }));
+    }
+  }
+  // Five lines are not enough to go by against sound, even when they do fit…
+  const e = new Float32Array(160 * HZ).fill(1e-5);
+  for (const c of few) for (let i = Math.round(c.start * HZ); i < Math.round(c.end * HZ); i++) e[i] = 1e-2;
+  const sp = C.speechScore(e, HZ);
+  const spoken = [{ from: 0, hz: HZ, score: sp.score, sharp: sp.sharp }];
+  const thin = C.alignCues(spoken, few.map((c) => ({ start: c.start - 3, end: c.end - 3 })), {});
+  assert.ok(Math.abs(thin.offset - 3) < 0.1 && thin.lines === 5 && thin.confident === false, JSON.stringify({ o: thin.offset, l: thin.lines }));
+  // …but against another set of subtitles of the same film they are (the caller asks for it).
+  const ref = new Float32Array(160 * HZ);
+  for (const c of few) for (let i = Math.round(c.start * HZ); i < Math.round(c.end * HZ); i++) ref[i] = 1;
+  const twin = C.alignCues([{ from: 0, hz: HZ, score: ref }], few.map((c) => ({ start: c.start + 20, end: c.end + 20 })), { minLines: 3 });
+  assert.ok(Math.abs(twin.offset + 20) < 0.05 && twin.confident && twin.strength > 0.9, JSON.stringify({ o: twin.offset, s: twin.strength, z: twin.z }));
+});
+
+test('speechScore: speech stands out against the seconds around it, whatever the level of the recording', () => {
+  const HZ = 50;
+  const mean = (x, a, b) => { let sum = 0; for (let i = a; i < b; i++) sum += x[i]; return sum / (b - a); };
+  let first = null;
+  for (const gain of [1, 0.02]) {
+    // Twenty seconds of quiet with somebody speaking from 8.0 to 10.0 s, in syllables.
+    const e = new Float32Array(20 * HZ);
+    for (let i = 0; i < e.length; i++) {
+      const t = i / HZ;
+      e[i] = gain * (t >= 8 && t < 10 && Math.floor(t * 5) % 2 === 0 ? 1e-2 : 1e-5);
+    }
+    const sc = C.speechScore(e, HZ);
+    assert.equal(sc.score.length, e.length);
+    assert.equal(sc.sharp.length, e.length);
+    for (const x of [sc.score, sc.sharp]) {
+      assert.ok(mean(x, 8 * HZ, 10 * HZ) > 0.15, 'up while somebody speaks: ' + mean(x, 8 * HZ, 10 * HZ));
+      assert.ok(mean(x, 10.3 * HZ, 11.5 * HZ) < -0.05, 'down right after: ' + mean(x, 10.3 * HZ, 11.5 * HZ));
+      assert.ok(Math.abs(mean(x, 15 * HZ, 19 * HZ)) < 0.02, 'level far from any speech: ' + mean(x, 15 * HZ, 19 * HZ));
+    }
+    // How loud the recording is makes no difference.
+    if (first) for (let i = 0; i < e.length; i += 7) assert.ok(Math.abs(first[i] - sc.score[i]) < 0.02, 'at ' + i + ': ' + first[i] + ' / ' + sc.score[i]);
+    first = sc.score;
+  }
+  // A loud scene is not one long line: a minute of steady loud music scores nothing, where the
+  // speech in front of it still does.
+  const e = new Float32Array(120 * HZ).fill(1e-5);
+  for (let i = 60 * HZ; i < 120 * HZ; i++) e[i] = 5e-2 * (1 + 0.05 * Math.sin(i / 3));
+  for (let i = 20 * HZ; i < 22 * HZ; i++) if (Math.floor(i / 10) % 2 === 0) e[i] = 1e-2;
+  const sc = C.speechScore(e, HZ);
+  assert.ok(Math.abs(mean(sc.sharp, 70 * HZ, 110 * HZ)) < 0.01, 'steady and loud is not speech: ' + mean(sc.sharp, 70 * HZ, 110 * HZ));
+  assert.ok(mean(sc.sharp, 20 * HZ, 22 * HZ) > 0.15);
+  const none = C.speechScore(new Float32Array(0), HZ);
+  assert.equal(none.score.length, 0);
+  assert.equal(C.percentile([3, 1, 2], 0.5), 2);
+  assert.ok(Number.isNaN(C.percentile([], 0.5)));
+});
+

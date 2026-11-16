@@ -57,8 +57,9 @@
       setArmed() {},
       async measureTime() { return { ok: false, offsetMs: 0, uncertaintyMs: Infinity, method: 'none', servers: [], at: Date.now() }; },
       async ffLocate() { return null; },
-      ffPick: async () => null, ffProbe: no, ffConvert: no, ffDownload: no, ffExtractSub: no, ffSubWindow: no,
+      ffPick: async () => null, ffProbe: no, ffConvert: no, ffDownload: no, ffExtractSub: no, ffSubWindow: no, ffSpeech: no,
       async ffCancel() { return true; },
+      async ffSpeechCancel() { return true; },
       onFfProgress() {},
       async appInfo() { return { version: 'dev', electron: '', chrome: '', platform: 'browser', logFile: '', isTest: false }; },
       showItem() {}, openLog() {}, log() {}, crashNow() {}
@@ -89,6 +90,7 @@
     showStats: false,
     subsOn: true, subPath: '', subName: '', subMovie: '', subEncoding: 'auto',
     subSize: 'm', subBg: 'shadow', subColor: 'white', subPos: 'low', subDelay: 0,
+    subScale: 1, subOwn: false, subAutoSync: true, subSyncKey: '', subSyncState: '',
     armed: false, armedTarget: null, moviePath: '', movieName: '', wasFullscreen: false,
     learnedLatency: 0.07, learnedSeekLead: 0.6,
     rehearsed: {}
@@ -110,6 +112,8 @@
     if (!Number.isInteger(c.audioPickPos)) c.audioPickPos = -1;
     if (!(c.autoRecoverSec >= 1 && c.autoRecoverSec <= 120)) c.autoRecoverSec = 10;
     if (!(Math.abs(c.subDelay) < 600)) c.subDelay = 0;
+    if (!(c.subScale > 0.9 && c.subScale < 1.1)) c.subScale = 1;
+    if (c.subSyncKey.length > 1200 || !['', 'synced', 'fine', 'close', 'unsure', 'mixed', 'undone'].includes(c.subSyncState)) { c.subSyncKey = ''; c.subSyncState = ''; }
     c.learnedLatency = clamp(+c.learnedLatency || 0.07, 0, 0.3);
     c.learnedSeekLead = clamp(+c.learnedSeekLead || 0.6, 0.4, 6);
     if (typeof c.rehearsed !== 'object' || Array.isArray(c.rehearsed)) c.rehearsed = {};
@@ -1555,6 +1559,7 @@
       if (perf < this.st.settleUntil) return;
 
       const now = Clock.now();
+      SubSync.tick(perf);
       SnapCam.autoTick(perf);
       // Armed on disk but not in memory, with a movie loaded and nothing going on: that must never
       // last. Whatever let go of the film, the countdown takes it back.
@@ -1907,21 +1912,26 @@
      * any cut. Returns { start, end, text, from } or null.
      */
     async line() {
-      if (SubsUI.loaded) {
-        const hit = C.findSnapLine(SubsUI.cues, cfg.snapSec - cfg.subDelay);
-        if (hit) return { start: hit.start + cfg.subDelay, end: hit.end + cfg.subDelay, text: hit.text, from: 'the subtitles' };
-      }
+      // A subtitle file is moved and stretched to fit the film: film time = line time * speed + shift.
+      const loaded = () => {
+        if (!SubsUI.loaded) return null;
+        const hit = C.findSnapLine(SubsUI.cues, (cfg.snapSec - cfg.subDelay) / cfg.subScale);
+        return hit ? { start: hit.start * cfg.subScale + cfg.subDelay, end: hit.end * cfg.subScale + cfg.subDelay, text: hit.text, from: 'the subtitles' } : null;
+      };
+      // Lines that are known to sit on the voices are asked first, then the movie's own; a file
+      // nobody has checked against the film comes last, because such files are often off.
+      const trusted = SubSync.trusted();
+      if (trusted) { const hit = loaded(); if (hit) return hit; }
       const inside = ((Media.probe && Media.probe.subtitles) || []).some((x) => x.isText);
-      if (!inside || !SubsCore || !Media.info || !Media.info.path || !native.isNative) return null;
-      try {
-        const from = Math.max(0, cfg.snapSec - 240);
-        const r = await native.ffSubWindow(Media.info.path, from, 600, cfg.audioLang);
-        if (!r || !r.srt) return null;
-        const hit = C.findSnapLine(SubsCore.parse(r.srt, 'window.srt').cues || [], cfg.snapSec);
-        return hit ? { start: hit.start, end: hit.end, text: hit.text, from: 'the subtitles inside the movie' } : null;
-      } catch (e) {
-        return null;
+      if (inside && SubsCore && Media.info && Media.info.path && native.isNative) {
+        try {
+          const from = Math.max(0, cfg.snapSec - 240);
+          const r = await native.ffSubWindow(Media.info.path, from, 600, cfg.audioLang);
+          const hit = r && r.srt ? C.findSnapLine(SubsCore.parse(r.srt, 'window.srt').cues || [], cfg.snapSec) : null;
+          if (hit) return { start: hit.start, end: hit.end, text: hit.text, from: 'the subtitles inside the movie' };
+        } catch (e) { /* the loaded file is asked instead */ }
       }
+      return trusted ? null : loaded();
     },
 
     /**
@@ -2014,6 +2024,7 @@
       if (snapConfirmed() || SnapMemory.get(Media.info)) { this.autoFor = 0; return; }     // this file has its answer, or was searched
       // Wait while something else has the floor: a dialog (the sound fix), the sound check, a test.
       if (this.busy || this.view || Modal.isOpen || AudioFix.running || Media.checking || !Media.inspected || Media.loading || Engine.test) return;
+      if (SubSync.wanted()) return;            // the subtitles are being put on the voices: their line is a witness
       if (el.app.dataset.view !== 'player' || video.seeking || perf - (this.autoSince || 0) < 1500) return;
       if (Engine.mode === 'armed') {
         if (!Media.byUser || Engine.phase !== 'standby' || Engine.session.startEpoch - Clock.now() < 10 * 60000) { this.autoFor = 0; return; }
@@ -2444,14 +2455,17 @@
   const SubsUI = {
     cues: [], index: null, bytes: null, name: '', path: '', format: '', encoding: '', confident: true,
     shown: null, found: [],
+    own: false,            // these lines came out of the movie file itself: they are right as they are
 
     get loaded() { return !!this.index && this.cues.length > 0; },
 
     clear(silent) {
       this.cues = []; this.index = null; this.bytes = null; this.name = ''; this.path = '';
       this.shown = null;
+      this.own = false;
       el.subs.textContent = '';
       if (!silent) { cfg.subPath = ''; cfg.subName = ''; cfg.subMovie = ''; save(); }
+      SubSync.fileChanged(false);
       this.renderPanel();
     },
 
@@ -2462,18 +2476,21 @@
       this.bytes = sub.bytes instanceof Uint8Array ? sub.bytes : new Uint8Array(sub.bytes);
       this.name = sub.name || 'subtitles';
       this.path = sub.path || '';
-      if (!opts.keepDelay) cfg.subDelay = 0;
+      if (!opts.keepDelay) { cfg.subDelay = 0; cfg.subScale = 1; }
       const ok = this.parse();
       if (!ok) {
         toast('No subtitles found in that file', 'bad');
         this.clear(true);
         return false;
       }
+      this.own = !!opts.own;
+      cfg.subOwn = this.own;
       cfg.subPath = this.path;
       cfg.subName = this.name;
       cfg.subMovie = Media.info ? (Media.info.path || Media.info.name) : '';
       if (!opts.auto) cfg.subsOn = true;
       save();
+      SubSync.fileChanged(true);              // a new file: is it on the voices?
       this.renderPanel();
       if (!opts.quiet) toast('Subtitles loaded: ' + this.name + (cfg.subsOn ? '' : ' (hidden, press C)'), 'good');
       Engine.logEvent('Subtitles loaded: ' + this.name + ' (' + this.cues.length + ' lines, ' + this.encoding + ')');
@@ -2517,7 +2534,7 @@
       let sub = null;
       try {
         if (cfg.subPath && cfg.subMovie === moviePath) sub = await native.readSubtitle(cfg.subPath);
-        if (sub) { if (token === Media.loadToken) await this.loadFrom(sub, { keepDelay: true, auto: true, quiet: true }); }
+        if (sub) { if (token === Media.loadToken) await this.loadFrom(sub, { keepDelay: true, auto: true, quiet: true, own: !!cfg.subOwn }); }
         else if (this.found.length && this.found[0].exact) {
           sub = await native.readSubtitle(this.found[0].path);
           if (sub && token === Media.loadToken) await this.loadFrom(sub, { auto: true });
@@ -2536,11 +2553,18 @@
     },
 
     nudge(delta) {
-      cfg.subDelay = delta === 0 ? 0 : Math.round((cfg.subDelay + delta) * 10) / 10;
+      // "reset" goes back to the file as it is: no shift, and its own speed.
+      if (delta === 0) { cfg.subDelay = 0; cfg.subScale = 1; SubSync.undo = null; }
+      else cfg.subDelay = Math.round((cfg.subDelay + delta) * 100) / 100;
       save();
       this.shown = null;
       this.renderPanel();
-      if (this.loaded) toast('Subtitle delay ' + (cfg.subDelay > 0 ? '+' : '') + cfg.subDelay.toFixed(1) + ' s');
+      if (this.loaded) toast('Subtitle delay ' + this.delayText());
+    },
+
+    delayText() {
+      const d = cfg.subDelay;
+      return (d > 0 ? '+' : '') + d.toFixed(Math.abs(d * 10 - Math.round(d * 10)) < 1e-6 ? 1 : 2) + ' s';
     },
 
     /** Runs every frame; touches the DOM only when the set of visible lines changes. */
@@ -2552,7 +2576,7 @@
         if (this.shown !== false) { el.subs.textContent = ''; this.shown = false; }
         return;
       }
-      const active = SubsCore.activeAt(this.index, video.currentTime - cfg.subDelay);
+      const active = SubsCore.activeAt(this.index, (video.currentTime - cfg.subDelay) / cfg.subScale);
       const prev = this.shown;
       if (prev && prev !== false && prev.length === active.length) {
         let same = true;
@@ -2567,7 +2591,8 @@
       el.subToggle.checked = !!cfg.subsOn;
       el.subToggle.disabled = !this.loaded;
       el.subClear.hidden = !this.loaded;
-      el.subDelay.textContent = (cfg.subDelay > 0 ? '+' : '') + cfg.subDelay.toFixed(1) + ' s';
+      el.subDelay.textContent = this.delayText();
+      SubSync.render();
       if (this.loaded) {
         el.subStatus.className = 'substat' + (this.confident ? '' : ' warn');
         el.subStatus.innerHTML = '<b>' + esc(this.name) + '</b>' + this.cues.length + ' lines · ' + esc(String(this.format).toUpperCase()) + ' · ' + esc(this.encoding) +
@@ -2608,12 +2633,346 @@
           toast('Reading subtitles from the movie…');
           try {
             const r = await native.ffExtractSub(Media.info.path, s.index);
-            if (r && r.sub) await this.loadFrom(r.sub); else toast((r && r.error) || 'Could not read that track', 'bad');
+            if (r && r.sub) await this.loadFrom(r.sub, { own: true }); else toast((r && r.error) || 'Could not read that track', 'bad');
           } catch (e) { toast('Could not read that track', 'bad'); }
           b.disabled = false;
         });
         el.subEmbedded.appendChild(b);
       });
+    }
+  };
+
+  /* ====================================================== subtitle sync === */
+
+  /**
+   * Puts a subtitle file on the voices of the film: film time = line time * speed + shift.
+   *
+   * Two things can say where a line belongs. The sound of the film: FFmpeg reads the speech band
+   * of stretches of it (the centre channel, where there is one), and the lines are laid where
+   * somebody is speaking. And the text subtitles inside the movie file, when it has them: those
+   * are right already, and a subtitle file is laid on them more exactly than on sound.
+   *
+   * Nothing is moved unless the fit stands out clearly, and a file that fits only here and there
+   * (it was made for another cut) is said to be just that.
+   */
+  const SubSync = {
+    busy: false, auto: false, runId: 0,
+    autoKey: '', autoAt: 0,
+    fraction: 0,
+    note: null,            // { kind, text, key } for the Subs tab
+    undo: null,            // { delay, scale } as they were before the last change
+    last: null,            // what the last check measured (for the tests and the log)
+
+    /** One name for "this subtitle file on this movie". */
+    key() {
+      if (!SubsUI.loaded || !Media.info) return '';
+      return (Media.info.path || Media.info.name || '') + '|' + (Media.info.size || 0) + '>' + (SubsUI.path || SubsUI.name) + '|' + (SubsUI.bytes ? SubsUI.bytes.length : 0);
+    },
+    state() { const k = this.key(); return k && cfg.subSyncKey === k ? cfg.subSyncState : ''; },
+    /** These lines are known to sit on the voices: they came out of the movie file, or were checked. */
+    trusted() { return SubsUI.loaded && (SubsUI.own || this.state() === 'synced' || this.state() === 'fine'); },
+    /** An automatic check is waiting or running: the snap search waits for it. */
+    wanted() { return !!this.autoKey || (this.busy && this.auto); },
+
+    /** Another subtitle file, or none: whatever was being listened to no longer matters. */
+    fileChanged(check) {
+      this.runId++;
+      if (this.busy) { try { native.ffSpeechCancel(); } catch (e) { /* nothing running */ } }
+      this.undo = null;
+      this.note = null;
+      this.last = null;
+      this.autoKey = '';
+      if (check && SubsUI.loaded && !SubsUI.own && cfg.subAutoSync && native.isNative && Media.info && Media.info.path) {
+        this.autoKey = this.key();
+        this.autoAt = performance.now();
+      }
+    },
+
+    /** The film's own timing comes first: no listening in the two minutes around the snap. */
+    nearSnap() {
+      if (Engine.mode !== 'armed' || !Engine.session) return false;
+      const toSnap = Engine.session.targetEpoch - Clock.now();
+      return toSnap < 150000 && toSnap > -20000;
+    },
+
+    /** Five times a second: start the automatic check when nothing is in the way; stop a job that is. */
+    tick(perf) {
+      if (this.busy) {
+        const armedRun = Engine.mode === 'armed' && Engine.phase !== 'standby';
+        const starting = Engine.mode === 'armed' && Engine.phase === 'standby' && Engine.session && Engine.session.startEpoch - Clock.now() < 45000;
+        if (this.nearSnap() || Engine.test || (this.auto && (armedRun || starting))) this.cancel();
+        return;
+      }
+      if (!this.autoKey) return;
+      if (!cfg.subAutoSync || !SubsUI.loaded || SubsUI.own || !Media.ready || this.autoKey !== this.key() || cfg.subSyncKey === this.autoKey) { this.autoKey = ''; return; }
+      if (perf - this.autoAt < 700) return;
+      if (Modal.isOpen || AudioFix.running || SnapCam.busy || SnapCam.view || Media.checking || !Media.inspected || Media.loading || Engine.test) {
+        if (perf - this.autoAt > 120000) this.autoKey = '';
+        return;
+      }
+      // An armed countdown is left alone once the film runs or is about to.
+      if (Engine.mode === 'armed' && (Engine.phase !== 'standby' || !Engine.session || Engine.session.startEpoch - Clock.now() < 5 * 60000)) { this.autoKey = ''; return; }
+      this.autoKey = '';
+      this.run({ auto: true });
+    },
+
+    cancel() {
+      if (!this.busy) return;
+      this.runId++;
+      try { native.ffSpeechCancel(); } catch (e) { /* nothing running */ }
+    },
+
+    progress(f) {
+      if (!this.busy) return;
+      this.fraction = clamp(f, this.fraction, 1);
+      this.render();
+    },
+
+    say(kind, text) {
+      this.note = text ? { kind: kind, text: text, key: this.key() } : null;
+      this.render();
+    },
+
+    /** The best fit over the usual speeds, one speed at a time so the player never waits long. */
+    async fit(wins, cues, linger, alive, minLines, halves) {
+      let best = null;
+      for (const r of C.SUB_SCALES) {            // likeliest first; a later one has to be clearly better
+        best = C.betterFit(best, C.alignCues(wins, cues, { scales: [r], linger: linger, minLines: minLines, halves: halves }));
+        await sleep(0);
+        if (!alive()) return null;
+      }
+      return best;
+    },
+
+    /**
+     * Listens, compares, and moves the lines when the answer is clear.
+     *   opts.auto  the app's own check of a new file: quiet unless the file is off, and it leaves a
+     *              file alone that is nearly right or that fits only parts of the film
+     */
+    async run(opts) {
+      opts = opts || {};
+      const auto = !!opts.auto;
+      if (this.busy) return null;
+      if (!SubsUI.loaded) { if (!auto) toast('Load a subtitle file first'); return null; }
+      if (!native.isNative || !Media.ready || !Media.info || !Media.info.path) { if (!auto) toast('That needs a movie opened from this PC', 'bad'); return null; }
+      if (Engine.test) { if (!auto) toast('Not during a test run'); return null; }
+      if (this.nearSnap()) { if (!auto) toast('Not this close to the snap: try again in a few minutes'); return null; }
+
+      this.busy = true;
+      this.auto = auto;
+      this.fraction = 0;
+      const id = ++this.runId;
+      const token = Media.loadToken;
+      const bytes = SubsUI.bytes;
+      const movie = Media.info.path;
+      const key = this.key();
+      const cues = SubsUI.cues.map((c) => ({ start: c.start, end: c.end }));
+      const alive = () => id === this.runId && token === Media.loadToken && bytes === SubsUI.bytes && Media.ready;
+      let out = null;
+      try {
+        const exe = await native.ffLocate().catch(() => null);
+        if (!alive()) return null;
+        if (!exe) {
+          this.say('', 'Syncing subtitles with the voices needs the free tool FFmpeg.');
+          if (!auto) this.offerFfmpeg();
+          return null;
+        }
+        this.say('', 'Listening to the film to sync the subtitles…');
+        if (!Media.probe) await Media.reprobe();
+        if (!alive()) return null;
+
+        // A huge file is slow to read: listen to less of it (about 3.5 GB at most).
+        const perSec = Media.info.size > 0 && video.duration > 0 ? Media.info.size / video.duration : 0;
+        const plan = C.speechPlan(video.duration, cues, perSec > 0 ? clamp(Math.floor(3.5e9 / perSec), 480, 3600) : 3600);
+        if (!plan.length) { this.say('warn', 'This movie is too short to sync subtitles automatically.'); return null; }
+
+        // 1. The voices.
+        let voices = null;
+        let trouble = '';
+        const r = await native.ffSpeech(movie, undefined, plan, cfg.audioLang).catch((e) => ({ error: e && e.message }));
+        if (!alive()) return null;
+        if (r && r.windows && r.windows.length) {
+          const wins = r.windows.map((w) => {
+            const sc = C.speechScore(w.energy instanceof Float32Array ? w.energy : Float32Array.from(w.energy || []), r.hz);
+            return { from: w.from, hz: r.hz, score: sc.score, sharp: sc.sharp };
+          });
+          voices = await this.fit(wins, cues, 0.25, alive);
+          if (!alive()) return null;
+        } else if (r && r.aborted) return null;
+        else trouble = (r && r.error) || 'the sound could not be read';
+        this.progress(0.62);
+
+        // 2. The movie's own subtitles, where it has them.
+        let inside = null;
+        const hasText = ((Media.probe && Media.probe.subtitles) || []).some((x) => x.isText);
+        if (hasText && SubsCore) {
+          const ref = [];
+          for (let i = 0; i < plan.length; i++) {
+            const w = plan[i];
+            const got = await native.ffSubWindow(movie, w.from, w.dur, cfg.audioLang).catch(() => null);
+            if (!alive()) return null;
+            this.progress(0.62 + 0.3 * (i + 1) / plan.length);
+            if (!got || !got.srt) continue;
+            const hz = 50;
+            const score = new Float32Array(Math.round(w.dur * hz));
+            for (const c of SubsCore.parse(got.srt, 'window.srt').cues || []) {
+              const a = Math.max(0, Math.round((c.start - w.from) * hz));
+              const b = Math.min(score.length - 1, Math.round((c.end - w.from) * hz));
+              for (let k = a; k <= b; k++) score[k] = 1;
+            }
+            ref.push({ from: w.from, hz: hz, score: score });
+          }
+          if (ref.length) inside = await this.fit(ref, cues, 0, alive, 3, false);
+          if (!alive()) return null;
+        }
+        this.progress(0.96);
+
+        // 3. Who is believed. Where both are sure and agree, the movie's own subtitles give the finer
+        //    answer; where they do not agree, the voices are what the lines are spoken in.
+        // Two sets of subtitles of the same film lie on each other almost line for line: anything
+        // less is a chance fit, however few lines there are.
+        const v = voices && voices.confident ? voices : null;
+        const o = inside && inside.confident && inside.strength >= 0.5 ? inside : null;
+        let pick = null;
+        let by = '';
+        if (v && o) {
+          const agree = Math.abs(v.scale - o.scale) < 1e-9 && Math.abs(v.offset - o.offset) <= 0.5;
+          pick = agree ? o : v;
+          by = agree ? 'both' : 'voices';
+        } else if (v) { pick = v; by = 'voices'; } else if (o) { pick = o; by = 'inside'; }
+        const brief = (a) => a ? (a.offset >= 0 ? '+' : '') + a.offset.toFixed(2) + ' s ×' + a.scale.toFixed(4) + ' (z ' + a.z.toFixed(1) + ', fit ' + a.strength.toFixed(2) + ', contrast ' + a.contrast.toFixed(2) + ', ' + a.lines + ' lines' + (a.mixed ? ', parts only' : '') + (a.confident ? '' : ', not sure') + ')' : 'nothing';
+        out = { state: '', by: by, voices: voices, inside: inside, pick: pick, moved: false, trouble: trouble };
+        this.last = out;
+        Engine.logEvent('Subtitles compared with the film: the sound says ' + brief(voices) + ', the subtitles inside the movie say ' + brief(inside) + (trouble ? ' (' + trouble + ')' : ''));
+
+        const byHand = ' Nothing was changed. Use − and + to move the subtitles by hand.';
+        if (!pick) {
+          out.state = 'unsure';
+          this.finish(key, 'unsure', 'warn', trouble && !voices
+            ? 'The sound of the film could not be read (' + trouble + ').' + byHand
+            : 'The app could not work out where these subtitles belong: the film\'s sound has too little clear speech, or the file is for another film.' + byHand);
+          if (!auto) toast('Could not sync the subtitles: nothing was changed', 'bad');
+          return out;
+        }
+
+        const sameSpeed = Math.abs(pick.scale - cfg.subScale) < 1e-9;
+        const diff = pick.offset - cfg.subDelay;                 // > 0: the lines have to come later
+        const off = Math.abs(diff);
+        const how = by === 'both' ? 'the sound of the film and the subtitles inside the movie file' : by === 'inside' ? 'the subtitles inside the movie file' : 'the sound of the film';
+        const amount = off.toFixed(off < 10 ? 2 : 1) + ' s ' + (diff > 0 ? 'early' : 'late');
+        const inSync = 'These subtitles are in sync with the voices. (Measured from ' + how + '.)';
+        // A file made for another cut fits the film in some parts and would need another shift in others.
+        const elsewhere = pick.mixed && pick.other
+          ? ' They match the film only in parts: around ' + C.fmtDuration(pick.other.from, { forceHours: video.duration >= 3600 }) + ' the subtitles would have to come about ' +
+            Math.abs(pick.other.offset - pick.offset).toFixed(0) + ' s ' + (pick.other.offset > pick.offset ? 'later' : 'earlier') + ' than in the rest, so the file was made for a different cut of the film.'
+          : '';
+        const small = sameSpeed && off < (auto ? (by === 'voices' ? 0.6 : 0.3) : 0.1);
+        if (pick.mixed && (small || auto)) {
+          out.state = 'mixed';
+          this.finish(key, 'mixed', 'warn', (small ? 'These subtitles are in sync with most of the film.' : 'These subtitles are off.') + elsewhere +
+            (small ? '' : ' Nothing was changed. “Sync with the voices” fits them to most of the film.'));
+          toast('These subtitles were made for a different cut of the film', 'bad');
+          return out;
+        }
+        if (sameSpeed && off < 0.1) {
+          out.state = 'fine';
+          this.finish(key, 'fine', 'good', inSync);
+          if (!auto) toast('The subtitles are already in sync', 'good');
+          return out;
+        }
+        // The sound alone tells where a line belongs to a few tenths of a second: the app does not
+        // move a file by itself for less than it can tell.
+        if (small) {
+          out.state = off < 0.25 ? 'fine' : 'close';
+          this.finish(key, out.state, 'good', off < 0.25 ? inSync
+            : 'These subtitles are close: measured from ' + how + ' they come about ' + amount + ', which is as fine as the sound can tell. Nothing was changed. “Sync with the voices” moves them anyway.');
+          return out;
+        }
+
+        this.undo = { delay: cfg.subDelay, scale: cfg.subScale };
+        cfg.subDelay = pick.offset;
+        cfg.subScale = pick.scale;
+        out.moved = true;
+        SubsUI.shown = null;
+        const pct = Math.abs(pick.scale - 1) * 100;
+        const text = sameSpeed
+          ? 'The subtitles came ' + amount + '. They are now in sync with the voices.'
+          : pick.scale === 1 ? 'The subtitles are now in sync with the voices, at the file\'s own speed.'
+            : 'These subtitles ran at the wrong speed for this film: the file was made for a copy that runs ' + pct.toFixed(pct < 1 ? 1 : 0) + '% ' + (pick.scale > 1 ? 'faster' : 'slower') +
+              ' (another frame rate), so they drifted further off the longer the film ran. They are now in sync with the voices.';
+        out.state = pick.mixed ? 'mixed' : 'synced';
+        this.finish(key, out.state, pick.mixed ? 'warn' : 'good', text + ' (Measured from ' + how + '.)' + elsewhere + (pick.mixed ? ' In those other parts they will still be off.' : ''));
+        Engine.logEvent('Subtitles synced: shift ' + (pick.offset >= 0 ? '+' : '') + pick.offset.toFixed(2) + ' s' + (pick.scale !== 1 ? ', speed ×' + pick.scale.toFixed(4) : '') + ' (measured from ' + how + ')');
+        toast(sameSpeed ? 'Subtitles were ' + amount + ': now in sync with the voices' : 'Subtitles are now in sync with the voices (their speed was wrong)', 'good');
+        return out;
+      } catch (e) {
+        if (alive()) this.say('warn', 'The subtitles could not be checked: ' + ((e && e.message) || 'unknown error') + '.');
+        return null;
+      } finally {
+        // Only one run exists at a time, so the flag is this run's to clear, called off or not.
+        this.busy = false;
+        this.auto = false;
+        if (this.note && /^Listening/.test(this.note.text)) this.note = null;
+        SubsUI.renderPanel();
+      }
+    },
+
+    finish(key, state, kind, text) {
+      cfg.subSyncKey = key;
+      cfg.subSyncState = state;
+      save();
+      this.say(kind, text);
+    },
+
+    revert() {
+      if (!this.undo || this.busy) return;
+      cfg.subDelay = this.undo.delay;
+      cfg.subScale = this.undo.scale;
+      this.undo = null;
+      SubsUI.shown = null;
+      this.finish(this.key(), 'undone', '', 'The subtitles are back where they were.');
+      SubsUI.renderPanel();
+      toast('Subtitles back where they were');
+    },
+
+    offerFfmpeg() {
+      if (Modal.isOpen) return;
+      const canDownload = native.platform === 'win32';
+      const go = async () => { Modal.close(); await Media.reprobe(); this.run(); };
+      Modal.open({
+        title: 'Sync with the voices',
+        html: 'To hear the voices of the film, Avengers Player uses the free tool <b>FFmpeg</b>.' + (canDownload ? ' It is a one-time download of about 100 MB.' : ''),
+        actions: [
+          { label: 'Not now', onClick: () => Modal.close() },
+          { label: 'I have FFmpeg…', onClick: async () => { const found = await native.ffPick(); if (found) go(); else toast('That is not a working FFmpeg', 'bad'); } }
+        ].concat(canDownload ? [{ label: 'Download and sync', primary: true, onClick: () => AudioFix.download(go) }] : []),
+        onEscape: () => Modal.close()
+      });
+    },
+
+    /** The button, the note and the switch in the Subs tab. */
+    render() {
+      if (!el.subSync) return;
+      el.subSyncWrap.hidden = !native.isNative;
+      el.subSync.disabled = !SubsUI.loaded || (!this.busy && SubsUI.own);
+      el.subSync.textContent = this.busy ? 'Stop listening (' + Math.round(this.fraction * 100) + '%)' : 'Sync with the voices';
+      el.subSyncUndo.hidden = !this.undo || this.busy;
+      el.optSubAuto.checked = cfg.subAutoSync !== false;
+      let note = this.note && this.note.key === this.key() ? this.note : null;
+      if (!note && SubsUI.loaded) {
+        const st = this.state();
+        if (SubsUI.own) note = { kind: 'good', text: 'These subtitles come from inside the movie file: they are in sync as they are.' };
+        else if (st === 'synced') note = { kind: 'good', text: 'These subtitles have been synced with the voices.' };
+        else if (st === 'fine') note = { kind: 'good', text: 'These subtitles are in sync with the voices.' };
+        else if (st === 'close') note = { kind: 'good', text: 'These subtitles were checked and are close to the voices.' };
+        else if (st === 'mixed') note = { kind: 'warn', text: 'These subtitles match only parts of the film: the file was made for a different cut.' };
+        else if (st === 'unsure') note = { kind: 'warn', text: 'The app could not work out from the sound where these subtitles belong.' };
+      }
+      el.subSyncNote.hidden = !note;
+      el.subSyncNote.className = 'substat syncnote' + (note && note.kind ? ' ' + note.kind : '');
+      el.subSyncNote.textContent = note ? note.text : '';
+      el.subSpeed.hidden = cfg.subScale === 1;
+      el.subSpeed.textContent = cfg.subScale === 1 ? '' : 'Subtitle speed ×' + cfg.subScale.toFixed(4) + ': the file was made for a copy of the film with another frame rate.';
     }
   };
 
@@ -2689,7 +3048,7 @@
       });
     },
 
-    async download() {
+    async download(then) {
       this.running = true;
       Modal.open({
         title: 'Downloading FFmpeg',
@@ -2700,7 +3059,7 @@
       const r = await native.ffDownload().catch((e) => ({ error: e && e.message }));
       this.running = false;
       Modal.close();
-      if (r && r.path) { this.afterFfmpeg(); return; }
+      if (r && r.path) { if (then) then(); else this.afterFfmpeg(); return; }
       if (!(r && r.aborted)) toast((r && r.error) || 'The download failed', 'bad');
     },
 
@@ -2761,6 +3120,7 @@
   };
 
   native.onFfProgress((p) => {
+    if (p && p.phase === 'listen') { SubSync.progress((p.fraction || 0) * 0.6); return; }
     if (!Modal.isOpen || !p) return;
     let note = '';
     if (p.phase === 'download') {
@@ -3836,6 +4196,14 @@
     el.subDelayMinus.addEventListener('click', () => SubsUI.nudge(-0.1));
     el.subDelayPlus.addEventListener('click', () => SubsUI.nudge(0.1));
     el.subDelayReset.addEventListener('click', () => SubsUI.nudge(0));
+    el.subSync.addEventListener('click', () => { if (SubSync.busy) SubSync.cancel(); else SubSync.run(); });
+    el.subSyncUndo.addEventListener('click', () => SubSync.revert());
+    el.optSubAuto.addEventListener('change', () => {
+      cfg.subAutoSync = el.optSubAuto.checked;
+      save();
+      if (cfg.subAutoSync) SubSync.fileChanged(true); else SubSync.autoKey = '';
+      SubsUI.renderPanel();
+    });
     bindSelect(el.subSize, 'subSize', null, () => SubsUI.renderPanel());
     bindSelect(el.subBg, 'subBg', null, () => SubsUI.renderPanel());
     bindSelect(el.subColor, 'subColor', null, () => SubsUI.renderPanel());
@@ -4132,7 +4500,7 @@
   }
 
   // For the automated tests and for debugging from the developer tools.
-  window.__AP = { Engine: Engine, Clock: Clock, cfg: cfg, Media: Media, AudioTracks: AudioTracks, AudioFix: AudioFix, SnapCam: SnapCam, Late: Late, NetTime: NetTime, SubsUI: SubsUI, UI: UI, Celebration: Celebration, Versions: Versions, C: C, saveNow: saveNow };
+  window.__AP = { Engine: Engine, Clock: Clock, cfg: cfg, Media: Media, AudioTracks: AudioTracks, AudioFix: AudioFix, SnapCam: SnapCam, Late: Late, NetTime: NetTime, SubsUI: SubsUI, SubSync: SubSync, UI: UI, Celebration: Celebration, Versions: Versions, C: C, saveNow: saveNow };
 
   boot();
 })();

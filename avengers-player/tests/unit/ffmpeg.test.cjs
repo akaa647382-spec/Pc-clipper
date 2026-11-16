@@ -416,6 +416,94 @@ test('subtitleWindow: the subtitles of one stretch, with the film\'s own times',
   await assert.rejects(ff.subtitleWindow(exe, path.join(tmp, 'nope.mkv'), 0, 10, {}), /does not exist/);
 });
 
+/* ---- listening to the film: where is somebody speaking? ---- */
+
+// A "voice": a tone that is on exactly during these stretches of a 20-second clip.
+const SPOKEN = [[1, 2.2], [3.1, 3.9], [6, 8.5], [9.4, 10], [12.7, 14.9], [16, 17.3]];
+const gate = (list) => list.map(([a, b]) => 'between(t,' + a + ',' + b + ')').join('+');
+const meanOver = (energy, hz, from, list, inside) => {
+  let sum = 0;
+  let n = 0;
+  for (let i = 0; i < energy.length; i++) {
+    const t = from + (i + 0.5) / hz;
+    // Leave the edges of each stretch out: a frame there is half voice, half quiet.
+    const on = list.some(([a, b]) => t > a + 0.06 && t < b - 0.06);
+    const off = !list.some(([a, b]) => t > a - 0.06 && t < b + 0.06);
+    if (inside ? on : off) { sum += energy[i]; n++; }
+  }
+  return sum / (n || 1);
+};
+
+test('speechEnergy: how loud the voice band is, frame by frame, in stretches of the film', { skip }, async () => {
+  const Core = require('../../src/core.js');
+  const clip = make('talk.mp4', [...V, '-f', 'lavfi', '-i', "aevalsrc='0.4*sin(2*PI*800*t)*(" + gate(SPOKEN) + ")+0.002*sin(2*PI*1300*t)':s=48000",
+    '-t', '20', ...X264, '-c:a', 'aac', '-b:a', '96k']);
+  const seen = [];
+  const r = await ff.speechEnergy(exe, clip, { windows: [{ from: 0, dur: 20 }, { from: 5, dur: 6 }], onProgress: (p) => seen.push(p.fraction) });
+  assert.equal(r.hz, 50);
+  assert.equal(r.windows.length, 2);
+  assert.deepEqual(seen, [0.5, 1]);
+  assert.ok(r.windows[0].energy instanceof Float32Array);
+  assert.ok(Math.abs(r.windows[0].energy.length - 1000) <= 3, 'twenty seconds are a thousand frames: ' + r.windows[0].energy.length);
+  assert.ok(Math.abs(r.windows[1].energy.length - 300) <= 3, 'six seconds are three hundred: ' + r.windows[1].energy.length);
+  for (const w of r.windows) {
+    const on = meanOver(w.energy, r.hz, w.from, SPOKEN, true);
+    const off = meanOver(w.energy, r.hz, w.from, SPOKEN, false);
+    assert.ok(on > 0.01 && off < on / 200, 'loud where the voice is, quiet elsewhere, from ' + w.from + ' s: ' + on + ' / ' + off);
+  }
+  // The stretch that starts at 5 s really starts there: the voice comes in at 6.0, a second in.
+  const second = r.windows[1].energy;
+  const first = second.findIndex((v) => v > 0.01);
+  assert.ok(Math.abs(first / r.hz - 1.0) <= 0.04, 'the stretch begins where it was asked to: voice at ' + (first / r.hz) + ' s into it');
+
+  // Subtitle lines made for a copy of the film that starts 0.7 s earlier are put back on the voice.
+  const cues = SPOKEN.map(([a, b]) => ({ start: a - 0.7, end: b - 0.7 }));
+  const sc = Core.speechScore(r.windows[0].energy, r.hz);
+  const fit = Core.alignCues([{ from: 0, hz: r.hz, score: sc.score, sharp: sc.sharp }], cues, { maxOffset: 5, scales: [1] });
+  assert.ok(Math.abs(fit.offset - 0.7) <= 0.06, 'the lines belong 0.7 s later: ' + fit.offset);
+  assert.ok(fit.strength > 0.4, 'and they fit: ' + fit.strength);
+
+  // A stretch past the end of the film gives nothing, without an error.
+  const past = await ff.speechEnergy(exe, clip, { windows: [{ from: 500, dur: 10 }] });
+  assert.equal(past.windows[0].energy.length, 0);
+});
+
+test('speechEnergy: in a surround mix the centre channel is listened to, where the dialogue is', { skip }, async () => {
+  // Left and right are loud with tones that come and go at times of their own; the voice is in the centre only.
+  const loud = (hz, every, on) => '0.5*sin(2*PI*' + hz + '*t)*lt(mod(t,' + every + '),' + on + ')';
+  const exprs = [loud(700, 1.3, 0.7), loud(1100, 1.7, 0.9), '0.3*sin(2*PI*800*t)*(' + gate(SPOKEN) + ')', '0', loud(500, 2.1, 1.0), loud(900, 0.9, 0.5)];
+  const clip = make('talk51.mkv', [...V, '-f', 'lavfi', '-i', "aevalsrc='" + exprs.join('|') + "':c=5.1:s=48000", '-t', '20', ...X264, '-c:a', 'ac3', '-b:a', '448k']);
+  const r = await ff.speechEnergy(exe, clip, { windows: [{ from: 0, dur: 20 }] });
+  assert.equal(r.track.channels, 6);
+  const on = meanOver(r.windows[0].energy, r.hz, 0, SPOKEN, true);
+  const off = meanOver(r.windows[0].energy, r.hz, 0, SPOKEN, false);
+  assert.ok(on > 0.005 && off < on / 50, 'only the centre channel is heard: ' + on + ' / ' + off);
+});
+
+test('speechEnergy: the wanted language, no sound, and calling it off', { skip }, async () => {
+  // Hindi first (440 Hz), English second (880 Hz): English is listened to unless told otherwise.
+  const eng = await ff.speechEnergy(exe, clips.pahe, { windows: [{ from: 0, dur: 2 }] });
+  assert.deepEqual({ index: eng.track.index, lang: eng.track.lang }, { index: 1, lang: 'eng' });
+  const hin = await ff.speechEnergy(exe, clips.pahe, { windows: [{ from: 0, dur: 2 }], preferLang: 'hin' });
+  assert.equal(hin.track.index, 0);
+  const byIndex = await ff.speechEnergy(exe, clips.pahe, { windows: [{ from: 0, dur: 2 }], audioIndex: 0 });
+  assert.equal(byIndex.track.index, 0);
+
+  await assert.rejects(ff.speechEnergy(exe, clips.videoOnly, { windows: [{ from: 0, dur: 2 }] }), /no sound track/);
+  await assert.rejects(ff.speechEnergy(exe, path.join(tmp, 'nope.mkv'), { windows: [{ from: 0, dur: 2 }] }), /does not exist/);
+
+  const gone = new AbortController();
+  gone.abort();
+  await assert.rejects(ff.speechEnergy(exe, clips.aac, { windows: [{ from: 0, dur: 2 }], signal: gone.signal }), { name: 'AbortError' });
+  // Called off between two stretches: the rest is not listened to.
+  const ctl = new AbortController();
+  let done = 0;
+  await assert.rejects(ff.speechEnergy(exe, clips.aac, {
+    windows: [{ from: 0, dur: 2 }, { from: 2, dur: 2 }, { from: 4, dur: 2 }], signal: ctl.signal, onProgress: () => { done++; ctl.abort(); }
+  }), { name: 'AbortError' });
+  assert.equal(done, 1);
+});
+
 test('zip: extracts exactly bin/ffmpeg.exe, deflated or stored', { skip: HAVE_PY ? false : 'python3 is not installed' }, async () => {
   for (const compress of [true, false]) {
     const zip = buildZip('pkg-' + compress + '.zip', zipFiles, compress);

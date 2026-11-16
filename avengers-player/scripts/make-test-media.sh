@@ -107,4 +107,20 @@ fi
 if [[ ! -f "$out/other.vtt" ]]; then
   printf 'WEBVTT\n\n00:00:00.000 --> 00:03:00.000\n<i>Other</i> subtitle track\n' > "$out/other.vtt"
 fi
+# "Talking" films for the subtitle sync: synthetic voices that speak exactly when the lines of
+# talk.srt say so, over music and effects. talk.mp4 is stereo; talk-51.mkv has the voices only in
+# the centre channel (drowned out in a mix-down) and the right subtitles inside the file;
+# talk-long.mp4 is half an hour, long enough to be listened to in stretches. The other .srt files
+# are the same lines made for other copies of the film: see scripts/make-talk.mjs.
+if [[ ! -f "$out/talk.mp4" || ! -f "$out/talk-51.mkv" || ! -f "$out/talk-long.mp4" || ! -f "$out/talk-early.srt" ]]; then
+  node "$(dirname "$0")/make-talk.mjs" "$out"
+  ff -f lavfi -i "testsrc2=size=320x180:rate=24,format=yuv420p" -i "$out/talk.wav" -t 240 \
+     -c:v libx264 -preset ultrafast -crf 34 -g 48 -c:a aac -b:a 96k -ar 48000 -movflags +faststart "$out/talk.mp4"
+  ff -f lavfi -i "testsrc2=size=320x180:rate=24,format=yuv420p" -i "$out/talk51.wav" -i "$out/talk.srt" -t 240 -map 0:v -map 1:a -map 2:s \
+     -c:v libx264 -preset ultrafast -crf 34 -g 48 -c:a aac -b:a 256k -ar 48000 -c:s srt \
+     -metadata:s:a:0 language=eng -metadata:s:s:0 language=eng "$out/talk-51.mkv"
+  ff -f lavfi -i "testsrc2=size=160x90:rate=6,format=yuv420p" -i "$out/talk-long.wav" -t 1800 \
+     -c:v libx264 -preset ultrafast -crf 38 -g 12 -c:a aac -b:a 48k -movflags +faststart "$out/talk-long.mp4"
+  rm -f "$out/talk.wav" "$out/talk51.wav" "$out/talk-long.wav"
+fi
 ls -la "$out"

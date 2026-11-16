@@ -594,6 +594,239 @@ const scenarios = {
     } finally { await s.close(); }
   },
 
+  async subsync() {
+    const TALK = path.join(MEDIA, 'talk.mp4');
+    const loadSub = (page, name) => page.evaluate(async (f) => window.__AP.SubsUI.loadFrom(await window.apNative.readSubtitle(f)), path.isAbsolute(name) ? name : path.join(MEDIA, name));
+    const sync = (page) => page.evaluate(() => {
+      const { cfg, SubSync, SubsUI } = window.__AP;
+      const note = document.getElementById('subSyncNote');
+      return {
+        delay: cfg.subDelay, scale: cfg.subScale, state: SubSync.state(), busy: SubSync.busy, wanted: SubSync.wanted(), by: SubSync.last ? SubSync.last.by : '',
+        note: note.hidden ? '' : note.textContent, undo: !document.getElementById('subSyncUndo').hidden, name: SubsUI.name, lines: SubsUI.cues.length,
+        button: document.getElementById('subSync').textContent, disabled: document.getElementById('subSync').disabled, toasts: document.getElementById('toasts').textContent
+      };
+    });
+    // The check of the file that is loaded now has run to its end.
+    const settled = (page, timeout) => waitFor(page, () => {
+      const { SubSync, cfg } = window.__AP;
+      return !SubSync.busy && !SubSync.autoKey && SubSync.key() !== '' && cfg.subSyncKey === SubSync.key();
+    }, null, timeout || 90000);
+    const lineAt = async (page, t) => {
+      await page.evaluate((x) => { document.getElementById('video').currentTime = x; }, t);
+      await sleep(350);
+      return page.textContent('#subs');
+    };
+    // The lines of the film as they really are (talk.srt), to compare against.
+    const truth = Array.from(fs.readFileSync(path.join(MEDIA, 'talk.srt'), 'utf8').matchAll(/(\d\d):(\d\d):(\d\d),(\d\d\d) --> /g)).map((m) => (+m[1]) * 3600 + (+m[2]) * 60 + (+m[3]) + (+m[4]) / 1000);
+
+    const profile = newProfile();
+    let s = await launch(profile);
+    try {
+      /* ---- a file that is right is left alone ---- */
+      await loadMovie(s.page, TALK);
+      check('the subtitle file next to the film is loaded', await waitFor(s.page, () => window.__AP.SubsUI.loaded && window.__AP.SubsUI.name === 'talk.srt', null, 8000));
+      check('the app checks it against the voices by itself', await settled(s.page));
+      let st = await sync(s.page);
+      check('a file that is in sync is left as it is', st.state === 'fine' && st.delay === 0 && st.scale === 1 && !st.undo, JSON.stringify(st));
+      await s.page.click('.tab[data-tab="subs"]');
+      check('and the Subs tab says so', /in sync with the voices/.test(st.note) && /sound of the film/.test(st.note), st.note);
+      check('line 1 is on screen while it is spoken', /^Line 1 of the film\.$/.test(await lineAt(s.page, truth[0] + 1)), await s.page.textContent('#subs'));
+
+      /* ---- a file that comes early is put right without asking ---- */
+      await loadSub(s.page, 'talk-early.srt');
+      check('a new subtitle file is checked too', await settled(s.page));
+      st = await sync(s.page);
+      check('lines that come 2.4 s early are moved 2.4 s later', st.state === 'synced' && Math.abs(st.delay - 2.4) <= 0.12 && st.scale === 1, JSON.stringify({ state: st.state, delay: st.delay, scale: st.scale }));
+      check('the note says what was wrong and what was done', /came 2\.\d\d s early\. They are now in sync with the voices/.test(st.note), st.note);
+      check('a toast says it too', /Subtitles were 2\.\d\d s early: now in sync with the voices/.test(st.toasts), st.toasts);
+      check('the delay readout shows the shift to the hundredth', /^\+2\.[34]\d? s$/.test(await s.page.textContent('#subDelay')), await s.page.textContent('#subDelay'));
+      check('line 1 is on screen while it is spoken, not 2.4 s before', /^Line 1 of the film\.$/.test(await lineAt(s.page, truth[0] + 1)) && (await lineAt(s.page, truth[0] - 1.2)) === '', await s.page.textContent('#subs'));
+      await shot(s.page, 'subsync-synced');
+
+      check('Undo is offered', st.undo);
+      await s.page.click('#subSyncUndo');
+      st = await sync(s.page);
+      check('Undo puts the lines back where the file has them', st.delay === 0 && st.scale === 1 && st.state === 'undone' && !st.undo, JSON.stringify(st));
+      await sleep(2500);
+      st = await sync(s.page);
+      check('and the app does not move them again by itself', st.delay === 0 && !st.busy && !st.wanted, JSON.stringify(st));
+      await s.page.click('#subSync');
+      check('the button syncs them on request', await waitFor(s.page, () => window.__AP.SubSync.state() === 'synced' && !window.__AP.SubSync.busy, null, 60000));
+      st = await sync(s.page);
+      check('to the same place', Math.abs(st.delay - 2.4) <= 0.12, st.delay);
+      const before = st.delay;
+      await s.page.click('#subDelayPlus');
+      check('the − / + buttons still move them by hand, in tenths', Math.abs((await sync(s.page)).delay - (before + 0.1)) < 1e-9, (await sync(s.page)).delay);
+      await s.page.click('#subSync');
+      await waitFor(s.page, () => !window.__AP.SubSync.busy && /already in sync|now in sync/.test(document.getElementById('toasts').textContent), null, 60000);
+      st = await sync(s.page);
+      check('syncing again after a nudge by hand puts them back on the voices', Math.abs(st.delay - 2.4) <= 0.12, st.delay);
+      await s.page.click('#subDelayReset');
+      st = await sync(s.page);
+      check('"reset" goes back to the file as it is', st.delay === 0 && st.scale === 1, JSON.stringify({ delay: st.delay, scale: st.scale }));
+
+      /* ---- a file made for a copy of the film at another speed ---- */
+      await loadSub(s.page, 'talk-pal.srt');
+      check('a file made for a 25 frames-a-second copy is checked', await settled(s.page));
+      st = await sync(s.page);
+      const mapped = await s.page.evaluate(() => { const { cfg, SubsUI } = window.__AP; return SubsUI.cues.map((c) => c.start * cfg.subScale + cfg.subDelay); });
+      const worst = Math.max(...mapped.map((t, i) => Math.abs(t - truth[i])));
+      check('its speed is corrected as well as its shift', st.state === 'synced' && Math.abs(st.scale - 25000 / 23976) < 0.002 && mapped.length === truth.length, JSON.stringify({ state: st.state, delay: st.delay, scale: st.scale }));
+      check('every line lands within 0.2 s of where it is spoken', worst <= 0.2, worst.toFixed(3) + ' s at worst');
+      check('the note explains the speed', /wrong speed for this film/.test(st.note) && /4% faster/.test(st.note), st.note);
+      check('the Subs tab shows the speed', await s.page.isVisible('#subSpeed') && /×1\.04/.test(await s.page.textContent('#subSpeed')), await s.page.textContent('#subSpeed'));
+      check('the last line of the film is on screen while it is spoken', new RegExp('^Line ' + truth.length + ' of the film\\.$').test(await lineAt(s.page, truth[truth.length - 1] + 0.6)), await s.page.textContent('#subs'));
+
+      /* ---- the subtitles of another film ---- */
+      await loadSub(s.page, 'talk-other.srt');
+      check('a file that belongs to another film is checked', await settled(s.page));
+      st = await sync(s.page);
+      check('nothing is moved when the lines fit nowhere', st.state === 'unsure' && st.delay === 0 && st.scale === 1 && !st.undo, JSON.stringify({ state: st.state, delay: st.delay, scale: st.scale }));
+      check('and the app says it could not tell', /could not work out where these subtitles belong/.test(st.note) && /Nothing was changed/.test(st.note), st.note);
+      await s.page.click('#subSync');
+      check('asking for it by hand says the same', await waitFor(s.page, () => /Could not sync the subtitles/.test(document.getElementById('toasts').textContent), null, 60000));
+      st = await sync(s.page);
+      check('and still moves nothing', st.delay === 0 && st.scale === 1, JSON.stringify({ delay: st.delay, scale: st.scale }));
+
+      /* ---- the switch ---- */
+      await s.page.click('label:has(#optSubAuto)');
+      check('the automatic check can be switched off', await s.page.evaluate(() => window.__AP.cfg.subAutoSync === false));
+      await loadSub(s.page, 'talk-early.srt');
+      await sleep(3000);
+      st = await sync(s.page);
+      check('then a new file is left alone', st.delay === 0 && st.state === '' && !st.busy && !st.wanted && st.note === '', JSON.stringify(st));
+      await s.page.click('label:has(#optSubAuto)');
+      check('switching it on checks the file that is loaded', await settled(s.page) && Math.abs((await sync(s.page)).delay - 2.4) <= 0.12, (await sync(s.page)).delay);
+
+      /* ---- it is all remembered ---- */
+      await sleep(400);
+      await s.close();
+      s = await launch(profile);
+      check('after a restart the film and its subtitles are back', await waitFor(s.page, () => window.__AP.Media.ready && window.__AP.SubsUI.loaded && window.__AP.SubsUI.name === 'talk-early.srt', null, 15000));
+      await sleep(2500);
+      st = await sync(s.page);
+      check('with the shift they were given, and without another check', Math.abs(st.delay - 2.4) <= 0.12 && st.state === 'synced' && !st.busy && !st.wanted, JSON.stringify(st));
+      await s.page.click('.tab[data-tab="subs"]');
+      check('the Subs tab says they have been synced', /have been synced with the voices/.test((await sync(s.page)).note), (await sync(s.page)).note);
+
+      /* ---- an armed countdown ---- */
+      const mission = () => s.page.click('.tab[data-tab="mission"]');
+      await setSnap(s.page, SNAP);
+      await armIn(s.page, 20 * 60);
+      await waitPhase(s.page, 'standby');
+      await s.page.evaluate(() => { window.__AP.cfg.subSyncKey = ''; window.__AP.cfg.subSyncState = ''; });
+      await loadSub(s.page, 'talk-early.srt');
+      check('with the film due in twenty minutes a new file is still checked', await settled(s.page) && Math.abs((await sync(s.page)).delay - 2.4) <= 0.12, JSON.stringify(await sync(s.page)));
+      check('and the countdown stays armed', (await state(s.page)).mode === 'armed' && (await state(s.page)).phase === 'standby');
+      await s.page.evaluate(() => window.__AP.Engine.disarm());
+      await armIn(s.page, 150);
+      await waitPhase(s.page, 'standby');
+      await s.page.evaluate(() => { window.__AP.cfg.subSyncKey = ''; window.__AP.cfg.subSyncState = ''; });
+      await loadSub(s.page, 'talk-early.srt');
+      await sleep(3000);
+      st = await sync(s.page);
+      check('with the film due in a few minutes the app leaves the subtitles alone', st.delay === 0 && !st.busy && !st.wanted && st.state === '', JSON.stringify(st));
+      await s.page.click('.tab[data-tab="subs"]');
+      await s.page.click('#subSync');
+      check('but the button still works while the film waits', await waitFor(s.page, () => window.__AP.SubSync.state() === 'synced' && !window.__AP.SubSync.busy, null, 60000) && Math.abs((await sync(s.page)).delay - 2.4) <= 0.12, JSON.stringify(await sync(s.page)));
+      await s.page.evaluate(() => window.__AP.Engine.disarm());
+      // The film is running and the snap is a minute away: nothing may get in its way.
+      await mission();
+      await armIn(s.page, -40);
+      await waitSynced(s.page, 30000);
+      await s.page.click('.tab[data-tab="subs"]');
+      await s.page.click('#subDelayReset');
+      await s.page.click('#subSync');
+      await sleep(1500);
+      st = await sync(s.page);
+      check('close to the snap the button refuses and says why', /Not this close to the snap/.test(st.toasts) && !st.busy && st.delay === 0, JSON.stringify({ toasts: st.toasts, busy: st.busy, delay: st.delay }));
+      await s.page.evaluate(() => window.__AP.Engine.disarm());
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally { await s.close(); }
+
+    /* ---- surround sound, and subtitles inside the movie file ---- */
+    s = await launch(newProfile());
+    try {
+      await loadMovie(s.page, path.join(MEDIA, 'talk-51.mkv'));
+      await waitFor(s.page, () => window.__AP.Media.inspected, null, 15000);
+      await loadSub(s.page, 'talk-early.srt');
+      check('5.1 film: the file is checked', await settled(s.page));
+      let st = await sync(s.page);
+      const last = await s.page.evaluate(() => { const l = window.__AP.SubSync.last; return { v: l.voices && { o: l.voices.offset, c: l.voices.confident }, i: l.inside && { o: l.inside.offset, c: l.inside.confident, s: l.inside.strength } }; });
+      check('the voices are heard in the centre channel, under loud music left and right', last.v && last.v.c && Math.abs(last.v.o - 2.4) <= 0.12, JSON.stringify(last.v));
+      check('the subtitles inside the movie file say the same, more exactly', last.i && last.i.c && last.i.s > 0.9 && Math.abs(last.i.o - 2.4) <= 0.06, JSON.stringify(last.i));
+      check('both are believed together', st.by === 'both' && st.state === 'synced' && Math.abs(st.delay - 2.4) <= 0.06 && /sound of the film and the subtitles inside the movie file/.test(st.note), JSON.stringify({ by: st.by, delay: st.delay, note: st.note }));
+      // Subtitles taken out of the movie file itself need no check.
+      await s.page.click('.tab[data-tab="subs"]');
+      await s.page.click('#subEmbedded button');
+      check('the movie\'s own subtitles load', await waitFor(s.page, () => window.__AP.SubsUI.loaded && window.__AP.SubsUI.own, null, 20000));
+      await sleep(1500);
+      st = await sync(s.page);
+      check('they are not checked or moved: they are right as they are', st.delay === 0 && st.scale === 1 && !st.busy && !st.wanted && st.disabled && /come from inside the movie file/.test(st.note), JSON.stringify(st));
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally { await s.close(); }
+
+    /* ---- a long film is listened to in stretches ---- */
+    s = await launch(newProfile());
+    try {
+      await loadMovie(s.page, path.join(MEDIA, 'talk-long.mp4'));
+      check('half-hour film: its own subtitle file is found in sync', await settled(s.page) && (await sync(s.page)).state === 'fine', JSON.stringify(await sync(s.page)));
+      const windows = await s.page.evaluate(() => window.__AP.SubSync.last.voices.windows.length);
+      check('it was listened to in six stretches, not from end to end', windows === 6, windows);
+      await loadSub(s.page, 'talk-long-ntsc.srt');
+      await settled(s.page);
+      let st = await sync(s.page);
+      check('a file made for a 24.000 frames-a-second copy: a tenth of a percent of speed is found', st.state === 'synced' && Math.abs(st.scale - 24000 / 23976) < 1e-6 && Math.abs(st.delay - 0.8) <= 0.15, JSON.stringify({ state: st.state, delay: st.delay, scale: st.scale }));
+      check('and named as less than a percent', /0\.1% faster/.test(st.note), st.note);
+      await loadSub(s.page, 'talk-long-cut.srt');
+      await settled(s.page);
+      st = await sync(s.page);
+      check('a file made for a different cut is recognised', st.state === 'mixed' && st.delay === 0 && st.scale === 1, JSON.stringify({ state: st.state, delay: st.delay, scale: st.scale }));
+      check('the note says where it stops matching and by how much', /in sync with most of the film/.test(st.note) && /about 20 s later than in the rest/.test(st.note) && /different cut/.test(st.note), st.note);
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally { await s.close(); }
+
+    /* ---- without FFmpeg ---- */
+    s = await launch(newProfile(), { AP_NO_FFMPEG: '1' });
+    try {
+      await loadMovie(s.page, TALK);
+      await waitFor(s.page, () => window.__AP.SubsUI.loaded, null, 8000);
+      await loadSub(s.page, 'talk-early.srt');
+      await sleep(3000);
+      let st = await sync(s.page);
+      check('without FFmpeg nothing is moved', st.delay === 0 && st.state === '' && !st.busy && !st.wanted, JSON.stringify(st));
+      check('and the Subs tab says what is needed', /needs the free tool FFmpeg/.test(st.note), st.note);
+      await s.page.click('.tab[data-tab="subs"]');
+      await s.page.click('#subSync');
+      check('the button offers to get FFmpeg', await waitFor(s.page, () => !document.getElementById('modal').hidden && /Sync with the voices/.test(document.getElementById('modalTitle').textContent) && /FFmpeg/.test(document.getElementById('modalBody').textContent), null, 5000));
+      await s.page.keyboard.press('Escape');
+      check('Escape closes the offer', await waitFor(s.page, () => document.getElementById('modal').hidden, null, 3000));
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally { await s.close(); }
+
+    /* ---- the line before the snap: whose subtitles are believed ---- */
+    s = await launch(newProfile());
+    try {
+      // The lines of snap-subs.mkv, made for a copy of the film that starts 20 s later.
+      const wrong = path.join(s.profile, 'late-copy.srt');
+      fs.writeFileSync(wrong, '1\n00:01:53,000 --> 00:01:55,000\nI am... inevitable.\n\n2\n00:01:56,500 --> 00:01:57,400\nAnd I...\n\n3\n00:01:57,600 --> 00:01:58,300\nam...\n\n4\n00:01:59,100 --> 00:02:00,600\nIron Man.\n\n5\n00:02:40,000 --> 00:02:42,000\nMr. Stark?\n');
+      await s.page.evaluate(() => { window.__AP.cfg.subAutoSync = false; });
+      await loadMovie(s.page, path.join(MEDIA, 'snap-subs.mkv'));
+      await waitFor(s.page, () => window.__AP.Media.inspected && !window.__AP.SnapCam.busy, null, 90000);
+      await setSnap(s.page, 100);
+      await loadSub(s.page, wrong);
+      let line = await s.page.evaluate(() => window.__AP.SnapCam.line());
+      check('a subtitle file nobody has checked is not asked where the snap is: the movie\'s own subtitles are', line && /inside the movie/.test(line.from) && Math.abs(line.end - 100.6) < 0.1, JSON.stringify(line));
+      await s.page.evaluate(() => { window.__AP.cfg.subAutoSync = true; window.__AP.SubSync.fileChanged(true); });
+      check('once it is checked', await settled(s.page));
+      const st = await sync(s.page);
+      check('the file is found to be 20 s late, from the movie\'s own subtitles (five lines and a steady tone are nothing to go by)', st.state === 'synced' && st.by === 'inside' && Math.abs(st.delay + 20) <= 0.1, JSON.stringify({ state: st.state, by: st.by, delay: st.delay }));
+      line = await s.page.evaluate(() => window.__AP.SnapCam.line());
+      check('and then its line before the snap is in the right place', line && line.from === 'the subtitles' && Math.abs(line.end - 100.6) < 0.1, JSON.stringify(line));
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally { await s.close(); }
+  },
+
   async clock() {
     const fake = JSON.stringify({ ok: true, offsetMs: 1500, uncertaintyMs: 12, method: 'ntp', servers: [] });
     const s = await launch(newProfile(), { AP_FAKE_NTP: fake });

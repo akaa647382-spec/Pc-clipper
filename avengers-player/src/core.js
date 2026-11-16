@@ -169,6 +169,391 @@
     return best ? { start: best.start, end: best.end, text: best.text } : null;
   }
 
+  /* ------------------------------------------------ subtitles and voices */
+
+  function percentile(values, p) {
+    if (!values || !values.length) return NaN;
+    const s = Array.from(values).sort((x, y) => x - y);
+    const i = clamp(p, 0, 1) * (s.length - 1);
+    const lo = Math.floor(i);
+    const hi = Math.ceil(i);
+    return s[lo] + (s[hi] - s[lo]) * (i - lo);
+  }
+
+  /** x minus its own average over `width` frames around each frame: what is left is the quick ups and downs. */
+  function detrend(x, width) {
+    const n = x.length;
+    const out = new Float32Array(n);
+    const half = Math.floor(width / 2);
+    let sum = 0;
+    let lo = 0;
+    let hi = -1;
+    for (let i = 0; i < n; i++) {
+      const a = Math.max(0, i - half);
+      const b = Math.min(n - 1, i + half);
+      while (hi < b) sum += x[++hi];
+      while (lo < a) sum -= x[lo++];
+      out[i] = x[i] - sum / (b - a + 1);
+    }
+    return out;
+  }
+
+  /** The average of x over `width` frames around each frame. */
+  function smoothed(x, width) {
+    const flat = detrend(x, width);
+    for (let i = 0; i < flat.length; i++) flat[i] = x[i] - flat[i];
+    return flat;
+  }
+
+  /**
+   * "Is somebody speaking?" for every frame of a stretch of sound.
+   *   energy  the mean square of the sound per frame (the speech band, the centre of the mix)
+   *   hz      frames a second (50)
+   *
+   * Loudness alone does not tell: a film is loudest where nobody speaks. Two things do. Speech
+   * rises and falls at the pace of syllables and stops between phrases, where music holds its
+   * level; and what counts is the level against the last few seconds, not against the whole film
+   * (a loud scene is not one long line). So the level is taken on a scale from the quiet to the
+   * loud parts of the stretch, the syllable flutter is added, and everything slower than a few
+   * seconds is taken out.
+   *
+   * Returns { score, sharp }: `score` finds the place (level and flutter), `sharp` sets it exactly
+   * (level only: the flutter is a little early). Both hover around zero.
+   */
+  function speechScore(energy, hz) {
+    const n = energy ? energy.length : 0;
+    const rate = hz > 0 ? hz : 50;
+    const db = new Float32Array(n);
+    for (let i = 0; i < n; i++) db[i] = 10 * Math.log10((energy[i] > 0 ? energy[i] : 0) + 1e-9);
+    const lo = percentile(db, 0.3);
+    const hi = percentile(db, 0.92);
+    const span = Math.max(8, hi - lo);               // at least 8 dB between "quiet" and "speech"
+    const raw = new Float32Array(n);
+    for (let i = 0; i < n; i++) raw[i] = clamp((db[i] - lo) / span, 0, 1);
+    const level = smoothed(raw, Math.round(rate * 0.1));
+    // Flutter: how far the level of the moment is from the level of the half second around it.
+    const quick = smoothed(db, Math.round(rate * 0.06));
+    const slow = smoothed(db, Math.round(rate * 0.5));
+    const away = new Float32Array(n);
+    for (let i = 0; i < n; i++) away[i] = Math.abs(quick[i] - slow[i]);
+    const flutter = smoothed(away, Math.round(rate * 0.5));
+    const both = new Float32Array(n);
+    for (let i = 0; i < n; i++) both[i] = level[i] + clamp(flutter[i] / 6, 0, 1);
+    const width = Math.round(rate * 4);
+    return { score: detrend(both, width), sharp: detrend(level, width) };
+  }
+
+  /** 1 wherever a subtitle line is on screen, `hz` steps a second, with film time = cue time * scale. */
+  function cueTimeline(cues, hz, scale, length) {
+    const m = new Uint8Array(length);
+    for (const c of cues) {
+      const a = Math.max(0, Math.round(c.start * scale * hz));
+      const b = Math.min(length - 1, Math.round(c.end * scale * hz));
+      for (let i = a; i <= b; i++) m[i] = 1;
+    }
+    return m;
+  }
+
+  /*
+   * Subtitle files made for another frame rate run at one of these speeds against the film: the
+   * file's own speed first, then the likeliest ones (25 against 23.976 frames a second, and back).
+   */
+  const SUB_SCALES = [1, 25000 / 23976, 23976 / 25000, 24000 / 23976, 23976 / 24000, 25 / 24, 24 / 25];
+
+  /**
+   * Which of two fits to believe when the speeds are tried one after the other, likeliest first.
+   * A later speed has to be clearly better: on a short film two speeds hardly differ, and the
+   * file's own speed is given up last of all.
+   */
+  function betterFit(best, next) {
+    if (!next) return best;
+    if (!best) return next;
+    return next.peak > best.peak * (best.scale === 1 ? 1.03 : 1.01) ? next : best;
+  }
+
+  /**
+   * Which stretches of the film to listen to: a film is long, and up to an hour of it, taken
+   * from all over and where the talking is, says nearly as much as the whole.
+   *   total  how many seconds of sound may be listened to altogether (a huge file is slow to read)
+   * Returns [{ from, dur }]; a short film is taken whole.
+   */
+  function speechPlan(durationSec, cues, total) {
+    const dur = Number(durationSec);
+    if (!(dur > 8)) return [];
+    if (dur <= 1200) return [{ from: 0, dur: Math.floor(dur) }];
+    const budget = total > 0 ? total : 3600;
+    let K = clamp(Math.round(dur / 720), 6, 16);
+    if (budget / K < 60) K = Math.max(4, Math.floor(budget / 60));
+    const from = dur * 0.03;
+    const span = dur * 0.9 / K;
+    const W = Math.min(clamp(Math.floor(budget / K), 60, 240), Math.floor(span));     // never two stretches over the same part
+    const plan = [];
+    for (let i = 0; i < K; i++) {
+      const a = from + i * span;
+      // Within this part of the film, the stretch with the most subtitle lines in it.
+      let best = a + (span - W) / 2;
+      let most = -1;
+      for (let t = a; t + W <= a + span + 1; t += 30) {
+        let on = 0;
+        for (const c of cues || []) { if (c.end > t && c.start < t + W) on += Math.min(c.end, t + W) - Math.max(c.start, t); }
+        if (on > most) { most = on; best = t; }
+      }
+      plan.push({ from: Math.round(clamp(best, 0, dur - W - 1)), dur: W });
+    }
+    return plan;
+  }
+
+  /** The stretches where a 0/1 time line is 1, as a flat list [from, to, from, to, …], `to` exclusive. */
+  function runsOf(S) {
+    const out = [];
+    const n = S.length;
+    let i = 0;
+    while (i < n) {
+      if (!S[i]) { i++; continue; }
+      let j = i + 1;
+      while (j < n && S[j]) j++;
+      out.push(i, j);
+      i = j;
+    }
+    return out;
+  }
+
+  /** The sum of a track over the runs moved by `lag`, within [lo, hi). P is the track's running total. */
+  function runSum(P, runs, lag, lo, hi) {
+    let sum = 0;
+    for (let q = 0; q < runs.length; q += 2) {
+      let a = runs[q] + lag;
+      let b = runs[q + 1] + lag;
+      if (a < lo) a = lo;
+      if (b > hi) b = hi;
+      if (b > a) sum += P[b] - P[a];
+    }
+    return sum;
+  }
+
+  const runningTotal = (A) => {
+    const P = new Float64Array(A.length + 1);
+    for (let i = 0; i < A.length; i++) P[i + 1] = P[i] + A[i];
+    return P;
+  };
+
+  /**
+   * How a subtitle file has to be moved to sit on the voices: film time = cue time * scale + offset.
+   *
+   *   windows  [{ from, hz, score, sharp }]  for stretches of the film, how much speech there is in
+   *            every frame: speechScore of the sound (`score` finds the place, `sharp` sets it), or
+   *            1/0 from subtitles that are known to be right (`score` only)
+   *   cues     [{ start, end }]       the subtitle lines as the file has them
+   *   opts.linger  seconds a line stays on screen after the voice has stopped (subtitles do that,
+   *            and against sound it pulls the answer early); 0 against other subtitles
+   *   opts.minLines  how many lines have to fall inside the stretches for the answer to count (12)
+   *   opts.halves  false: do not ask that two halves of the film agree (a few lines of subtitles
+   *            against other subtitles cannot be split)
+   *
+   * Every shift up to maxOffset seconds either way is tried at each of the usual speeds, first
+   * coarsely, then to the frame around the best one. Returns null when there is nothing to go by,
+   * otherwise { offset, scale, z, strength, peak, contrast, lines, halves, confident, mixed, other, windows }:
+   *   z, strength  how far the best fit stands out from the others, and how well the lines sit on
+   *                the voices (a correlation, 0..1)
+   *   contrast     how much more speech there is while a line is up than while none is
+   *   lines        how many lines fall inside the stretches at the answer
+   *   halves       every other half minute of the film, and the rest, each give the same answer
+   *   peak         the raw height of the best fit: the speed that gives the highest one is the right one
+   *   confident    only then should anything be changed
+   *   mixed        stretches of the film that do not fit would fit with another shift: the file
+   *                was made for another cut; `other` = { offset, from, count } says which shift and
+   *                from which stretch on
+   */
+  function alignCues(windows, cues, opts) {
+    opts = opts || {};
+    const scales = opts.scales || SUB_SCALES;
+    const maxOff = opts.maxOffset != null ? opts.maxOffset : 120;
+    const CZ = 5;                                    // coarse steps a second
+    const wins = (windows || []).filter((w) => w && w.score && w.hz > 0 && w.score.length >= w.hz * 4);
+    if (!wins.length || !cues || cues.length < 3) return null;
+    const linger = opts.linger > 0 ? opts.linger : 0;
+    if (linger) {
+      // What is compared with the sound is when the line is SPOKEN: a little less than when it is shown.
+      cues = cues.map((c) => {
+        const len = c.end - c.start;
+        return { start: c.start + Math.min(0.05, len * 0.1), end: c.end - Math.min(linger, len * 0.3) };
+      });
+    }
+    const hz = wins[0].hz;
+    const step = Math.max(1, Math.round(hz / CZ));
+    const lastCue = cues.reduce((m, c) => Math.max(m, c.end), 0);
+    const lastWin = wins.reduce((m, w) => Math.max(m, w.from + w.score.length / w.hz), 0);
+
+    // The stretches laid out on the film's own time line, each with its own average taken out:
+    // coarsely from `score` (to find the place), frame by frame from `sharp` (to set it). With
+    // running totals, the sum under all the lines at any shift costs one step per line.
+    const lenC = Math.ceil((lastWin + 1) * CZ) + 1;
+    const lenF = Math.ceil((lastWin + 1) * hz) + 1;
+    const AC = new Float32Array(lenC);
+    const AF = new Float32Array(lenF);
+    const HF = new Uint8Array(lenF);                 // 1 where the film was listened to
+    const spans = [];
+    let saa = 0;
+    let all = 0;
+    for (const w of wins) {
+      const nC = Math.floor(w.score.length / step);
+      const c0 = Math.round(w.from * CZ);
+      const c1 = Math.min(lenC, c0 + nC);
+      let mean = 0;
+      for (let i = 0; i < nC; i++) {
+        let sum = 0;
+        for (let k = 0; k < step; k++) sum += w.score[i * step + k];
+        if (c0 + i < lenC) AC[c0 + i] = sum / step;
+        mean += sum / step;
+      }
+      mean /= nC || 1;
+      let caa = 0;
+      for (let i = c0; i < c1; i++) { AC[i] -= mean; caa += AC[i] * AC[i]; }
+      const src = w.sharp && w.sharp.length === w.score.length ? w.sharp : w.score;
+      const f0 = Math.round(w.from * hz);
+      const f1 = Math.min(lenF, f0 + src.length);
+      let m2 = 0;
+      for (let i = 0; i < src.length; i++) m2 += src[i];
+      m2 /= src.length || 1;
+      let aa = 0;
+      for (let i = f0; i < f1; i++) {
+        const v = src[i - f0] - m2;
+        AF[i] = v;
+        HF[i] = 1;
+        aa += v * v;
+      }
+      spans.push({ from: w.from, c0: c0, c1: c1, caa: caa, f0: f0, f1: f1, aa: aa });
+      saa += aa;
+      all += f1 - f0;
+    }
+    const PC = runningTotal(AC);
+
+    const L = Math.round(maxOff * CZ);
+    const sweep = (P, runs) => {
+      const curve = new Float64Array(2 * L + 1);
+      let top = 0;
+      for (let lag = -L; lag <= L; lag++) {
+        const v = runSum(P, runs, lag, 0, lenC);
+        curve[lag + L] = v;
+        if (v > curve[top]) top = lag + L;
+      }
+      return { curve: curve, lag: top - L, peak: curve[top] };
+    };
+    let best = null;
+    for (const r of scales) {
+      const runs = runsOf(cueTimeline(cues, CZ, r, Math.ceil((lastCue * r + 1) * CZ) + 1));
+      const found = sweep(PC, runs);
+      const next = { r: r, scale: r, lag: found.lag, peak: found.peak, curve: found.curve, runs: runs };
+      if (betterFit(best, next) === next) best = next;
+    }
+    // How far the peak stands out from what the other shifts give (its own neighbourhood left out).
+    let n = 0;
+    let mean = 0;
+    const far = (i) => Math.abs(i - (best.lag + L)) > 3 * CZ;
+    for (let i = 0; i < best.curve.length; i++) if (far(i)) { mean += best.curve[i]; n++; }
+    mean /= n || 1;
+    let spread2 = 0;
+    for (let i = 0; i < best.curve.length; i++) if (far(i)) spread2 += (best.curve[i] - mean) * (best.curve[i] - mean);
+    const z = (best.peak - mean) / (Math.sqrt(spread2 / (n || 1)) || 1e-9);
+
+    // A fit that is real shows in any part of the film. Every other half minute goes to one half,
+    // the rest to the other, and each half is asked on its own: a chance fit does not repeat.
+    let halves = false;
+    if (all / hz >= 120) {
+      const block = 30 * CZ;
+      const A0 = new Float32Array(lenC);
+      const A1 = new Float32Array(lenC);
+      for (let i = 0; i < lenC; i++) { if (Math.floor(i / block) % 2 === 0) A0[i] = AC[i]; else A1[i] = AC[i]; }
+      const h0 = sweep(runningTotal(A0), best.runs).lag;
+      const h1 = sweep(runningTotal(A1), best.runs).lag;
+      halves = Math.abs(h0 - best.lag) <= 3 && Math.abs(h1 - best.lag) <= 3;
+    }
+
+    // Fine: around the coarse answer, frame by frame.
+    const runsF = runsOf(cueTimeline(cues, hz, best.r, Math.ceil((lastCue * best.r + 1) * hz) + 1));
+    const PF = runningTotal(AF);
+    const PH = runningTotal(HF);
+    const centre = Math.round(best.lag / CZ * hz);
+    const reach = Math.round(0.5 * hz);
+    let bestF = centre;
+    let bestV = -Infinity;
+    for (let lag = centre - reach; lag <= centre + reach; lag++) {
+      const v = runSum(PF, runsF, lag, 0, lenF);
+      if (v > bestV) { bestV = v; bestF = lag; }
+    }
+
+    // How well the lines sit on the voices at the answer (a correlation), and how much more speech
+    // there is under the lines than between them. A film whose sound is one long hum has a best
+    // fit too, on whatever click it contains: that must not count.
+    const on = runSum(PH, runsF, bestF, 0, lenF);
+    const share = on / (all || 1);
+    const strength = bestV / (Math.sqrt(saa * all * share * (1 - share)) || 1e-9);
+    const contrast = on > 0 && all > on ? bestV / on + bestV / (all - on) : 0;      // the stretches average zero
+    const offsetExact = bestF / hz;
+    let lines = 0;
+    for (const c of cues) {
+      const a = c.start * best.r + offsetExact;
+      const b = c.end * best.r + offsetExact;
+      if (wins.some((w) => b > w.from && a < w.from + w.score.length / w.hz)) lines++;
+    }
+    const minLines = opts.minLines != null ? opts.minLines : 12;
+
+    // Does every stretch of the film fit? Each gets its own correlation at the answer.
+    const local = spans.map((sp) => {
+      const len = sp.f1 - sp.f0;
+      const part = runSum(PH, runsF, bestF, sp.f0, sp.f1) / (len || 1);
+      const sum = runSum(PF, runsF, bestF, sp.f0, sp.f1);
+      return { from: sp.from, lines: part, strength: part > 0.08 && part < 0.92 ? sum / (Math.sqrt(sp.aa * len * part * (1 - part)) || 1e-9) : null };
+    });
+
+    // A stretch that does not fit at all: would it fit with another shift? Two such stretches that
+    // agree on one say the file was made for another cut of the film (and where the cuts differ).
+    const offset = Math.round(bestF / hz * 100) / 100;
+    const ones = new Uint8Array(lenC).fill(1);
+    const P1 = runningTotal(ones);
+    const elsewhere = [];
+    for (let wi = 0; wi < spans.length; wi++) {
+      if (local[wi].strength == null || local[wi].strength >= 0.15 * strength) continue;
+      const sp = spans[wi];
+      const len = sp.c1 - sp.c0;
+      let top = null;
+      for (let lag = -L; lag <= L; lag++) {
+        const part = runSum(P1, best.runs, lag, sp.c0, sp.c1) / (len || 1);
+        if (!(part > 0.08 && part < 0.92)) continue;
+        const fit = runSum(PC, best.runs, lag, sp.c0, sp.c1) / (Math.sqrt(sp.caa * len * part * (1 - part)) || 1e-9);
+        if (!top || fit > top.fit) top = { fit: fit, offset: lag / CZ };
+      }
+      if (top && top.fit >= 0.5 * strength && Math.abs(top.offset - offset) > 1) elsewhere.push({ from: sp.from, offset: top.offset });
+    }
+    let other = null;
+    for (const a of elsewhere) {
+      const same = elsewhere.filter((b) => Math.abs(b.offset - a.offset) <= 0.6);
+      if (same.length >= 2 && (!other || same.length > other.count)) {
+        other = { count: same.length, offset: Math.round(median(same.map((b) => b.offset)) * 10) / 10, from: Math.min.apply(null, same.map((b) => b.from)) };
+      }
+    }
+
+    return {
+      offset: offset, scale: best.r, z: z, strength: strength, peak: best.peak, contrast: contrast, lines: lines, halves: halves,
+      // Thresholds from films put together out of real voices, music and effects (see the tests).
+      // (A fit that towers over the rest needs no second opinion: a file made for another cut has
+      // two places that fit, and either may come out on top in one half of the film.)
+      confident: z >= ALIGN.z && strength >= ALIGN.strength && contrast >= ALIGN.contrast && lines >= minLines &&
+        (opts.halves === false || halves || (z >= ALIGN.sure.z && strength >= ALIGN.sure.strength)),
+      mixed: !!other, other: other, windows: local
+    };
+  }
+
+  /*
+   * What a fit has to show before anything is moved on the strength of it. Measured on films put
+   * together from real voices, real music and real sound effects (speech from 8 dB over the rest
+   * down to 6 dB under it, in one channel): the right place gave z 6.8 to 16.6, strength 0.09 to
+   * 0.28 and contrast 0.05 to 0.14, and both halves agreed every time; subtitles of another film
+   * and sound without speech gave z up to 4.9, strength up to 0.05 (0.12 once), contrast up to
+   * 0.03 (0.08 once), and the halves never agreed.
+   */
+  const ALIGN = { z: 6, strength: 0.07, contrast: 0.035, sure: { z: 9, strength: 0.15 } };
+
   /* Languages of sound tracks: files label them with ISO 639 codes, people read names. */
   const LANG_NAMES = {
     eng: 'English', hin: 'Hindi', tam: 'Tamil', tel: 'Telugu', mal: 'Malayalam', kan: 'Kannada', ben: 'Bengali',
@@ -485,6 +870,7 @@
     normLang: normLang, langName: langName, langFromTitle: langFromTitle, trackLang: trackLang, pickAudioTrack: pickAudioTrack,
     LANG_NAMES: LANG_NAMES, playableAudioCodec: playableAudioCodec, audioCodecName: audioCodecName,
     findFlash: findFlash, findSnapLine: findSnapLine, median: median,
+    percentile: percentile, speechScore: speechScore, cueTimeline: cueTimeline, speechPlan: speechPlan, alignCues: alignCues, SUB_SCALES: SUB_SCALES, betterFit: betterFit, ALIGN: ALIGN,
     MONTHS: MONTHS, MONTHS_LONG: MONTHS_LONG, DAYS: DAYS, DAYS_LONG: DAYS_LONG,
     clamp: clamp, pad: pad, median: median,
     fmtDuration: fmtDuration, parseDuration: parseDuration,
