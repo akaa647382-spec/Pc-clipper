@@ -19,18 +19,41 @@ fi
 if [[ ! -f "$out/silent.mp4" ]]; then
   ff -f lavfi -i "testsrc2=size=640x360:rate=24,format=yuv420p" -t 30 -c:v libx264 -preset ultrafast -crf 32 -g 48 -an "$out/silent.mp4"
 fi
-# Two tiny clips with the real lengths of the film, to test recognising the cut and the real
-# snap point three hours in: the 2019 original (3:01:11) and the 2026 Encore re-release (about 3:05
-# by press reports, 3:01:36 by a user's report).
-long_clip() {   # name seconds
+# What the snap looks like to the app: the picture bursts into white. flash_expr <second> gives a
+# blend expression that leaves the frame at <second> untouched, brightens the following frames,
+# is white all over from <second>+0.167 for about a second and has faded 1.7 s after <second>.
+flash_expr() { echo "A+(B-A)*clip((T-$1)/0.1666,0,1)*clip(($1+1.7-T)/0.7,0,1)"; }
+
+# A short clip with such a flash beginning right after 1:41.5 (the frame at 1:41.542 is the first
+# brighter one, 1:41.667 the first white one), and the same thing as a wide picture with black bars.
+if [[ ! -f "$out/snap-scene.mp4" ]]; then
+  ff -f lavfi -i "testsrc2=size=640x360:rate=24,format=yuv420p" -f lavfi -i "color=white:size=640x360:rate=24,format=yuv420p" \
+     -f lavfi -i "sine=frequency=330:sample_rate=48000" \
+     -filter_complex "[0:v][1:v]blend=all_expr='$(flash_expr 101.5)'[v]" -map "[v]" -map 2:a -t 160 \
+     -c:v libx264 -preset ultrafast -crf 30 -g 48 -c:a aac -b:a 96k -movflags +faststart "$out/snap-scene.mp4"
+fi
+if [[ ! -f "$out/snap-wide.mp4" ]]; then
+  ff -f lavfi -i "testsrc2=size=640x268:rate=24,format=yuv420p" -f lavfi -i "color=white:size=640x268:rate=24,format=yuv420p" \
+     -f lavfi -i "sine=frequency=330:sample_rate=48000" \
+     -filter_complex "[0:v][1:v]blend=all_expr='$(flash_expr 21.5)',pad=640:360:0:46:black[v]" -map "[v]" -map 2:a -t 40 \
+     -c:v libx264 -preset ultrafast -crf 30 -g 48 -c:a aac -b:a 96k -movflags +faststart "$out/snap-wide.mp4"
+fi
+
+# Tiny clips with the real lengths of the film, to test recognising the cut and finding the snap
+# three hours in: ENDGAME (3:01:11), ENCORE (3:01:36) and a longer copy (3:05:10). Each has the
+# flash of a snap: a second and a half after 2:30:30 in the 3:01:11 and 3:05:10 clips, and 25 s
+# later than that in the 3:01:36 clip (as if its extra 25 s came before the film).
+long_clip() {   # name seconds second-of-the-flash
   if [[ ! -f "$out/$1" ]]; then
-    ff -f lavfi -i "testsrc2=size=160x90:rate=6,format=yuv420p" -f lavfi -i "sine=frequency=220:sample_rate=22050" \
+    ff -f lavfi -i "testsrc2=size=160x90:rate=6,format=yuv420p" -f lavfi -i "color=white:size=160x90:rate=6,format=yuv420p" \
+       -f lavfi -i "sine=frequency=220:sample_rate=22050" \
+       -filter_complex "[0:v][1:v]blend=all_expr='$(flash_expr "$3")'[v]" -map "[v]" -map 2:a \
        -t "$2" -c:v libx264 -preset ultrafast -crf 38 -g 12 -c:a aac -b:a 24k -movflags +faststart "$out/$1"
   fi
 }
-long_clip original-length.mp4 10871
-long_clip encore-length.mp4 11110
-long_clip encore-short.mp4 10896      # 3:01:36, an Encore length reported by a user: 25 s more than the 2019 film
+long_clip original-length.mp4 10871 9031.5
+long_clip encore-length.mp4 11110 9031.5
+long_clip encore-short.mp4 10896 9056.5
 # Movies with sound in several languages. English must play, whatever the file flags as its main
 # track. The tracks differ in bitrate so a test can tell which one is being decoded.
 LV=(-f lavfi -i "testsrc2=size=640x360:rate=24,format=yuv420p")

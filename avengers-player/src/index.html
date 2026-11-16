@@ -31,6 +31,11 @@
     <p class="lead">Import the movie, press <b>Start the Countdown</b>, go fullscreen and wait.
       The film starts itself at <b id="imStart">9:29:30 PM</b> on December 31 so the snap lands on the first second of the new year.</p>
 
+    <div id="imLate" class="resume late-note" hidden>
+      <div class="resume-title">The movie should be playing right now</div>
+      <p id="imLateText">Import the movie and press JOIN NOW: it jumps straight to where it should be.</p>
+    </div>
+
     <div id="resumeCard" class="resume" hidden>
       <div class="resume-title">Countdown is still armed</div>
       <p id="resumeText">Open the movie again and playback jumps straight to where the clock says it should be.</p>
@@ -116,6 +121,37 @@
     </div>
     <button id="slipPill" class="slip-pill" type="button" hidden>OUT OF SYNC · click or press R to recalibrate</button>
 
+    <!-- late start: the movie should already be playing and nobody started the countdown -->
+    <div id="late" class="slip late" role="alertdialog" aria-labelledby="lateTitle" hidden>
+      <div class="slip-icon" aria-hidden="true"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="19"/><path d="M24 13v12l8 5"/></svg></div>
+      <div class="slip-title" id="lateTitle">You are late to the countdown</div>
+      <div class="slip-body" id="lateBody">The movie should already be playing.</div>
+      <button id="lateBtn" class="btn btn-primary slip-btn" type="button">JOIN NOW</button>
+      <div class="slip-auto" id="lateSub">Press Enter or Space</div>
+      <button id="lateNo" class="slip-stay" type="button">Not now</button>
+    </div>
+    <button id="latePill" class="slip-pill" type="button" hidden>LATE · click to join the movie where it should be</button>
+
+    <!-- film strip: the frames around the snap, one picture per frame -->
+    <div id="strip" class="strip" hidden>
+      <canvas id="stripPreview" class="strip-preview" hidden></canvas>
+      <div class="strip-sheet">
+        <div class="strip-head">
+          <div class="strip-text"><b id="stripTitle">Where does he snap?</b><span id="stripNote">&nbsp;</span></div>
+          <div class="strip-time"><b id="stripTime">0:00:00.000</b><span id="stripRel">&nbsp;</span></div>
+        </div>
+        <div class="strip-row" id="stripRow" role="listbox" aria-label="Frames around the snap" tabindex="-1"></div>
+        <div class="strip-actions">
+          <button id="stripPrev" class="btn btn-ghost btn-sm" type="button" title="One frame back (←)">◀ frame</button>
+          <button id="stripNext" class="btn btn-ghost btn-sm" type="button" title="One frame on (→)">frame ▶</button>
+          <span class="strip-legend" id="stripLegend"></span>
+          <span class="grow"></span>
+          <button id="stripCancel" class="btn btn-ghost btn-sm" type="button">Close</button>
+          <button id="stripOk" class="btn btn-primary btn-sm" type="button">The snap is on this frame</button>
+        </div>
+      </div>
+    </div>
+
     <button id="blocked" class="blocked" type="button" hidden>Click to start playback</button>
     <div id="audioWarn" class="audio-warn" hidden></div>
     <pre id="statsHud" class="stats" hidden></pre>
@@ -192,6 +228,7 @@
 
         <h3 class="sec">Pre-flight check</h3>
         <ul class="preflight" id="preflight"></ul>
+        <button id="findSnapBtn" class="btn btn-ghost btn-wide" type="button" hidden>FIND THE SNAP IN THIS FILE</button>
 
         <h3 class="sec">Movie</h3>
         <div class="filecard">
@@ -246,7 +283,7 @@
         </div>
         <div class="tcard">
           <h4><span>2</span>Snap test</h4>
-          <p>Jumps to just before midnight. Watch the snap land on 12:00:00, the date roll over to January 1 and the celebration. Afterwards the app asks whether the snap was on time.</p>
+          <p>Jumps to just before midnight. Watch the snap land on 12:00:00, the date roll over to January 1 and the celebration. Afterwards the app shows the frames that were on screen around 12:00:00: if his fingers snap on another frame, one click moves the snap point there.</p>
           <div class="row">
             <select id="tsLeadSnap" aria-label="Seconds before the snap"><option value="20">20 s before</option><option value="40" selected>40 s before</option><option value="75">75 s before</option><option value="150">2½ min before</option></select>
             <button class="btn btn-primary btn-sm" data-test="snap" type="button">Run</button>
@@ -351,7 +388,9 @@
         <button id="snapShiftTry" class="link" type="button" hidden>Try the snap later</button>
 
         <h3 class="sec">Snap point</h3>
-        <p class="hint">The exact moment in <i>your</i> file where the fingers snap. To find it: play from 10 s before, pause on the snap, step to the exact frame, then press the button.</p>
+        <p class="hint">The exact moment in <i>your</i> file where the fingers snap. The quick way: the app plays that stretch of the film, shows it frame by frame and points at the flash of the snap. One click on the right frame sets the snap point to the millisecond.</p>
+        <button id="snapFind" class="btn btn-primary btn-wide" type="button">Find the snap for me</button>
+        <p class="hint">By hand: play from 10 s before, pause on the snap, step to the exact frame, then press the button.</p>
         <div class="snaprow">
           <input id="snapInput" class="inp mono" type="text" inputmode="numeric" spellcheck="false" aria-label="Snap point" value="2:30:30.000">
           <button id="snapApply" class="btn btn-ghost btn-sm" type="button">Set</button>
@@ -367,6 +406,7 @@
           <div class="snapnow">Now showing <b id="snapNow">0:00.000</b></div>
           <button id="snapSetHere" class="btn btn-primary btn-sm" type="button">The snap is on this frame</button>
           <button id="snapReset" class="link" type="button">back to 2:30:30</button>
+          <button id="snapCopy" class="link" type="button">Copy the details of this snap point</button>
         </div>
         <p class="hint" id="snapArmedNote" hidden>Stop the countdown to calibrate the snap point.</p>
 

@@ -68,6 +68,40 @@ async function measureSync(page, durationMs) {
   }, durationMs);
 }
 
+/** Points the countdown at a moment such that the movie has to start `startInSec` from now (negative: it already should have). */
+async function aimAt(page, startInSec) {
+  await page.evaluate(({ startInSec, snap }) => {
+    const { cfg, Engine, saveNow } = window.__AP;
+    const d = new Date(Date.now() + (startInSec + snap) * 1000);
+    const pad = (n) => String(n).padStart(2, '0');
+    cfg.targetMode = 'custom';
+    cfg.customTarget = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    saveNow();
+    Engine.session = Engine.computeFree();
+  }, { startInSec, snap: SNAP });
+}
+
+/** What the film strip shows, or null when it is closed. */
+const stripView = (page) => page.evaluate(() => {
+  const S = window.__AP.SnapCam;
+  const v = S.view;
+  if (!v) return null;
+  const g = (id) => document.getElementById(id);
+  const tags = (i) => Array.from(g('stripRow').children[i].querySelectorAll('i')).map((x) => x.className + ':' + x.textContent);
+  return {
+    mode: v.mode, n: v.frames.length, sel: v.sel, selT: v.frames[v.sel].t, first: v.frames[0].t, last: v.frames[v.frames.length - 1].t, dt: v.dt,
+    clockT: v.clock >= 0 ? v.frames[v.clock].t : null, nowT: v.now >= 0 ? v.frames[v.now].t : null, readOnly: v.readOnly, offMs: v.offMs,
+    flash: v.flash ? { rise: v.frames[v.flash.rise].t, start: v.frames[v.flash.start].t, kind: v.flash.kind } : null,
+    gaps: v.frames.slice(1).filter((f, i) => f.t - v.frames[i].t > v.dt * 1.5).length,
+    title: g('stripTitle').textContent, note: g('stripNote').textContent, time: g('stripTime').textContent, rel: g('stripRel').textContent,
+    ok: g('stripOk').textContent, okDisabled: g('stripOk').disabled, tags: tags(v.sel), thumbs: g('stripRow').children.length,
+    shown: !g('strip').hidden && g('stage').classList.contains('has-strip'), preview: !g('stripPreview').hidden,
+    videoT: g('video').currentTime, paused: g('video').paused, muted: g('video').muted, rate: g('video').playbackRate
+  };
+});
+const stripOpen = (page, timeout) => waitFor(page, () => !!window.__AP.SnapCam.view, null, timeout || 60000);
+const stripClosed = (page) => waitFor(page, () => !window.__AP.SnapCam.view && document.getElementById('strip').hidden, null, 4000);
+
 const scenarios = {
 
   async boot() {
@@ -902,28 +936,34 @@ const scenarios = {
   },
 
   async versions() {
-    // Two tiny clips with the real lengths of the film: the 2019 original and the 2026 Encore cut.
-    const ENCORE = path.join(MEDIA, 'encore-length.mp4');
-    const ORIGINAL = path.join(MEDIA, 'original-length.mp4');
-    if (!fs.existsSync(ENCORE) || !fs.existsSync(ORIGINAL)) { console.log('  note  long test clips missing: run scripts/make-test-media.sh'); return; }
-    const info = () => s.page.evaluate(() => ({
-      version: window.__AP.cfg.filmVersion, snap: window.__AP.cfg.snapSec, dur: document.getElementById('video').duration,
-      card: document.getElementById('fileMeta').textContent, point: document.getElementById('ktPoint').textContent,
-      start: document.getElementById('ktStart').textContent, target: document.getElementById('ktSnap').textContent,
-      preflight: document.getElementById('preflight').textContent, picker: document.getElementById('filmVersion').value,
-      note: document.getElementById('filmVersionNote').textContent
-    }));
+    // Tiny clips with the real lengths: ENDGAME (3:01:11), ENCORE (3:01:36) and a longer copy (3:05:10).
+    // Each has the flash of a snap in it: 1.67 s after 2:30:30 in the first and the last, 25 s later
+    // than that in the 3:01:36 clip. They run at 6 frames a second, so a frame is 0.167 s long.
+    const ENDGAME = path.join(MEDIA, 'original-length.mp4');
+    const ENCORE = path.join(MEDIA, 'encore-short.mp4');
+    const LONGER = path.join(MEDIA, 'encore-length.mp4');
+    if (![ENDGAME, ENCORE, LONGER].every((f) => fs.existsSync(f))) { console.log('  note  long test clips missing: run scripts/make-test-media.sh'); return; }
+    const info = (page) => page.evaluate(() => {
+      const g = (id) => document.getElementById(id);
+      return {
+        version: window.__AP.cfg.filmVersion, snap: window.__AP.cfg.snapSec, dur: g('video').duration, card: g('fileMeta').textContent, point: g('ktPoint').textContent,
+        start: g('ktStart').textContent, target: g('ktSnap').textContent, preflight: g('preflight').textContent, picker: g('filmVersion').value,
+        options: Array.from(g('filmVersion').options).map((o) => o.textContent), note: g('filmVersionNote').textContent,
+        lengthNote: g('filmLengthNote').hidden ? '' : g('filmLengthNote').textContent, findBtn: !g('findSnapBtn').hidden
+      };
+    });
     const s = await launch(newProfile());
     try {
-      // 1. An Encore-length file is recognised, and its snap point is where the original's is.
-      await loadMovie(s.page, ENCORE);
+      // 1. ENDGAME, 3:01:11.
+      await loadMovie(s.page, ENDGAME);
       await sleep(600);
-      let v = await info();
-      check('a 3:05 file is recognised as the Encore cut', v.version === 'encore' && v.picker === 'encore' && /^Encore · /.test(v.card), v.version + ' | ' + v.card);
-      check('Encore keeps the snap at 2:30:30 and the 9:29:30 PM start', v.snap === 9030 && /^2:30:30 · Encore$/.test(v.point) && /Dec 31 · 9:29:30 PM/.test(v.start) && /Jan 1 · 12:00:00 AM/.test(v.target), v.point + ' | ' + v.start);
-      check('pre-flight says the Encore timing still has to be confirmed', /Snap point not confirmed in this file yet/.test(v.preflight) && /not established/.test(v.preflight));
+      let v = await info(s.page);
+      check('the version list is ENDGAME 3:01:11, ENCORE 3:01:36 and a custom cut', v.options.length === 3 && /Endgame \(2019\) · 3:01:11/.test(v.options[0]) && /Encore \(2026\) · 3:01:36/.test(v.options[1]), JSON.stringify(v.options));
+      check('a 3:01:11 file is ENDGAME', v.version === 'original' && v.picker === 'original' && /^Endgame · /.test(v.card), v.version + ' | ' + v.card);
+      check('it starts from 2:30:30 and the 9:29:30 PM start', v.snap === 9030 && /Dec 31 · 9:29:30 PM/.test(v.start) && /Jan 1 · 12:00:00 AM/.test(v.target), v.point + ' | ' + v.start);
+      check('and says that 2:30:30 is not the last word', /Snap point not confirmed in this file yet/.test(v.preflight) && /round number/.test(v.preflight) && v.findBtn);
 
-      // 2. The Snap test on a real three-hour timeline, with the real snap point.
+      // 2. The Snap test with the round number: the film is on the clock, the snap is not.
       await s.page.click('.tab[data-tab="test"]');
       await s.page.selectOption('#tsLeadSnap', '20');
       await s.page.click('[data-test="snap"]');
@@ -932,104 +972,88 @@ const scenarios = {
       check('the film is at about 2:30:10', Math.abs(st.t - 9010) < 6, C_fmt(st.t));
       const toSnap = await s.page.evaluate(() => window.__AP.Engine.session.targetEpoch - window.__AP.Clock.now());
       await sleep(Math.max(0, toSnap + 1500));
-      const at = await s.page.evaluate(() => ({ since: (window.__AP.Clock.now() - window.__AP.Engine.session.targetEpoch) / 1000, t: document.getElementById('video').currentTime, date: document.getElementById('ovDate').textContent }));
-      check('at midnight the film is exactly at 2:30:30', at.since > 0 && Math.abs((at.t - 9030) - at.since) < 0.25, 'film ' + (at.t - 9030).toFixed(3) + ' s past the snap, clock ' + at.since.toFixed(3) + ' s past midnight');
-      check('the app then asks whether the snap landed on 12:00:00', await waitFor(s.page, () => !document.getElementById('modal').hidden && /Did the snap land/.test(document.getElementById('modalTitle').textContent), null, 30000));
-      await shot(s.page, 'versions-ask');
+      const at = await s.page.evaluate(() => ({ since: (window.__AP.Clock.now() - window.__AP.Engine.session.targetEpoch) / 1000, t: document.getElementById('video').currentTime }));
+      check('at midnight the film is exactly at 2:30:30', at.since > 0 && Math.abs((at.t - 9030) - at.since) < 0.25, 'film ' + (at.t - 9030).toFixed(3) + ' s past 2:30:30, clock ' + at.since.toFixed(3) + ' s past midnight');
+      check('after the test the film strip opens', await stripOpen(s.page, 40000));
+      let f = await stripView(s.page);
+      check('it shows the frame the app put on 12:00:00: the one at 2:30:30', f.mode === 'test' && Math.abs(f.nowT - 9030) < 0.01 && Math.abs(f.offMs) < 60, f.nowT + ', ' + Math.round(f.offMs) + ' ms');
+      check('and finds the flash of the snap 1.667 s later', !!f.flash && Math.abs(f.flash.rise - 9031.6667) < 0.01 && /1\.667 s later/.test(f.note), JSON.stringify(f.flash) + ' | ' + f.note.slice(0, 190));
+      check('the frame of the flash is selected, with its film time to the millisecond', Math.abs(f.selT - 9031.6667) < 0.01 && f.time === '2:30:31.667' && /^1\.667 s after the frame put on 12:00:00$/.test(f.rel), f.time + ' | ' + f.rel);
+      await shot(s.page, 'versions-strip-endgame');
+      await s.page.click('#stripOk');
+      await sleep(500);
+      v = await info(s.page);
+      check('one click puts the snap on the moment that frame comes on screen: 2:30:31.668', Math.abs(v.snap - 9031.668) < 1e-6 && /Snap point confirmed in this file/.test(v.preflight), v.snap + ' | ' + v.point);
+      check('the start moves with it, to 9:29:28 PM', /Dec 31 · 9:29:28 PM/.test(v.start), v.start);
+      check('a dialog offers the Snap test again', await s.page.isVisible('#modal') && /Snap point set to 2:30:31\.668/.test(await s.page.textContent('#modalTitle')) && /1\.668 s later/.test(await s.page.textContent('#modalBody')), await s.page.textContent('#modalTitle'));
       await s.page.click('#modalActions .btn-primary');
-      check('answering yes marks the snap point as confirmed', await waitFor(s.page, () => /Snap point confirmed in this file/.test(document.getElementById('preflight').textContent), null, 3000));
+      check('the second test runs', await waitSynced(s.page, 12000));
+      check('and its strip opens', await stripOpen(s.page, 60000));
+      f = await stripView(s.page);
+      check('now the frame put on 12:00:00 is the frame of the flash, and it came on screen within 60 ms of it', Math.abs(f.nowT - 9031.6667) < 0.01 && !!f.flash && Math.abs(f.flash.rise - f.nowT) < 0.01 && Math.abs(f.offMs) < 60, JSON.stringify({ now: f.nowT, flash: f.flash, offMs: Math.round(f.offMs) }));
+      check('the strip says the snap landed', /The snap landed on 12:00:00/.test(f.title) && f.ok === 'Yes, the snap is on this frame', f.title + ' | ' + f.ok);
+      await shot(s.page, 'versions-strip-landed');
+      await s.page.keyboard.press('Enter');
+      check('Enter confirms and closes the strip', await stripClosed(s.page) && /Snap point confirmed in this file/.test((await info(s.page)).preflight));
 
-      // 3. A copy that opens with the cinema introduction: everything a minute later.
-      await s.page.click('.tab[data-tab="setup"]');
-      await s.page.selectOption('#filmVersion', 'encore-intro');
-      await sleep(400);
-      v = await info();
-      check('the cinema-intro version moves the snap to 2:31:30 and the start to 9:28:30 PM', v.snap === 9090 && /9:28:30 PM/.test(v.start) && /12:00:00 AM/.test(v.target), v.point + ' | ' + v.start);
-      check('and the earlier confirmation no longer counts', /Snap point not confirmed/.test(v.preflight));
-      await shot(s.page, 'versions-setup');
-
-      // 4. Importing the 2019 film switches back.
-      await loadMovie(s.page, ORIGINAL);
-      await sleep(600);
-      v = await info();
-      check('a 3:01 file is recognised as the original film', v.version === 'original' && v.snap === 9030 && /^Original · /.test(v.card) && v.point === '2:30:30', v.version + ' | ' + v.card + ' | ' + v.point);
-
-      // 5. A snap point set by hand is never overridden by the recognition.
-      await setSnap(s.page, '2:30:28.5');
+      // 3. ENCORE, 3:01:36: recognised, and its snap found by the app, 25 s further in.
       await loadMovie(s.page, ENCORE);
       await sleep(600);
-      v = await info();
-      check('a hand-set snap point survives importing another cut', v.version === 'custom' && v.snap === 9028.5, v.version + ' ' + v.snap);
-
-      // 6. "It was off" leads straight to the frame tools; pointing at the frame confirms it.
+      v = await info(s.page);
+      check('a 3:01:36 file is ENCORE', v.version === 'encore' && v.picker === 'encore' && /^Encore · /.test(v.card), v.version + ' | ' + v.card);
+      check('the search starts from 2:30:30 and nothing is confirmed', v.snap === 9030 && /Snap point not confirmed in this file yet/.test(v.preflight) && v.findBtn, v.snap + '');
       await s.page.click('.tab[data-tab="setup"]');
-      await s.page.selectOption('#filmVersion', 'encore');
-      await s.page.evaluate(() => { window.__AP.cfg.celebration = 'off'; });
-      await s.page.click('.tab[data-tab="test"]');
-      await s.page.click('[data-test="snap"]');
-      check('second snap test asks again', await waitFor(s.page, () => !document.getElementById('modal').hidden && /Did the snap land/.test(document.getElementById('modalTitle').textContent), null, 45000));
-      await s.page.click('#modalActions button:first-child');
-      await sleep(900);
-      const f = await s.page.evaluate(() => ({ tab: window.__AP.UI.tab, paused: document.getElementById('video').paused, t: document.getElementById('video').currentTime, modal: !document.getElementById('modal').hidden, mode: window.__AP.Engine.mode }));
-      check('"It was off" opens the snap finder 12 s before the snap point', f.tab === 'setup' && f.paused && Math.abs(f.t - 9018) < 0.6 && !f.modal && f.mode === 'free', JSON.stringify(f));
-      await s.page.click('#snapSecFwd');
-      await s.page.click('#snapSecFwd');
-      await s.page.click('#snapFrameFwd');
+      await sleep(300);
+      v = await info(s.page);
+      check('Setup says the file is 25 s longer than the 2019 film', /3:01:36 long, 25 s longer than the 2019 film/.test(v.lengthNote), v.lengthNote.slice(0, 90));
+      await s.page.click('#snapFind');
+      check('“Find the snap” searches', await waitFor(s.page, () => !document.getElementById('modal').hidden && /Looking for the snap/.test(document.getElementById('modalTitle').textContent), null, 4000));
+      check('not near 2:30:30, so it sweeps a wider stretch', await waitFor(s.page, () => /Not there\. Searching from 2:29:45 to 2:32:15/.test(document.getElementById('modalNote').textContent), null, 30000), await s.page.textContent('#modalNote'));
+      check('and opens the strip', await stripOpen(s.page, 90000));
+      f = await stripView(s.page);
+      check('on the flash at 2:30:56.667, 26.7 s after 2:30:30', f.mode === 'find' && !!f.flash && Math.abs(f.flash.rise - 9056.6667) < 0.01 && Math.abs(f.selT - 9056.6667) < 0.01 && f.time === '2:30:56.667', JSON.stringify(f.flash) + ' ' + f.time);
+      check('the film itself is paused on that frame', f.paused && f.videoT >= 9056.666 && f.videoT < 9056.834 && !f.muted && f.rate === 1, JSON.stringify({ t: f.videoT, muted: f.muted, rate: f.rate }));
+      await shot(s.page, 'versions-strip-encore');
+      await s.page.click('#stripOk');
       await sleep(500);
-      await s.page.click('#snapSetHere');
-      await sleep(400);
-      v = await info();
-      check('pointing at the frame sets and confirms the snap point', v.version === 'custom' && Math.abs(v.snap - 9020.17) < 0.2 && /Snap point confirmed in this file/.test(v.preflight), v.version + ' ' + v.snap);
+      v = await info(s.page);
+      check('ENCORE: snap at 2:30:56.668, the movie starts at 9:29:03 PM', Math.abs(v.snap - 9056.668) < 1e-6 && /Dec 31 · 9:29:03 PM/.test(v.start) && /Snap point confirmed/.test(v.preflight), v.snap + ' | ' + v.start);
+      await s.page.keyboard.press('Escape');
+
+      // 4. Each file remembers its own snap point: swapping the two films needs no second search.
+      await loadMovie(s.page, ENDGAME);
+      await sleep(600);
+      v = await info(s.page);
+      check('back to ENDGAME: its own snap point is back, confirmed', v.version === 'original' && Math.abs(v.snap - 9031.668) < 1e-6 && /Snap point confirmed in this file/.test(v.preflight) && !v.findBtn && /9:29:28 PM/.test(v.start), v.version + ' ' + v.snap);
+      await loadMovie(s.page, ENCORE);
+      await sleep(600);
+      v = await info(s.page);
+      check('back to ENCORE: its own snap point is back, confirmed', v.version === 'encore' && Math.abs(v.snap - 9056.668) < 1e-6 && /Snap point confirmed in this file/.test(v.preflight) && /9:29:03 PM/.test(v.start), v.version + ' ' + v.snap);
+
+      // 5. The same film in another folder is still the same film; another copy of the cut starts
+      //    from what was confirmed in the first, but has to be looked at itself.
+      const elsewhere = path.join(newProfile(), path.basename(ENDGAME));
+      fs.copyFileSync(ENDGAME, elsewhere);
+      await loadMovie(s.page, elsewhere);
+      await sleep(600);
+      v = await info(s.page);
+      check('the ENDGAME file moved to another folder keeps its confirmed snap point', Math.abs(v.snap - 9031.668) < 1e-6 && /Snap point confirmed in this file/.test(v.preflight), v.snap + '');
+      fs.unlinkSync(elsewhere);
+
+      await loadMovie(s.page, LONGER);
+      await sleep(600);
+      v = await info(s.page);
+      check('a 3:05:10 file is taken for Encore too', v.version === 'encore' && /Encore/.test(v.card), v.card);
+      check('it starts from the point confirmed in the other Encore copy, unconfirmed', Math.abs(v.snap - 9056.668) < 1e-6 && /Snap point not confirmed in this file yet/.test(v.preflight) && v.findBtn, v.snap + '');
+      await s.page.click('.tab[data-tab="mission"]');
+      await s.page.click('#findSnapBtn');
+      check('its own snap is found all the same', await stripOpen(s.page, 120000));
+      f = await stripView(s.page);
+      check('25 s earlier in this copy: 2:30:31.667', !!f.flash && Math.abs(f.flash.rise - 9031.6667) < 0.01, JSON.stringify(f.flash));
+      await s.page.keyboard.press('Escape');
+      check('Esc closes the strip and changes nothing', await stripClosed(s.page) && Math.abs((await info(s.page)).snap - 9056.668) < 1e-6);
       check('no page errors', s.errors.length === 0, s.errors.join(' | '));
     } finally { await s.close(); }
-
-    // ---- an Encore copy of 3:01:36, the length a user reported: 25 s more than the 2019 film
-    const SHORT = path.join(MEDIA, 'encore-short.mp4');
-    if (!fs.existsSync(SHORT)) { console.log('  note  encore-short.mp4 missing: run scripts/make-test-media.sh'); return; }
-    const s2 = await launch(newProfile());
-    try {
-      const look = () => s2.page.evaluate(() => {
-        const g = (id) => document.getElementById(id);
-        return {
-          version: window.__AP.cfg.filmVersion, snap: window.__AP.cfg.snapSec, card: g('fileMeta').textContent, start: g('ktStart').textContent,
-          preflight: g('preflight').textContent, lengthNote: g('filmLengthNote').hidden ? '' : g('filmLengthNote').textContent,
-          tryBtn: g('snapShiftTry').hidden ? '' : g('snapShiftTry').textContent, t: g('video').currentTime, paused: g('video').paused, tab: window.__AP.UI.tab
-        };
-      });
-      await loadMovie(s2.page, SHORT);
-      await sleep(600);
-      let v = await look();
-      check('a 3:01:36 file is taken for the Encore cut, not for the 2019 film', v.version === 'encore' && /^Encore · /.test(v.card), v.version + ' | ' + v.card);
-      check('the snap stays at 2:30:30 until someone has looked', v.snap === 9030 && /9:29:30 PM/.test(v.start), v.snap + ' | ' + v.start);
-      check('pre-flight insists on confirming the snap point', /Snap point not confirmed in this file yet/.test(v.preflight) && /not established/.test(v.preflight));
-      await s2.page.click('.tab[data-tab="setup"]');
-      await sleep(300);
-      v = await look();
-      check('Setup says how much longer the file is and what that can mean', /3:01:36 long, 25 s longer than the 2019 film/.test(v.lengthNote) && /after the snap/.test(v.lengthNote) && /before the film/.test(v.lengthNote), v.lengthNote.slice(0, 120));
-      check('and offers to try the snap 25 s later', /Try 2:30:55 \(25 s later\)/.test(v.tryBtn), v.tryBtn);
-      await shot(s2.page, 'versions-encore-short');
-      await s2.page.click('#snapShiftTry');
-      await sleep(900);
-      v = await look();
-      check('trying it moves the snap to 2:30:55 and the start to 9:29:05 PM', v.snap === 9055 && /9:29:05 PM/.test(v.start), v.snap + ' | ' + v.start);
-      check('and puts the film 12 s before that point, paused, with the frame tools in view', v.tab === 'setup' && v.paused && Math.abs(v.t - 9043) < 0.6, JSON.stringify({ t: v.t, paused: v.paused, tab: v.tab }));
-      check('the offer is gone once it is taken, and the snap still has to be confirmed', v.tryBtn === '' && /Snap point not confirmed/.test(v.preflight), v.tryBtn);
-      await s2.page.click('#snapReset');
-      await sleep(400);
-      v = await look();
-      check('"back to 2:30:30" undoes it', v.snap === 9030 && v.version === 'encore' && /Try 2:30:55/.test(v.tryBtn), v.version + ' ' + v.snap + ' | ' + v.tryBtn);
-
-      // The 2019 film and the long Encore get no such offer.
-      await loadMovie(s2.page, ORIGINAL);
-      await sleep(500);
-      v = await look();
-      check('the 2019 film shows no length note and no offer', v.version === 'original' && v.lengthNote === '' && v.tryBtn === '', v.lengthNote + v.tryBtn);
-      await loadMovie(s2.page, ENCORE);
-      await sleep(500);
-      v = await look();
-      check('a 3:05 Encore shows the length note (3:59 longer) but no "try it later" offer', /3:05:10 long, 3:59 longer/.test(v.lengthNote) && v.tryBtn === '', v.lengthNote.slice(0, 80) + ' | ' + v.tryBtn);
-      check('no page errors', s2.errors.length === 0, s2.errors.join(' | '));
-    } finally { await s2.close(); }
   },
 
   async languages() {
@@ -1282,6 +1306,326 @@ const scenarios = {
       await s.page.click('#fixAudioBtn');
       check('the offer explains what FFmpeg is for', await s.page.isVisible('#modal') && /FFmpeg/.test(await s.page.textContent('#modalBody')), await s.page.textContent('#modalTitle'));
       await s.page.keyboard.press('Escape');
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally { await s.close(); }
+  },
+
+  async strip() {
+    // A clip whose picture bursts into white the way the snap does: the first brighter frame is the
+    // one at 1:41.542 (frame 2437), the first frame that is white all over the one at 1:41.667.
+    const SCENE = path.join(MEDIA, 'snap-scene.mp4');
+    const FRAME = 1 / 24;
+    const RISE = 2437 / 24;
+    const WHITE = 2440 / 24;
+    const snapSec = (page) => page.evaluate(() => window.__AP.cfg.snapSec);
+    const s = await launch(newProfile());
+    try {
+      await loadMovie(s.page, SCENE);
+      await setSnap(s.page, SNAP);
+      await waitFor(s.page, () => window.__AP.Media.hasAudio === true && !window.__AP.Media.checking, null, 9000);
+      check('with the snap point unconfirmed, the Mission tab offers to find it', await s.page.isVisible('#findSnapBtn'));
+
+      // ---- Find the snap
+      await s.page.click('#findSnapBtn');
+      check('a progress dialog while the app looks', await waitFor(s.page, () => !document.getElementById('modal').hidden && /Looking for the snap/.test(document.getElementById('modalTitle').textContent), null, 3000));
+      check('the strip opens by itself', await stripOpen(s.page, 40000));
+      let f = await stripView(s.page);
+      check('every frame from 3 s before to 7 s after, none missing', f.mode === 'find' && f.n >= 236 && f.n <= 244 && f.gaps === 0 && f.thumbs === f.n && Math.abs(f.first - 97) < 0.05, f.n + ' frames, ' + f.gaps + ' gaps, from ' + f.first);
+      check('the flash is found: begins at 1:41.542, white at 1:41.667', !!f.flash && Math.abs(f.flash.rise - RISE) < 0.002 && Math.abs(f.flash.start - WHITE) < 0.002 && f.flash.kind === 'white', JSON.stringify(f.flash));
+      check('the frame where it begins is selected and marked SNAP?', Math.abs(f.selT - RISE) < 0.002 && f.tags.includes('pick:SNAP?'), f.selT + ' ' + f.tags.join(','));
+      check('its film time is shown to the millisecond', f.time === '0:01:41.542' && /^1\.542 s after the snap point set now$/.test(f.rel), f.time + ' | ' + f.rel);
+      check('the film itself is paused on that frame, above the strip', f.shown && f.paused && Math.abs(f.videoT - (RISE + FRAME / 2)) < 0.005, 't=' + f.videoT);
+      check('sound and speed are as they were', !f.muted && f.rate === 1);
+      check('the frame at 1:40.000 is marked as the snap point set now', Math.abs(f.nowT - 100) < 0.002, String(f.nowT));
+      await shot(s.page, 'strip-find');
+
+      // ---- keys
+      await s.page.keyboard.press('ArrowRight');
+      await sleep(250);
+      f = await stripView(s.page);
+      check('→ steps one frame on, and the film follows', Math.abs(f.selT - (RISE + FRAME)) < 0.002 && Math.abs(f.videoT - (RISE + 1.5 * FRAME)) < 0.005, f.selT + ' / ' + f.videoT);
+      await s.page.keyboard.press('ArrowLeft');
+      await s.page.keyboard.press('ArrowLeft');
+      await sleep(250);
+      f = await stripView(s.page);
+      check('← steps back', Math.abs(f.selT - (RISE - FRAME)) < 0.002, String(f.selT));
+      await s.page.keyboard.press('Space');
+      await sleep(300);
+      check('Space does not start the film while the strip is open', (await stripView(s.page)).paused);
+      await s.page.click('#stripNext');
+      await sleep(250);
+      f = await stripView(s.page);
+      check('the frame buttons do the same', Math.abs(f.selT - RISE) < 0.002 && f.ok === 'Put the snap on this frame', f.selT + ' ' + f.ok);
+      // clicking a thumbnail
+      await s.page.evaluate(() => { const v = window.__AP.SnapCam.view; document.getElementById('stripRow').children[v.frames.findIndex((x) => Math.abs(x.t - 100) < 0.002)].click(); });
+      await sleep(250);
+      f = await stripView(s.page);
+      check('clicking the frame set now says so', Math.abs(f.selT - 100) < 0.002 && f.ok === 'Yes, the snap is on this frame' && /as it is set now/.test(f.rel), f.selT + ' | ' + f.ok + ' | ' + f.rel);
+      await s.page.evaluate((t) => { const v = window.__AP.SnapCam.view; window.__AP.SnapCam.select(v.frames.findIndex((x) => Math.abs(x.t - t) < 0.002)); }, RISE);
+
+      // ---- set it
+      await s.page.keyboard.press('Enter');
+      await sleep(400);
+      let snap = await snapSec(s.page);
+      check('Enter puts the snap on the moment that frame comes on screen: 1:41.543', Math.abs(snap - 101.543) < 1e-6, String(snap));
+      check('the strip is closed and the point counts as confirmed', await stripClosed(s.page) && /Snap point confirmed in this file/.test(await s.page.textContent('#preflight')) && await s.page.isHidden('#findSnapBtn'));
+      check('a dialog says by how much it moved', await s.page.isVisible('#modal') && /Snap point set to 0:01:41\.543/.test(await s.page.textContent('#modalTitle')) && /1\.543 s later/.test(await s.page.textContent('#modalBody')) && /land on 12:00:00/.test(await s.page.textContent('#modalBody')), await s.page.textContent('#modalBody'));
+
+      // ---- the Snap test proves it: the frame on screen at the target moment is that frame
+      await s.page.click('#modalActions .btn-primary');
+      check('the Snap test starts from the dialog', await waitFor(s.page, () => window.__AP.Engine.test && window.__AP.Engine.test.kind === 'snap', null, 3000));
+      check('in sync', await waitSynced(s.page, 12000));
+      const m = await measureSync(s.page, 4000);
+      check('collecting the frames does not disturb the film', Math.abs(m.worst) < 0.06, ms(m.worst));
+      check('after the test the strip opens', await stripOpen(s.page, 60000));
+      f = await stripView(s.page);
+      check('test strip: 2 s before to 4.5 s after, none missing', f.mode === 'test' && f.n >= 150 && f.n <= 158 && f.gaps === 0, f.n + ' frames, ' + f.gaps + ' gaps');
+      check('the frame the app put on 12:00:00 is the frame of the snap', Math.abs(f.nowT - RISE) < 0.002 && Math.abs(f.selT - RISE) < 0.002, 'put on midnight: ' + f.nowT + ', flash begins: ' + (f.flash && f.flash.rise));
+      check('it came on screen within 20 ms of the clock reaching 12:00:00', Math.abs(f.offMs) < 20, Math.round(f.offMs) + ' ms');
+      check('and the strip says so, with the measured figure', /The snap landed on 12:00:00/.test(f.title) && /it came on screen (\d+ ms (after|before)|exactly as) the clock got there\. The flash of the snap begins on that very frame/.test(f.note) && f.ok === 'Yes, the snap is on this frame' && f.tags.includes('clock:12:00:00') && f.tags.includes('pick:SNAP?') && /^on screen (\d+ ms (after|before)|exactly as) the clock reached 12:00:00$/.test(f.rel), f.title + ' | ' + f.rel + ' | ' + f.tags.join(','));
+      await shot(s.page, 'strip-landed');
+      await s.page.click('#stripOk');
+      check('“Yes” confirms', await stripClosed(s.page) && /Snap point confirmed in this file/.test(await s.page.textContent('#preflight')));
+      check('the snap point is unchanged', Math.abs((await snapSec(s.page)) - snap) < 1e-6);
+
+      // ---- starting from the round number with a Snap test: what a first-time user sees
+      await setSnap(s.page, SNAP);
+      await s.page.click('.tab[data-tab="test"]');
+      await s.page.selectOption('#tsLeadSnap', '20');
+      await s.page.click('[data-test="snap"]');
+      check('Snap test with the round number', await waitSynced(s.page, 12000));
+      check('strip after it', await stripOpen(s.page, 60000));
+      f = await stripView(s.page);
+      check('the frame put on 12:00:00 was the one at 1:40.000, not the snap', Math.abs(f.nowT - 100) < 0.002 && /Was that the snap/.test(f.title) && Math.abs(f.offMs) < 30, f.nowT + ', ' + Math.round(f.offMs) + ' ms');
+      check('the app points at the frame of the flash, 1.542 s later', Math.abs(f.selT - RISE) < 0.002 && /begins 1\.542 s later/.test(f.note) && /^1\.542 s after the frame put on 12:00:00$/.test(f.rel) && f.ok === 'Put the snap on this frame', f.note.slice(0, 190) + ' | ' + f.rel);
+      await shot(s.page, 'strip-after-test');
+      await s.page.click('#stripOk');
+      await sleep(400);
+      check('one click moves the snap there', Math.abs((await snapSec(s.page)) - 101.543) < 1e-6);
+      await s.page.keyboard.press('Escape');
+
+      // ---- the snap is nowhere near the point that is set: the wide sweep
+      await setSnap(s.page, 60);
+      await s.page.click('.tab[data-tab="setup"]');
+      await s.page.click('#snapFind');
+      check('not near the point set: the app says it is searching wider', await waitFor(s.page, () => /Not there\. Searching from 0:00:15 to 0:02:39/.test(document.getElementById('modalNote').textContent), null, 30000), await s.page.textContent('#modalNote'));
+      check('and still ends on the flash', await stripOpen(s.page, 90000));
+      f = await stripView(s.page);
+      check('found 41.5 s away from the point that was set', !!f.flash && Math.abs(f.flash.rise - RISE) < 0.002 && Math.abs(f.selT - RISE) < 0.002 && f.nowT === null, JSON.stringify(f.flash));
+      await s.page.click('#stripCancel');
+      check('Close leaves the snap point alone', await stripClosed(s.page) && (await snapSec(s.page)) === 60);
+
+      // ---- cancelling the search
+      await s.page.click('#snapFind');
+      await sleep(1500);
+      await s.page.click('#modalActions button');
+      await sleep(900);
+      const after = await s.page.evaluate(() => { const v = document.getElementById('video'); return { strip: !!window.__AP.SnapCam.view, busy: window.__AP.SnapCam.busy, modal: !document.getElementById('modal').hidden, paused: v.paused, muted: v.muted, rate: v.playbackRate }; });
+      check('Cancel stops the search and puts sound and speed back', !after.strip && !after.busy && !after.modal && after.paused && !after.muted && after.rate === 1, JSON.stringify(after));
+      check('the sound is not mistaken for broken by the silent search', (await state(s.page)).hasAudio === true);
+
+      // ---- subtitles help: the line before the snap
+      const srt = path.join(newProfile(), 'line.srt');
+      fs.writeFileSync(srt, '1\n00:01:33,000 --> 00:01:35,000\nI am... inevitable.\n\n2\n00:01:36,500 --> 00:01:37,400\nAnd I...\n\n3\n00:01:37,600 --> 00:01:39,250\nam... Iron Man.\n');
+      await s.page.evaluate(async (file) => { await window.__AP.SubsUI.loadFrom(await window.apNative.readSubtitle(file), { quiet: true }); }, srt);
+      await s.page.click('#snapFind');
+      check('with subtitles loaded the search starts just after the line, although the point set is far away', await waitFor(s.page, () => /Looking near 0:01:40/.test(document.getElementById('modalNote').textContent), null, 6000), await s.page.textContent('#modalNote'));
+      check('strip', await stripOpen(s.page, 40000));
+      f = await stripView(s.page);
+      check('the strip quotes the line and where it ends', /The line “And I\.\.\. am\.\.\. Iron Man\.” ends at 0:01:39\.250/.test(f.note) && Math.abs(f.selT - RISE) < 0.002, f.note.slice(0, 120));
+      await s.page.keyboard.press('Enter');
+      await sleep(300);
+      await s.page.keyboard.press('Escape');
+      check('set from there', Math.abs((await snapSec(s.page)) - 101.543) < 1e-6);
+
+      // ---- while a countdown is armed the strip is for looking only
+      await s.page.click('.tab[data-tab="mission"]');
+      await armIn(s.page, 900);
+      check('armed, waiting for a start 15 minutes away', await waitPhase(s.page, 'standby', 6000));
+      await s.page.click('.tab[data-tab="test"]');
+      await s.page.click('[data-test="snap"]');
+      check('a Snap test during an armed countdown', await waitSynced(s.page, 12000));
+      check('its strip opens too', await stripOpen(s.page, 60000));
+      f = await stripView(s.page);
+      const st = await state(s.page);
+      check('the real countdown is armed again underneath', st.mode === 'armed' && st.phase === 'standby' && st.test === null, st.mode + ' ' + st.phase);
+      check('the strip shows its own picture and does not move the film', f.readOnly && f.preview && st.t < 0.1, JSON.stringify({ readOnly: f.readOnly, preview: f.preview, t: st.t }));
+      check('the snap landed, and “Yes” is offered', /The snap landed/.test(f.title) && !f.okDisabled && f.ok === 'Yes, the snap is on this frame');
+      await s.page.keyboard.press('ArrowRight');
+      await sleep(200);
+      f = await stripView(s.page);
+      check('another frame can be looked at but not set', f.okDisabled && f.ok === 'Put the snap on this frame' && (await state(s.page)).t < 0.1);
+      await shot(s.page, 'strip-armed');
+      await s.page.keyboard.press('Escape');
+      check('closed, still armed, no slip', await stripClosed(s.page) && (await state(s.page)).mode === 'armed' && (await state(s.page)).slips === 0);
+      await s.page.click('.tab[data-tab="mission"]');
+      await s.page.click('#armBtn');
+      await s.page.click('#armBtn');
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally { await s.close(); }
+
+    // ---- a wide picture with black bars, and a film with no flash at all
+    const s2 = await launch(newProfile());
+    try {
+      await loadMovie(s2.page, path.join(MEDIA, 'snap-wide.mp4'));
+      await setSnap(s2.page, 20);
+      await s2.page.click('#findSnapBtn');
+      check('a wide picture with black bars: strip', await stripOpen(s2.page, 40000));
+      let f = await stripView(s2.page);
+      check('the bars do not hide the flash: begins at 0:21.542', !!f.flash && f.flash.kind === 'white' && Math.abs(f.flash.rise - 517 / 24) < 0.002, JSON.stringify(f.flash));
+      await s2.page.keyboard.press('Escape');
+
+      await loadMovie(s2.page, MOVIE);
+      await setSnap(s2.page, SNAP);
+      await s2.page.click('#findSnapBtn');
+      check('a film with no flash: the app searches wider, then shows the frames anyway', await stripOpen(s2.page, 120000));
+      f = await stripView(s2.page);
+      check('no frame is suggested; the frame set now is selected', f.flash === null && /No flash was found/.test(f.note) && Math.abs(f.selT - SNAP) < 0.002 && f.ok === 'Yes, the snap is on this frame', f.note.slice(0, 80) + ' | ' + f.selT);
+      await s2.page.keyboard.press('ArrowRight');
+      await s2.page.keyboard.press('ArrowRight');
+      await sleep(250);
+      await s2.page.keyboard.press('Enter');
+      await sleep(300);
+      check('a frame picked by eye is set just the same', Math.abs((await s2.page.evaluate(() => window.__AP.cfg.snapSec)) - 100.084) < 0.0011, String(await s2.page.evaluate(() => window.__AP.cfg.snapSec)));
+      await s2.page.keyboard.press('Escape');
+      check('“Copy the details” has the numbers', /Snap point: 0:01:40\.08\d \(100\.08\d s\), confirmed in this file/.test(await s2.page.evaluate(() => window.__AP.UI.snapDetails())), (await s2.page.evaluate(() => window.__AP.UI.snapDetails())).slice(0, 300));
+      check('no page errors', s2.errors.length === 0, s2.errors.join(' | '));
+    } finally { await s2.close(); }
+  },
+
+  async latejoin() {
+    // Somebody who never started the countdown and turns up when the film should already be running.
+    const box = (page) => page.evaluate(() => {
+      const g = (id) => document.getElementById(id);
+      return {
+        box: !g('late').hidden, title: g('lateTitle').textContent, body: g('lateBody').textContent, sub: g('lateSub').textContent,
+        pill: !g('latePill').hidden, pillText: g('latePill').textContent, arm: g('armBtn').textContent, hint: g('armHint').textContent, label: g('stLabel').textContent
+      };
+    });
+    const stop = async (page) => { await page.click('.tab[data-tab="mission"]'); await page.click('#armBtn'); await page.click('#armBtn'); await sleep(300); };
+    const profile = newProfile();
+    let s = await launch(profile);
+    try {
+      await loadMovie(s.page, MOVIE);
+      await setSnap(s.page, SNAP);
+      await waitFor(s.page, () => window.__AP.Media.hasAudio === true && !window.__AP.Media.checking, null, 9000);
+      let L = await box(s.page);
+      check('weeks before the start nothing is said', !L.box && !L.pill && L.arm === 'START THE COUNTDOWN');
+
+      // five minutes to go and not armed
+      await aimAt(s.page, 300);
+      check('ten minutes before the start an un-armed player is reminded', await waitFor(s.page, () => !document.getElementById('latePill').hidden, null, 3000));
+      L = await box(s.page);
+      check('the reminder counts down and says what to press', /^NOT ARMED · the movie has to start in 00:0(4:5\d|5:00) · click to start the countdown$/.test(L.pillText) && !L.box, L.pillText);
+      await s.page.click('#latePill');
+      check('clicking it starts the countdown', await waitPhase(s.page, 'standby', 5000) && (await state(s.page)).mode === 'armed' && await s.page.isHidden('#latePill'));
+      await stop(s.page);
+
+      // the movie should have started half a minute ago
+      await aimAt(s.page, -30);
+      check('late: the box appears by itself', await waitFor(s.page, () => !document.getElementById('late').hidden && document.getElementById('stLabel').textContent === 'LATE · NOT ARMED', null, 3000));
+      L = await box(s.page);
+      check('it says so, and where the film should be', L.title === 'You are late to the countdown' && /^The movie had to start at \d+:\d\d:\d\d [AP]M\. Right now it should be at 0:00:3\d\.$/.test(L.body) && /^The snap in 00:01:\d\d · press Enter or Space$/.test(L.sub), L.body + ' | ' + L.sub);
+      check('the big button and the status card say the same', L.arm === 'JOIN THE MOVIE NOW' && L.label === 'LATE · NOT ARMED' && /should already be playing/.test(L.hint), L.arm + ' | ' + L.label);
+      await shot(s.page, 'late-box');
+      await s.page.keyboard.press('Enter');
+      check('Enter joins: the film locks onto the clock', await waitSynced(s.page, 12000));
+      let st = await state(s.page);
+      let m = await measureSync(s.page, 2500);
+      check('it is where the clock says it should be, not at the beginning', st.mode === 'armed' && st.t > 30 && Math.abs(m.worst) < 0.08, 't=' + st.t.toFixed(2) + ', ' + ms(m.worst));
+      L = await box(s.page);
+      check('the box is gone and the countdown counts as armed', !L.box && !L.pill && /COUNTDOWN ARMED/.test(L.arm), L.arm);
+      check('it is logged as a late join, not as a recalibration', (await s.page.evaluate(() => window.__AP.Engine.events.some((e) => /Joined late/.test(e.text)))) && st.recals === 0);
+
+      // stopping on purpose is not answered with the box
+      await stop(s.page);
+      L = await box(s.page);
+      check('after stopping on purpose: no box, only a small way back', !L.box && L.pill && /^LATE · the movie should be at 0:00:\d\d · click to join$/.test(L.pillText), L.pillText);
+      await s.page.click('#latePill');
+      check('the pill joins again', await waitSynced(s.page, 12000) && (await state(s.page)).mode === 'armed');
+      await stop(s.page);
+
+      // "Not now"
+      await aimAt(s.page, -40);
+      await waitFor(s.page, () => !document.getElementById('late').hidden, null, 3000);
+      await s.page.click('#lateNo');
+      await sleep(300);
+      L = await box(s.page);
+      check('“Not now” puts the box away', !L.box && L.pill);
+      await s.page.keyboard.press('Space');
+      await sleep(900);
+      st = await state(s.page);
+      check('after that, Space plays the film freely as always', st.mode === 'free' && !st.paused);
+      await s.page.keyboard.press('Space');
+
+      // the play button
+      await aimAt(s.page, -50);
+      await waitFor(s.page, () => !document.getElementById('late').hidden, null, 3000);
+      await s.page.click('#btnPlay', { force: true });
+      check('while the box is up, the play button joins too', await waitSynced(s.page, 12000) && (await state(s.page)).mode === 'armed' && (await state(s.page)).t > 50);
+      await stop(s.page);
+
+      // eight seconds before the snap
+      await aimAt(s.page, -(SNAP - 8));
+      await waitFor(s.page, () => !document.getElementById('late').hidden, null, 3000);
+      L = await box(s.page);
+      check('seconds before the snap the box still offers to join', /^The snap in 00:00:0\d/.test(L.sub), L.sub);
+      await s.page.keyboard.press(' ');
+      check('Space joins', await waitSynced(s.page, 9000));
+      const left = await s.page.evaluate(() => window.__AP.Engine.session.targetEpoch - window.__AP.Clock.now());
+      check('in sync before the snap', left > 1000, Math.round(left) + ' ms to go');
+      await sleep(Math.max(0, left) + 1200);
+      const atSnap = await s.page.evaluate(() => {
+        const { Engine, Clock, cfg, Celebration } = window.__AP;
+        const v = document.getElementById('video');
+        return { since: (Clock.now() - Engine.session.targetEpoch) / 1000, t: v.currentTime, snap: cfg.snapSec, party: !!(Celebration.fx && Celebration.fx.running), reached: Engine.events.some((e) => /Target moment reached/.test(e.text)) };
+      });
+      check('the snap lands on the clock and the celebration plays', atSnap.reached && atSnap.party && Math.abs((atSnap.t - atSnap.snap) - atSnap.since) < 0.08, JSON.stringify(atSnap));
+      await stop(s.page);
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally { await s.close(); }
+
+    // ---- the PC crashed with nothing armed, or the app is simply opened late: the box is there at once
+    await (async () => {
+      const again = await launch(profile);
+      try {
+        await aimAt(again.page, -45);
+        await again.close();
+      } catch (e) { await again.close(); throw e; }
+    })();
+    s = await launch(profile);
+    try {
+      check('opened late with the movie remembered: the box is on screen', await waitFor(s.page, () => window.__AP.Media.ready && !document.getElementById('late').hidden, null, 15000));
+      const L = await box(s.page);
+      check('and says where the film should be', /Right now it should be at 0:0[01]:\d\d\./.test(L.body), L.body);
+      await s.page.click('#lateBtn');
+      check('JOIN NOW joins', await waitSynced(s.page, 12000) && (await state(s.page)).mode === 'armed');
+      await s.page.click('.tab[data-tab="mission"]');
+      await s.page.click('#armBtn');
+      await s.page.click('#armBtn');
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally { await s.close(); }
+
+    // ---- no movie yet: the import screen says that it should be playing
+    s = await launch(newProfile());
+    try {
+      check('before the start the import screen says nothing of the kind', await s.page.isHidden('#imLate'));
+      await s.page.evaluate(() => {
+        const { cfg, Engine } = window.__AP;
+        const d = new Date(Date.now() + 3600 * 1000);
+        const pad = (n) => String(n).padStart(2, '0');
+        cfg.targetMode = 'custom';
+        cfg.customTarget = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+        Engine.session = Engine.computeFree();
+      });
+      check('with the film due to be running, the import screen says so', await waitFor(s.page, () => !document.getElementById('imLate').hidden, null, 3000));
+      const txt = await s.page.textContent('#imLateText');
+      check('with the start time and where the film should be', /^It had to start at \d+:\d\d:\d\d [AP]M and should be at 1:30:\d\d now\. Import the movie and press JOIN NOW/.test(txt), txt);
+      await shot(s.page, 'late-import');
+      await loadMovie(s.page, path.join(MEDIA, 'original-length.mp4'));
+      check('importing the movie brings up the box', await waitFor(s.page, () => !document.getElementById('late').hidden, null, 6000));
+      await s.page.keyboard.press('Enter');
+      check('and one key joins an hour and a half into the film', await waitSynced(s.page, 15000) && Math.abs((await state(s.page)).t - 5430) < 30, C_fmt((await state(s.page)).t));
       check('no page errors', s.errors.length === 0, s.errors.join(' | '));
     } finally { await s.close(); }
   },

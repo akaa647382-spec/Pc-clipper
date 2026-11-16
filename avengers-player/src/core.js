@@ -13,49 +13,45 @@
   /** 2:30:30 into the film: start at 9:29:30 PM and the snap lands on midnight. */
   const DEFAULT_SNAP_SEC = 2 * 3600 + 30 * 60 + 30;
 
-  /** Length of the 2019 home release (3:01:11): the yardstick other copies are measured against. */
+  /** Length of the 2019 film (3:01:11): the yardstick other copies are measured against. */
   const REFERENCE_SEC = 10871;
 
   /**
    * The cuts of the film the player knows about.
    *
-   *   snapSec   where the snap is in that cut
-   *   minutes   range of file lengths that identify the cut (null: never guessed from the length)
-   *   settled   true when the snap point is the long-established figure; false when it is derived
-   *             or approximate and must be confirmed in the file
+   *   lengthSec  how long the cut is
+   *   snapSec    where the snap is in that cut, as far as it is known before anyone has looked
+   *   minutes    range of file lengths that identify the cut (null: never guessed from the length)
+   *   settled    true once the snap point has been measured in that cut; false while it is the
+   *              round figure everybody quotes
    *
-   * "Avengers Endgame: Encore" is the 2026 re-release. By all published accounts its added scenes
-   * sit at the very end (a longer last scene, then scenes during and after the credits), which
-   * leaves the snap where it always was. Copies differ in length, though (3:01:36 has been reported
-   * by a user, about 3:05 by the press), and cinemas played a short introduction BEFORE the film,
-   * so the snap point of an Encore copy has to be confirmed in the file itself.
+   * Avengers: Endgame is 3:01:11 long, Avengers Endgame: Encore (the 2026 re-release) 3:01:36.
+   * The snap point given here is where the search starts, never where it ends: "2:30:30" is a
+   * round number, the real snap is a second or so later, and the player puts the exact frame on
+   * midnight only after that frame has been found in the file itself (the film strip does that).
    */
   const FILM_VERSIONS = [
     {
-      id: 'original', family: 'original', name: 'Avengers: Endgame (2019)', short: 'Original',
-      snapSec: DEFAULT_SNAP_SEC, minutes: [180.0, 181.45], settled: true,
-      note: 'The 2019 film, 3:01:11 long. Start at 9:29:30 PM and the snap lands on midnight.'
+      id: 'original', family: 'original', name: 'Avengers: Endgame (2019) · 3:01:11', short: 'Endgame', lengthSec: REFERENCE_SEC,
+      snapSec: DEFAULT_SNAP_SEC, minutes: [180.0, 181.4], settled: false,
+      note: 'The 2019 film, 3:01:11 long. The snap is a moment after 2:30:30: press “Find the snap” once and the app puts the exact frame on midnight.'
     },
     {
-      id: 'encore', family: 'encore', name: 'Avengers Endgame: Encore (2026)', short: 'Encore',
-      snapSec: DEFAULT_SNAP_SEC, minutes: [181.45, 187.5], settled: false,
-      note: 'The 2026 re-release. Its new scenes are reported to come after the snap (a longer last scene and scenes in the credits), which would leave the snap where it was in the original. Copies differ in length and nobody has published a New Year timing for this cut yet, so confirm it once with the Snap test.'
+      id: 'encore', family: 'encore', name: 'Avengers Endgame: Encore (2026) · 3:01:36', short: 'Encore', lengthSec: 10896,
+      snapSec: DEFAULT_SNAP_SEC, minutes: [181.4, 187.5], settled: false,
+      note: 'The 2026 re-release, 3:01:36 long: 25 seconds more than the 2019 film. Where the snap sits in it has to be found in the file: press “Find the snap” once.'
     },
     {
-      id: 'encore-intro', family: 'encore', name: 'Encore with the cinema introduction', short: 'Encore + intro',
-      snapSec: DEFAULT_SNAP_SEC + 60, minutes: null, settled: false,
-      note: 'For a copy that opens with the roughly one-minute introduction shown in cinemas: everything is about a minute later. This is approximate. Find the exact frame below.'
-    },
-    {
-      id: 'custom', family: 'custom', name: 'Another cut (set the snap point yourself)', short: 'Custom',
+      id: 'custom', family: 'custom', name: 'Another cut, or a snap point set by hand', short: 'Custom', lengthSec: null,
       snapSec: null, minutes: null, settled: false,
-      note: 'Your own snap point. Find the frame below, or type the time.'
+      note: 'Your own snap point. Press “Find the snap”, or type the time.'
     }
   ];
 
   function filmVersion(id) {
     for (const v of FILM_VERSIONS) if (v.id === id) return v;
-    return FILM_VERSIONS[0];
+    // A cut that is no longer offered (or a damaged setting) keeps its snap point: that is "custom".
+    return id ? FILM_VERSIONS[FILM_VERSIONS.length - 1] : FILM_VERSIONS[0];
   }
 
   /** Which cut a file of this length most likely is, or null when the length says nothing. */
@@ -66,6 +62,108 @@
       if (v.minutes && minutes >= v.minutes[0] && minutes < v.minutes[1]) return v;
     }
     return null;
+  }
+
+  /* ------------------------------------------------------------- the snap */
+
+  /**
+   * Looks for the flash of the snap in a run of frames: the picture going white all over, out of
+   * a normal picture, for at least a moment.
+   *
+   *   frames  [{ t, mean, white }]  t = film time of the frame, mean = average brightness (0..1)
+   *           of the middle of the picture, white = share of that area that is nearly white
+   *   opts    { expect, minDur }    expect = where the snap is thought to be (breaks ties)
+   *
+   * Returns null, or { start, rise, end, kind, duration } as positions in `frames`:
+   *   start  the first frame that is white all over
+   *   rise   the frame on which the brightness began to climb towards it: the suggested snap frame
+   *   kind   'white' (the screen whites out) or 'bright' (only a clear peak of brightness)
+   */
+  function findFlash(frames, opts) {
+    opts = opts || {};
+    const n = frames ? frames.length : 0;
+    if (n < 4) return null;
+    const gaps = [];
+    for (let i = 1; i < n; i++) gaps.push(frames[i].t - frames[i - 1].t);
+    const dt = Math.max(1e-3, median(gaps));
+    const minDur = opts.minDur != null ? opts.minDur : 0.12;
+    const expect = isFinite(opts.expect) ? opts.expect : (frames[0].t + frames[n - 1].t) / 2;
+
+    // 1. runs of frames that are white all over, each starting out of a picture that is not
+    const runs = [];
+    for (let i = 1; i < n; i++) {
+      if (!(frames[i].white >= 0.88) || frames[i - 1].white >= 0.75) continue;
+      let j = i;
+      while (j + 1 < n && frames[j + 1].white >= 0.75 && frames[j + 1].t - frames[j].t < Math.max(0.3, dt * 4)) j++;
+      const duration = frames[j].t - frames[i].t + dt;
+      if (duration >= minDur) runs.push({ start: i, end: j, duration: duration, kind: 'white' });
+      i = j;
+    }
+
+    // 2. failing that, one clear peak of brightness (a flash that does not reach pure white)
+    if (!runs.length) {
+      const means = frames.map((f) => f.mean);
+      const base = median(means);
+      let top = 0;
+      for (let i = 1; i < n; i++) if (means[i] > means[top]) top = i;
+      const peak = means[top];
+      if (peak >= 0.6 && peak - base >= 0.35) {
+        const half = (peak + base) / 2;
+        let a = top;
+        let b = top;
+        while (a > 0 && means[a - 1] >= half) a--;
+        while (b + 1 < n && means[b + 1] >= half) b++;
+        const duration = frames[b].t - frames[a].t + dt;
+        if (a > 0 && duration >= Math.min(minDur, 0.08) && duration <= 4) runs.push({ start: a, end: b, duration: duration, kind: 'bright' });
+      }
+    }
+    if (!runs.length) return null;
+
+    // The longest white-out wins; between (nearly) equals, the one nearest to where the snap is expected.
+    const same = Math.max(dt * 1.5, 0.08);
+    let run = runs[0];
+    for (const r of runs) {
+      const longer = Math.min(r.duration, 1.5) - Math.min(run.duration, 1.5);
+      if (longer > same || (Math.abs(longer) <= same && Math.abs(frames[r.start].t - expect) < Math.abs(frames[run.start].t - expect))) run = r;
+    }
+
+    // Where the brightness began to climb: walk back from the white-out while the picture is still
+    // clearly brighter than it was before the flash.
+    const before = [];
+    for (let i = run.start - 1; i >= 0 && frames[run.start].t - frames[i].t <= 1.6; i--) {
+      if (frames[run.start].t - frames[i].t >= 0.35) before.push(frames[i].mean);
+    }
+    const calm = before.length ? median(before) : frames[0].mean;
+    const lift = Math.max(0.06, 0.15 * (1 - calm));
+    let rise = run.start;
+    while (rise > 0 && frames[run.start].t - frames[rise - 1].t <= 0.6 && frames[rise - 1].mean > calm + lift && frames[rise - 1].mean <= frames[rise].mean + 0.02) rise--;
+    return { start: run.start, rise: rise, end: run.end, kind: run.kind, duration: run.duration };
+  }
+
+  /**
+   * Finds the line "And I... am... Iron Man." in a list of subtitle cues ({ start, end, text }),
+   * also when it is split over two cues. Of several, the one nearest to `expect` wins.
+   * Returns { start, end, text } or null.
+   */
+  function findSnapLine(cues, expect) {
+    if (!cues || !cues.length) return null;
+    const re = /\bi\b[^a-z0-9]{0,12}am[^a-z0-9]{0,12}iron[^a-z0-9]{0,3}man\b/i;
+    const plain = (c) => String(c && c.text != null ? c.text : '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    let best = null;
+    const take = (start, end, text) => {
+      const d = Math.abs(end - (isFinite(expect) ? expect : end));
+      if (!best || d < best.d) best = { start: start, end: end, text: text, d: d };
+    };
+    for (let i = 0; i < cues.length; i++) {
+      const a = plain(cues[i]);
+      if (re.test(a)) { take(cues[i].start, cues[i].end, a); continue; }
+      const next = cues[i + 1];
+      if (next && next.start - cues[i].end < 4) {
+        const both = a + ' ' + plain(next);
+        if (re.test(both) && !re.test(plain(next))) take(cues[i].start, next.end, both);
+      }
+    }
+    return best ? { start: best.start, end: best.end, text: best.text } : null;
   }
 
   /* Languages of sound tracks: files label them with ISO 639 codes, people read names. */
@@ -383,6 +481,7 @@
     FILM_VERSIONS: FILM_VERSIONS, filmVersion: filmVersion, guessFilmVersion: guessFilmVersion, REFERENCE_SEC: REFERENCE_SEC,
     normLang: normLang, langName: langName, langFromTitle: langFromTitle, trackLang: trackLang, pickAudioTrack: pickAudioTrack,
     LANG_NAMES: LANG_NAMES, playableAudioCodec: playableAudioCodec, audioCodecName: audioCodecName,
+    findFlash: findFlash, findSnapLine: findSnapLine, median: median,
     MONTHS: MONTHS, MONTHS_LONG: MONTHS_LONG, DAYS: DAYS, DAYS_LONG: DAYS_LONG,
     clamp: clamp, pad: pad, median: median,
     fmtDuration: fmtDuration, parseDuration: parseDuration,

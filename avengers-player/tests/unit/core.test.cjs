@@ -142,41 +142,140 @@ test('drift controller needs fresh samples', () => {
   assert.equal(c.rate, 1);
 });
 
-test('film versions: table is sane', () => {
+test('film versions: ENDGAME is 3:01:11, ENCORE is 3:01:36', () => {
   const ids = C.FILM_VERSIONS.map((v) => v.id);
-  assert.deepEqual(ids, ['original', 'encore', 'encore-intro', 'custom']);
-  assert.equal(new Set(ids).size, ids.length);
-  assert.equal(C.filmVersion('original').snapSec, 9030);
-  assert.equal(C.filmVersion('encore').snapSec, 9030, 'the Encore scenes are all after the snap');
-  assert.equal(C.filmVersion('encore-intro').snapSec, 9090);
+  assert.deepEqual(ids, ['original', 'encore', 'custom']);
+  assert.equal(C.filmVersion('original').lengthSec, 3 * 3600 + 1 * 60 + 11);
+  assert.equal(C.filmVersion('encore').lengthSec, 3 * 3600 + 1 * 60 + 36);
+  assert.equal(C.REFERENCE_SEC, 10871);
+  assert.match(C.filmVersion('original').name, /3:01:11/);
+  assert.match(C.filmVersion('encore').name, /3:01:36/);
+  assert.equal(C.filmVersion('original').snapSec, 9030, 'where the search starts');
+  assert.equal(C.filmVersion('encore').snapSec, 9030);
   assert.equal(C.filmVersion('custom').snapSec, null);
-  assert.equal(C.filmVersion('nonsense').id, 'original');
-  assert.equal(C.filmVersion('original').settled, true);
-  assert.equal(C.filmVersion('encore').settled, false, 'no published New Year timing for Encore yet');
+  // No cut is taken on trust: 2:30:30 is a round number until the frame has been found in the file.
+  for (const v of C.FILM_VERSIONS) assert.equal(v.settled, false, v.id);
+  // A cut that is no longer offered keeps its own snap point; nothing at all means the film itself.
+  assert.equal(C.filmVersion('encore-intro').id, 'custom');
+  assert.equal(C.filmVersion('nonsense').id, 'custom');
+  assert.equal(C.filmVersion('').id, 'original');
+  assert.equal(C.filmVersion(undefined).id, 'original');
   for (const v of C.FILM_VERSIONS) {
     assert.ok(v.name && v.short && v.note && v.family, v.id);
     if (v.minutes) assert.ok(v.minutes[0] < v.minutes[1], v.id);
   }
   // The ranges used to recognise a file must not overlap.
-  const ranges = C.FILM_VERSIONS.filter((v) => v.minutes).map((v) => v.minutes).sort((a, b) => a[0] - b[0]);
+  const ranges = C.FILM_VERSIONS.filter((v) => v.minutes).map((v) => v.minutes).sort((x, y) => x[0] - y[0]);
   for (let i = 1; i < ranges.length; i++) assert.ok(ranges[i][0] >= ranges[i - 1][1]);
 });
-
 test('film versions: recognised by the length of the file', () => {
-  const guess = (h, m, s) => { const v = C.guessFilmVersion(h * 3600 + m * 60 + s); return v ? v.id : null; };
-  assert.equal(guess(3, 1, 11), 'original', 'the home release');
+  const guess = (h, m, sec) => { const v = C.guessFilmVersion(h * 3600 + m * 60 + sec); return v ? v.id : null; };
+  assert.equal(guess(3, 1, 11), 'original', 'ENDGAME');
+  assert.equal(guess(3, 1, 36), 'encore', 'ENCORE');
   assert.equal(guess(3, 0, 57), 'original', 'the 2019 cinema print');
   assert.equal(guess(3, 1, 20), 'original', 'a few seconds of logo in front');
-  assert.equal(guess(3, 1, 36), 'encore', 'the Encore length a user reported');
-  assert.equal(guess(3, 5, 10), 'encore', 'the Encore length the press reported');
-  assert.equal(guess(3, 3, 3), 'encore', 'Encore, standard cinema');
-  assert.equal(guess(3, 6, 0), 'encore', 'Encore, Infinity Vision');
+  assert.equal(guess(3, 1, 23), 'original');
+  assert.equal(guess(3, 1, 24), 'encore', 'halfway between the two lengths is where one becomes the other');
+  assert.equal(guess(3, 1, 40), 'encore');
+  assert.equal(guess(3, 5, 10), 'encore', 'a longer copy of the re-release');
   assert.equal(guess(2, 29, 0), null, 'Infinity War is not Endgame');
   assert.equal(guess(0, 3, 20), null, 'a test clip');
   assert.equal(guess(3, 10, 0), null);
   assert.equal(C.guessFilmVersion(NaN), null);
   assert.equal(C.guessFilmVersion(0), null);
   assert.equal(C.guessFilmVersion(-5), null);
+});
+
+// A run of frames as the app measures them: brightness of the middle of the picture, and how much of it is white.
+function strip(opts) {
+  const fps = opts.fps || 24;
+  const out = [];
+  for (let i = 0; i < Math.round((opts.to - opts.from) * fps); i++) {
+    const t = opts.from + i / fps;
+    let k = 0;
+    for (const f of opts.flashes || []) k = Math.max(k, Math.max(0, Math.min(1, (t - f.at) / (f.rise || 0.1666))) * Math.max(0, Math.min(1, (f.at + (f.hold || 1.7) - t) / (f.fade || 0.7))));
+    const calm = opts.calm != null ? opts.calm : 0.3;
+    const peak = opts.peak != null ? opts.peak : 1;
+    const mean = calm + (peak - calm) * k;
+    out.push({ t: t, mean: mean, white: peak >= 0.99 ? (k >= 0.97 ? 1 : k > 0.8 ? 0.5 : 0) : 0 });
+  }
+  return out;
+}
+
+test('findFlash: the white-out of the snap, and the frame on which it begins', () => {
+  // The picture begins to brighten on the frame after 101.5 and is white all over four frames later.
+  const fr = strip({ from: 98, to: 106, flashes: [{ at: 101.5 }] });
+  const f = C.findFlash(fr, { expect: 100 });
+  assert.ok(f);
+  assert.equal(f.kind, 'white');
+  assert.ok(Math.abs(fr[f.rise].t - 101.5417) < 0.001, 'the first brighter frame: ' + fr[f.rise].t);
+  assert.ok(Math.abs(fr[f.start].t - 101.6667) < 0.001, 'the first frame that is white all over: ' + fr[f.start].t);
+  assert.ok(fr[f.end].t > 102.3 && fr[f.end].t < 102.7);
+  assert.ok(f.duration > 0.7 && f.duration < 1.1);
+
+  // A hard cut to white: the flash begins on the white frame itself.
+  const cut = strip({ from: 10, to: 16, flashes: [{ at: 12, rise: 0.001 }] });
+  const c = C.findFlash(cut);
+  assert.equal(c.rise, c.start);
+  assert.ok(Math.abs(cut[c.start].t - 12.0417) < 0.001);
+
+  // At 6 frames a second (the long test clips) there is no room for a ramp either.
+  const slow = strip({ from: 9028, to: 9036, fps: 6, flashes: [{ at: 9031.5 }] });
+  const s6 = C.findFlash(slow);
+  assert.ok(Math.abs(slow[s6.rise].t - 9031.6667) < 0.001, String(slow[s6.rise].t));
+
+  // Nothing there, too little to go by, or white from the very first frame (no beginning to point at).
+  assert.equal(C.findFlash(strip({ from: 0, to: 8 })), null);
+  assert.equal(C.findFlash([]), null);
+  assert.equal(C.findFlash(null), null);
+  assert.equal(C.findFlash(fr.slice(0, 3)), null);
+  assert.equal(C.findFlash(strip({ from: 101.7, to: 102.3, flashes: [{ at: 101.5 }] })), null);
+
+  // One white frame is a camera flash or a cut, not the snap.
+  const blip = strip({ from: 0, to: 6 });
+  blip[60].white = 1; blip[60].mean = 1;
+  assert.equal(C.findFlash(blip), null);
+
+  // Two white-outs: the longer one; of two equals, the one nearer to where the snap is expected.
+  const two = strip({ from: 0, to: 30, flashes: [{ at: 5, hold: 0.6, fade: 0.2 }, { at: 20 }] });
+  assert.ok(Math.abs(two[C.findFlash(two, { expect: 5 }).start].t - 20.1667) < 0.001, 'the longer white-out wins even when it is further away');
+  const twins = strip({ from: 0, to: 30, flashes: [{ at: 5 }, { at: 20 }] });
+  assert.ok(Math.abs(twins[C.findFlash(twins, { expect: 6 }).start].t - 5.1667) < 0.001);
+  assert.ok(Math.abs(twins[C.findFlash(twins, { expect: 19 }).start].t - 20.1667) < 0.001);
+
+  // A flash that does not reach pure white is still found, and says so.
+  const dim = strip({ from: 0, to: 10, calm: 0.2, peak: 0.8, flashes: [{ at: 4 }] });
+  const d = C.findFlash(dim);
+  assert.equal(d.kind, 'bright');
+  assert.ok(dim[d.start].t > 4 && dim[d.start].t < 4.3);
+  // A picture that is bright all the time is not a flash.
+  assert.equal(C.findFlash(strip({ from: 0, to: 10, calm: 0.8, peak: 0.8, flashes: [{ at: 4 }] })), null);
+
+  // A fast sweep that sees only every fifth frame still finds it.
+  const sparse = strip({ from: 60, to: 160, flashes: [{ at: 101.5 }] }).filter((x, i) => i % 5 === 0);
+  const sp = C.findFlash(sparse, { expect: 100, minDur: 0.2 });
+  assert.ok(sp && Math.abs(sparse[sp.start].t - 101.7) < 0.25, String(sp && sparse[sp.start].t));
+});
+
+test('findSnapLine: the line before the snap, wherever the subtitles put it', () => {
+  const cues = [
+    { start: 100, end: 102, text: 'I am... inevitable.' },
+    { start: 9021.2, end: 9023.0, text: 'And I...' },
+    { start: 9023.4, end: 9026.1, text: '<i>am... Iron Man.</i>' },
+    { start: 9500, end: 9502, text: 'Everybody wants a happy ending.' }
+  ];
+  assert.deepEqual(C.findSnapLine(cues, 9030), { start: 9021.2, end: 9026.1, text: 'And I... am... Iron Man.' });
+  assert.deepEqual(C.findSnapLine([{ start: 5, end: 8, text: 'And I... am... Iron Man.' }], 9030), { start: 5, end: 8, text: 'And I... am... Iron Man.' });
+  assert.deepEqual(C.findSnapLine([{ start: 5, end: 8, text: '- And I am\nIron-Man.' }], 0), { start: 5, end: 8, text: '- And I am Iron-Man.' });
+  // The same words twice in a film: the one nearest to where the snap is expected.
+  const twice = [{ start: 600, end: 602, text: 'I am Iron Man.' }, { start: 9024, end: 9026, text: 'I am Iron Man.' }];
+  assert.equal(C.findSnapLine(twice, 9030).start, 9024);
+  assert.equal(C.findSnapLine(twice, 500).start, 600);
+  // Not the line.
+  assert.equal(C.findSnapLine([{ start: 1, end: 2, text: 'I am inevitable.' }, { start: 3, end: 4, text: 'Iron Man is here.' }, { start: 30, end: 31, text: 'I am' }], 0), null);
+  assert.equal(C.findSnapLine([{ start: 1, end: 2, text: 'And I...' }, { start: 60, end: 62, text: 'am Iron Man' }], 0), null, 'two cues a minute apart are not one line');
+  assert.equal(C.findSnapLine([], 0), null);
+  assert.equal(C.findSnapLine(null, 0), null);
 });
 
 test('languages: codes, names and titles', () => {

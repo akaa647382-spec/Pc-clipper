@@ -97,4 +97,4 @@ How it works, and why each FFmpeg flag is there: [SPEC.md](SPEC.md) and the rese
 
 **[Avengers Player](avengers-player/README.md)**: a separate Windows app that starts *Avengers: Endgame* by itself at
 9:29:30 PM on December 31 and keeps it locked to the clock so the snap lands on midnight.
-[Download the installer](download/Avengers-Player-Setup-1.1.0.exe).
+[Download the installer](download/Avengers-Player-Setup-1.2.0.exe).

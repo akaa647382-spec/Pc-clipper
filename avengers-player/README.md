@@ -1,17 +1,18 @@
 # Avengers Player
 
-A Windows video player that starts *Avengers: Endgame* by itself at **9:29:30 PM on December 31**, keeps the film
-locked to the clock for the whole two and a half hours, and lands the snap on **12:00:00 AM**. It works with the
-2019 film and with the 2026 re-release, *Avengers Endgame: Encore* (see [Which version of the film?](#which-version-of-the-film)).
+A Windows video player that starts *Avengers: Endgame* by itself on December 31, keeps the film locked to the clock
+for the whole two and a half hours, and lands the snap on **12:00:00 AM**: the very frame on which his fingers snap,
+found in your own file and put on midnight to the millisecond. It works with *Avengers: Endgame* (3:01:11) and with
+*Avengers Endgame: Encore* (3:01:36).
 
-**[Download the installer](../download/Avengers-Player-Setup-1.1.0.exe)** (Windows 10 / 11, 64-bit, about 93 MB).
+**[Download the installer](../download/Avengers-Player-Setup-1.2.0.exe)** (Windows 10 / 11, 64-bit, about 93 MB).
 You bring your own copy of the movie. Nothing is uploaded anywhere.
 
 ![The player with the countdown running](docs/player.png)
 
 ## Install
 
-1. Run `Avengers-Player-Setup-1.1.0.exe`. It installs for your user only, so there is no administrator prompt.
+1. Run `Avengers-Player-Setup-1.2.0.exe`. It installs for your user only, so there is no administrator prompt.
 2. Windows may show a blue box, "Windows protected your PC". That appears for any new app that is not signed by a
    company. Click **More info → Run anyway**. (If *Smart App Control* is switched on, Windows offers no such button.)
 3. Start **Avengers Player** from the desktop or the Start menu.
@@ -41,47 +42,59 @@ A test run moves the app's own clock, not your PC clock, so you can try the whol
 
 Each test prints a result with the measured error in milliseconds.
 
-**Check the snap point once.** The usual copy of the film has the snap at 2:30:30. A different cut can be a second or
-two off. Open **Setup → Snap point**, press *Play from 10 s before*, pause on the snap, step with the frame buttons and
-press *The snap is on this frame*. The start time adjusts itself. Until the snap point has been confirmed in the file
-that is loaded, the pre-flight list keeps a line saying so.
+## Find the snap (do this once per film)
+
+"Start at 9:29:30 PM" puts the snap at 2:30:30, and that is a round number. In the film the fingers snap a moment
+later, and how much later differs between cuts. So the app does not take the figure on trust: it finds the frame.
+
+1. Import the movie. The pre-flight list says *Snap point not confirmed in this file yet*.
+2. Press **FIND THE SNAP IN THIS FILE**. The app plays that part of the film without sound, looks at every frame and
+   opens a **film strip**: one small picture per frame, with the film itself paused on the selected frame above it.
+3. The app marks the frame where the flash of the snap begins (**SNAP?**). Check it against the picture; step a frame
+   with **←** **→** if it is one off. The film time of the frame is shown to the millisecond.
+4. Press **Put the snap on this frame** (or **Enter**). The start time of the movie moves with it.
+5. Run the **Snap test**. Afterwards the strip opens again and shows the frame the app put on 12:00:00 and how many
+   milliseconds from the clock it came on screen. If that is the snap, press **Yes**.
+
+If the snap is nowhere near 2:30:30 in your copy, the app sweeps a wider stretch (45 s before to 105 s after) by
+itself. With subtitles loaded it also goes by the line *"And I… am… Iron Man."* Every film file remembers its own snap
+point, so ENDGAME and ENCORE can both be set once and then swapped freely.
+
+The old way still works: **Setup → Snap point**, play from 10 s before, pause, step with the frame buttons and press
+*The snap is on this frame*.
 
 ## Which version of the film?
 
-The app looks at the length of the file and picks the cut by itself (**Setup → Film version** shows it and lets you
-change it).
+The app tells the two cuts apart by the length of the file (**Setup → Film version** shows it and lets you change it).
 
-| Cut | Length | Snap point | Movie starts |
-|---|---|---|---|
-| *Avengers: Endgame* (2019) | 3:01:11 (home release) | 2:30:30, long established | 9:29:30 PM |
-| *Avengers Endgame: Encore* (2026) | reports differ, see below | 2:30:30 expected, **not established** | 9:29:30 PM if the snap is at 2:30:30 |
-| Encore with the cinema introduction | about a minute longer at the front | about 2:31:30, approximate | about 9:28:30 PM |
+| Cut | Length | Snap point |
+|---|---|---|
+| *Avengers: Endgame* (2019) | 3:01:11 | a moment after 2:30:30; found in the file |
+| *Avengers Endgame: Encore* (2026) | 3:01:36 | found in the file; the search covers the extra 25 seconds |
 
-What is known about Encore, and what is not:
+For neither cut is the snap point taken from a table: it is found in the file, once, as described above. Until that
+has been done the pre-flight list keeps a line saying so, and the countdown can still be started with the round
+figure.
 
-- The added scenes are reported to sit at the very end. A scene-by-scene guide puts the first new scene at 2:48:50,
-  as an extension of the last scene, with more during and after the credits
-  ([CinemaBlend](https://www.cinemablend.com/movies/i-grabbed-avengers-endgame-encore-doomsday-scene-timestamps)).
-  The credits of the 2019 film start at 2:48:56
-  ([ComicBook](https://comicbook.com/marvel/news/how-long-avengers-endgame-without-credits/)). The two figures are six
-  seconds apart, so in the copy that guide timed nothing was added before the end of the story, and the snap is where
-  it was in 2019. That is a deduction from two published numbers, not a measurement of the snap.
-- Cinemas showed a roughly one-minute introduction before the film
-  ([GamesRadar](https://www.gamesradar.com/entertainment/marvel-movies/avengers-endgame-encore-bonus-footage-explained/),
-  [Murphy's Multiverse](https://www.murphysmultiverse.com/runtimes-infinity-vision-vs-standard-endgame-encore/)). A copy
-  that begins with it has everything, the snap included, about a minute later.
-- Published lengths do not agree: 185 minutes
-  ([tbreak](https://tbreak.com/avengers-endgame-encore-runtime-185-minutes-2026/)), 183 minutes for standard screens and
-  186 for the premium format (Murphy's Multiverse, above). Copies of 3:01:36 have also been reported by a user of this
-  app. A file can be 25 seconds longer than the 2019 film because of something in front of the film (then the snap is
-  25 seconds later) or because of something after the snap (then it is not). The length alone cannot say which.
-- Nobody seems to have published a New Year's Eve start time for Encore yet.
+What is known from outside the file: on the 4K Blu-ray, the line *"And I…"* begins at 2:30:21.8 (from a subtitle
+file of that release), so the snap cannot be at 2:30:30.000 sharp; published start times are 9:29:30 PM
+([ComicBook](https://comicbook.com/2019/12/31/avengers-endgame-what-time-when-start-movie-iron-man-snap-midnight-new-years/))
+and 9:29:31 PM in a few places, which shows that nobody was counting frames. For Encore, a scene-by-scene guide puts
+the first new scene at 2:48:50
+([CinemaBlend](https://www.cinemablend.com/movies/i-grabbed-avengers-endgame-encore-doomsday-scene-timestamps)), after
+the snap. Other lengths than 3:01:36 have been published for Encore; a file longer than 3:01:24 is treated as Encore
+whatever its exact length.
 
-So with an Encore file, do this once: **Setup → Snap point → Play from 10 s before**. If Tony snaps his fingers about ten
-seconds in, the standard point is right: pause on the snap, step to the frame and press *The snap is on this frame*.
-If he does not, the snap is later in your copy. When the file is a little longer than the 2019 film, a link under the
-film version offers to try the snap that much later; otherwise keep playing until the snap, then pause, step and
-press the button. Then run the **Snap** test.
+## If you are late
+
+Nothing has to be armed in advance for the night to work. If the app is opened, or the movie imported, after the
+movie should have started (even at 11:59 PM), or the PC crashed with no countdown armed, a box says so:
+
+> **You are late to the countdown** · The movie had to start at 9:29:28 PM. Right now it should be at 1:12:43. · **JOIN NOW**
+
+Press the button, **Enter**, **Space** or the play button: the film jumps to where the clock says it should be and
+stays locked to it, exactly as if the countdown had been armed all along. *Not now* puts the box away and leaves a
+small reminder at the top. In the ten minutes before the start, a player that is not armed shows a reminder too.
 
 ## If someone slips
 
@@ -110,6 +123,7 @@ date rolls over from December 31 to January 1.
 | **A** | Sound language: switches between the sound tracks of the movie |
 | **C** | Subtitles on or off |
 | **Z** / **X** | Subtitles earlier / later |
+| **←** **→** / **Enter** / **Esc** | In the film strip: step a frame, set the snap on the frame, close |
 | **F** / **F11** | Fullscreen |
 | **R** | Recalibrate |
 | **L** | Lock the controls |
@@ -174,11 +188,15 @@ want, and switches the sound back on if the player was left muted.
 - Switching the sound language uses a part of Chromium that is still marked experimental. The app works around its
   one known weakness (it re-cues the film on every switch, and brings the sound back by itself if it ever stops), and
   the language is normally chosen once, before the countdown. Choose it during a rehearsal, not during the film.
-- The snap point of the 2026 Encore cut is deduced, not measured. Confirm it in your file as described above.
+- The app finds the snap by the flash that fills the screen when the fingers snap. That was tested on clips made
+  for the purpose, not on the film itself, which the author does not have. So the frame it marks is a suggestion:
+  look at the picture and move a frame or two if needed. If it finds no flash at all, the strip still opens and the
+  frame is picked by eye.
+- Around the snap the film is held to within about a hundredth of a second of the clock. On a 60 Hz screen a film
+  frame can only come on screen at one of 60 moments a second, so a few milliseconds either way are the limit of
+  any player; the strip shows the figure that was measured.
 - The internet time check was tested against stand-in time servers only. If it cannot reach a real one on your PC, the
   pre-flight list says so and the app uses the PC clock as it is.
-- 9:29:30 PM is the commonly quoted start time. It depends on your copy of the film; that is what the snap point check
-  is for.
 - Sound through Bluetooth speakers or a TV can lag behind the picture by a tenth of a second or more. That delay
   happens after the player and is not corrected.
 - This is an unofficial fan project. It ships no film content.
