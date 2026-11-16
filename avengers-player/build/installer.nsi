@@ -259,19 +259,24 @@ Function AskToReplace
     Return
   ${EndIf}
 
+  ; $0: what is installed and the question; $2: what Yes does.
   ${If} $OldVer == ""
     StrCpy $0 "${APP_NAME} is already installed on this PC.$\r$\n$\r$\nDo you want to replace it with version ${APP_VERSION}?"
+    StrCpy $2 "replace it"
   ${Else}
     ${VersionCompare} "${APP_VERSION}" "$OldVer" $1
     ${If} $1 == "1"
       StrCpy $0 "${APP_NAME} $OldVer is already installed on this PC.$\r$\n$\r$\nDo you want to update it to version ${APP_VERSION}?"
+      StrCpy $2 "update it"
     ${ElseIf} $1 == "0"
-      StrCpy $0 "${APP_NAME} ${APP_VERSION} is already installed on this PC.$\r$\n$\r$\nDo you want to replace it (install it again)?"
+      StrCpy $0 "${APP_NAME} ${APP_VERSION} is already installed on this PC.$\r$\n$\r$\nDo you want to install it again (replace it)?"
+      StrCpy $2 "install it again"
     ${Else}
       StrCpy $0 "A newer version of ${APP_NAME} ($OldVer) is already installed on this PC.$\r$\n$\r$\nDo you want to replace it with version ${APP_VERSION}?"
+      StrCpy $2 "replace it with ${APP_VERSION}"
     ${EndIf}
   ${EndIf}
-  MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON1 "$0$\r$\n$\r$\nThe program in $OldDir is replaced. Your settings, snap points and countdown are kept. If ${APP_NAME} is open, Setup closes it first.$\r$\n$\r$\nYes: replace it.   No: leave it as it is." /SD IDYES IDYES replace
+  MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON1 "$0$\r$\n$\r$\nSetup will replace the program in its folder:$\r$\n$OldDir$\r$\n$\r$\nYour settings, snap points and countdown stay as they are. If ${APP_NAME} is open, Setup closes it first.$\r$\n$\r$\nYes: $2.$\r$\nNo: leave it as it is and close Setup." /SD IDYES IDYES replace
   Quit
   replace:
   StrCpy $Replacing "1"

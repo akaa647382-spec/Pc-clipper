@@ -16,10 +16,10 @@ version is installed at a time: installing one over the other asks first, then r
 ## Install
 
 1. Run `Avengers-Player-Setup-1.4.0.exe`. It installs for your user only, so there is no administrator prompt.
-   If Avengers Player is already installed, Setup says so first and asks: *update it to 1.4.0?*, *replace it
-   (install it again)?*, or, when the installed one is newer, *replace it with this version?* **Yes** puts the new
-   version into the folder of the old one (your settings, snap points and an armed countdown stay); **No** leaves
-   everything as it is.
+   If Avengers Player is already installed, Setup says so first and asks: *update it to version 1.4.0?*, *install
+   it again?* (the same version), or, when the installed one is newer, *replace it with this version?* **Yes** puts
+   the new version into the folder of the old one (your settings, snap points and an armed countdown stay as they
+   are); **No** leaves everything as it is and closes Setup. On a PC without it, Setup simply installs it.
 2. Windows may show a blue box, "Windows protected your PC". That appears for any new app that is not signed by a
    company. Click **More info → Run anyway**. (If *Smart App Control* is switched on, Windows offers no such button.)
 3. Start **Avengers Player** from the desktop or the Start menu.
