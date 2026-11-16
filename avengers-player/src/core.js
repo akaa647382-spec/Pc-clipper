@@ -21,7 +21,8 @@
    *
    *   lengthSec  how long the cut is
    *   snapSec    where the snap is in that cut, as far as it is known before anyone has looked
-   *   minutes    range of file lengths that identify the cut (null: never guessed from the length)
+   *   minutes    the usual lengths of the cut, in minutes (for reference only: a cut is told by the
+   *              file's name, since copies of the same cut differ in length)
    *   settled    true once the snap point has been measured in that cut; false while it is the
    *              round figure everybody quotes
    *
@@ -54,14 +55,23 @@
     return id ? FILM_VERSIONS[FILM_VERSIONS.length - 1] : FILM_VERSIONS[0];
   }
 
-  /** Which cut a file of this length most likely is, or null when the length says nothing. */
-  function guessFilmVersion(durationSec) {
-    if (!isFinite(durationSec) || durationSec <= 0) return null;
-    const minutes = durationSec / 60;
-    for (const v of FILM_VERSIONS) {
-      if (v.minutes && minutes >= v.minutes[0] && minutes < v.minutes[1]) return v;
-    }
-    return null;
+  /**
+   * Lengths a file of the film can have: releases differ by seconds to minutes (logos, an
+   * introduction, a re-release's new scenes, credits cut short), so anything from 2:45:00 to
+   * 3:30:00 is taken for the film and searched for the snap.
+   */
+  const FILM_SPAN = [2 * 3600 + 45 * 60, 3 * 3600 + 30 * 60];
+
+  /**
+   * Which cut a file most likely is, or null when its length is not that of the film at all.
+   * The length does not tell the cuts apart (copies of the 2019 film run from 3:00:57 to beyond
+   * 3:02): the name does. "Encore", or the year 2026, is the re-release; anything else the 2019 film.
+   */
+  function guessFilmVersion(durationSec, name) {
+    if (!isFinite(durationSec) || durationSec < FILM_SPAN[0] || durationSec > FILM_SPAN[1]) return null;
+    const n = String(name || '');
+    if (/encore/i.test(n) || /(^|[^0-9])2026([^0-9]|$)/.test(n)) return FILM_VERSIONS[1];
+    return FILM_VERSIONS[0];
   }
 
   /* ------------------------------------------------------------- the snap */
@@ -939,6 +949,29 @@
     };
   }
 
+  /**
+   * Milliseconds until the clock shows the second in which `epochMs` falls. A countdown to the
+   * start of the film (which can be at 9:29:28.332) counted this way ticks on the same instant as
+   * the clock's seconds, and reaches zero as the clock shows that second.
+   */
+  function untilClockSecond(epochMs, nowMs) {
+    return Math.floor(epochMs / 1000) * 1000 - nowMs;
+  }
+
+  /**
+   * The second of the film to show at `nowMs` while the film runs on `session`, counted on the
+   * clock's seconds: it changes on the same instant as the clock's seconds, and when the clock
+   * reaches the target (midnight) it shows the second of the film that holds the snap.
+   *
+   * (A start time between two seconds, 9:29:28.6 say, cannot have both: the film's own seconds
+   * begin 0.6 s after the clock's. The display follows the clock and is pinned to the snap; the
+   * film itself runs on the millisecond.)
+   */
+  function filmSecondOnClock(session, nowMs) {
+    const snapMs = session.targetEpoch - session.startEpoch;
+    return Math.floor(nowMs / 1000) - Math.floor(session.targetEpoch / 1000) + Math.floor(snapMs / 1000);
+  }
+
   function fmtCountdown(ms) {
     const p = countdownParts(ms);
     const hms = pad(p.h) + ':' + pad(p.m) + ':' + pad(p.s);
@@ -1097,7 +1130,7 @@
     findFlash: findFlash, findSnapLine: findSnapLine, judgeSnap: judgeSnap, climbStart: climbStart, median: median,
     percentile: percentile, speechScore: speechScore, cueTimeline: cueTimeline, speechPlan: speechPlan, alignCues: alignCues, SUB_SCALES: SUB_SCALES, betterFit: betterFit, ALIGN: ALIGN,
     MONTHS: MONTHS, MONTHS_LONG: MONTHS_LONG, DAYS: DAYS, DAYS_LONG: DAYS_LONG,
-    clamp: clamp, pad: pad, median: median,
+    clamp: clamp, pad: pad, median: median, untilClockSecond: untilClockSecond, filmSecondOnClock: filmSecondOnClock, FILM_SPAN: FILM_SPAN,
     fmtDuration: fmtDuration, parseDuration: parseDuration,
     countdownParts: countdownParts, fmtCountdown: fmtCountdown,
     clockParts: clockParts, fmtClock: fmtClock, fmtDateTime: fmtDateTime, dateKey: dateKey,

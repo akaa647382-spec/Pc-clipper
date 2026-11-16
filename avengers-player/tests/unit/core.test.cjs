@@ -39,6 +39,48 @@ test('countdown reaches zero exactly at the target', () => {
   assert.equal(C.fmtCountdown(3723000), '01:02:03');
 });
 
+test('countdowns tick on the same instant as the clock, also to a start between two seconds', () => {
+  // Midnight, and a snap at 2:30:31.4: the film starts at 9:29:28.6.
+  const T = Date.UTC(2027, 0, 1, 0, 0, 0);
+  const start = T - 9031400;
+  const shown = (now) => C.fmtCountdown(C.untilClockSecond(start, now));
+  // The number changes exactly when the clock's second changes, never in between.
+  for (let k = 3; k >= 1; k--) {
+    const sec = Math.floor(start / 1000) * 1000 - k * 1000;      // the clock shows a whole second
+    assert.equal(shown(sec), '00:00:0' + k, 'at the tick');
+    assert.equal(shown(sec + 1), '00:00:0' + k, 'just after');
+    assert.equal(shown(sec + 999), '00:00:0' + k, 'the same all through the second');
+    assert.equal(shown(sec + 1000), '00:00:0' + (k - 1), 'and one less as the clock ticks');
+  }
+  // It reaches zero as the clock shows the second in which the film starts (9:29:28).
+  assert.equal(C.untilClockSecond(start, Math.floor(start / 1000) * 1000), 0);
+  // A target on a whole second (midnight) counts exactly as before.
+  for (const left of [10000, 9999, 9001, 1, 0]) assert.equal(C.untilClockSecond(T, T - left), left);
+});
+
+test('the film\'s time ticks with the clock and shows the snap\'s second at midnight', () => {
+  const T = Date.UTC(2027, 0, 1, 0, 0, 0);
+  for (const snapMs of [9031400, 9030000, 9031999, 9032001, 10871]) {
+    const session = { targetEpoch: T, startEpoch: T - snapMs };
+    const at = (now) => C.filmSecondOnClock(session, now);
+    assert.equal(at(T), Math.floor(snapMs / 1000), 'midnight shows the second that holds the snap (' + snapMs + ')');
+    // It changes on the clock's seconds and nowhere else.
+    for (let ms = -5000; ms < 5000; ms += 7) {
+      const now = T + ms;
+      const tick = now % 1000 === 0;
+      if (!tick) assert.equal(at(now), at(now - 1), 'steady inside a second');
+    }
+    for (let k = -5; k <= 5; k++) assert.equal(at(T + k * 1000) - at(T + k * 1000 - 1), 1, 'one up at each tick');
+    // Never ahead of the film; the film's own second, or the one before while the film's second
+    // has turned over and the clock's has not yet.
+    for (let ms = -3000; ms < 3000; ms += 13) {
+      const real = (T + ms - session.startEpoch) / 1000;
+      const d = at(T + ms);
+      assert.ok(d <= real + 1e-9 && Math.floor(real + 1e-9) - d <= 1, snapMs + ' at ' + ms + ': ' + d + ' vs ' + real);
+    }
+  }
+});
+
 test('clock formatting, 12 and 24 hour', () => {
   assert.equal(C.fmtClock(new Date(2026, 11, 31, 21, 29, 30), false), '9:29:30 PM');
   assert.equal(C.fmtClock(new Date(2026, 11, 31, 21, 29, 30), true), '21:29:30');
@@ -168,22 +210,25 @@ test('film versions: ENDGAME is 3:01:11, ENCORE is 3:01:36', () => {
   const ranges = C.FILM_VERSIONS.filter((v) => v.minutes).map((v) => v.minutes).sort((x, y) => x[0] - y[0]);
   for (let i = 1; i < ranges.length; i++) assert.ok(ranges[i][0] >= ranges[i - 1][1]);
 });
-test('film versions: recognised by the length of the file', () => {
-  const guess = (h, m, sec) => { const v = C.guessFilmVersion(h * 3600 + m * 60 + sec); return v ? v.id : null; };
-  assert.equal(guess(3, 1, 11), 'original', 'ENDGAME');
-  assert.equal(guess(3, 1, 36), 'encore', 'ENCORE');
-  assert.equal(guess(3, 0, 57), 'original', 'the 2019 cinema print');
-  assert.equal(guess(3, 1, 20), 'original', 'a few seconds of logo in front');
-  assert.equal(guess(3, 1, 23), 'original');
-  assert.equal(guess(3, 1, 24), 'encore', 'halfway between the two lengths is where one becomes the other');
-  assert.equal(guess(3, 1, 40), 'encore');
-  assert.equal(guess(3, 5, 10), 'encore', 'a longer copy of the re-release');
-  assert.equal(guess(2, 29, 0), null, 'Infinity War is not Endgame');
-  assert.equal(guess(0, 3, 20), null, 'a test clip');
-  assert.equal(guess(3, 10, 0), null);
-  assert.equal(C.guessFilmVersion(NaN), null);
+test('film versions: any copy of the film\'s length is taken for the film; the name tells the cut', () => {
+  const guess = (h, m, sec, name) => { const v = C.guessFilmVersion(h * 3600 + m * 60 + sec, name); return v ? v.id : null; };
+  const BLURAY = 'Avengers.Endgame.2019.1080p.BluRay.Hindi.5.1-English.5.1.mkv';
+  assert.equal(guess(3, 1, 11, BLURAY), 'original', 'ENDGAME');
+  assert.equal(guess(3, 2, 5, BLURAY), 'original', 'a 2019 Blu-ray rip that runs 3:02:05 is still the 2019 film');
+  assert.equal(guess(3, 1, 36, 'Avengers Endgame Encore (2026).mkv'), 'encore', 'ENCORE by its name');
+  assert.equal(guess(3, 1, 36, 'Avengers.Endgame.2026.2160p.WEB-DL.mkv'), 'encore', 'the year of the re-release');
+  assert.equal(guess(3, 1, 36, 'movie.mkv'), 'original', 'a name that says nothing: the 2019 film');
+  assert.equal(guess(3, 0, 57, 'endgame.mp4'), 'original', 'the 2019 cinema print');
+  assert.equal(guess(2, 50, 0, 'endgame-no-credits.mp4'), 'original', 'credits cut short');
+  assert.equal(guess(3, 20, 0, 'endgame-with-extras.mkv'), 'original', 'a long intro or extras');
+  assert.equal(guess(3, 1, 11, 'x2160p.x265.mkv'), 'original', '2160p is no year');
+  assert.equal(guess(2, 29, 0, BLURAY), null, 'Infinity War is not Endgame');
+  assert.equal(guess(0, 3, 20, BLURAY), null, 'a test clip');
+  assert.equal(guess(3, 31, 0, BLURAY), null, 'longer than any copy of the film');
+  assert.equal(C.guessFilmVersion(NaN, BLURAY), null);
   assert.equal(C.guessFilmVersion(0), null);
   assert.equal(C.guessFilmVersion(-5), null);
+  assert.equal(C.guessFilmVersion(10871), C.FILM_VERSIONS[0], 'no name at all');
 });
 
 // A run of frames as the app measures them: brightness of the middle of the picture, and how much of it is white.

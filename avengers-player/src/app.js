@@ -350,7 +350,7 @@
       save();
       video.playbackRate = 1;
       applyVolume();
-      if (cfg.armed) Versions.guess = C.guessFilmVersion(video.duration); else Versions.onImport();
+      if (cfg.armed) Versions.guess = C.guessFilmVersion(video.duration, info.name); else Versions.onImport();
       // Every copy of the film is timed a little differently: the app looks for the snap in this one.
       SnapCam.autoFor = opts.retry || opts.afterError ? 0 : token;
       SnapCam.autoSince = performance.now();
@@ -891,12 +891,12 @@
      * whatever is set.
      */
     onImport() {
-      this.guess = Media.ready ? C.guessFilmVersion(video.duration) : null;
+      this.guess = Media.ready ? C.guessFilmVersion(video.duration, Media.info && Media.info.name) : null;
       const mem = SnapMemory.get(Media.info);
       if (mem && mem.snapSec < video.duration - 2) {
         const moved = Math.abs(cfg.snapSec - mem.snapSec) > 0.0005;
         cfg.snapSec = mem.snapSec;
-        cfg.filmVersion = C.filmVersion(mem.version).id;
+        cfg.filmVersion = (this.guess || C.filmVersion(mem.version)).id;     // what the file's name says, now
         if (mem.confirmed) cfg.snapConfirmedFor = snapKey();
         if (moved) cfg.rehearsed = {};
         save();
@@ -910,7 +910,7 @@
 
     /** Starts a file of a known length from that cut's own figure. */
     recognise() {
-      this.guess = Media.ready ? C.guessFilmVersion(video.duration) : null;
+      this.guess = Media.ready ? C.guessFilmVersion(video.duration, Media.info && Media.info.name) : null;
       const guess = this.guess;
       const cur = this.current();
       if (!guess) return;
@@ -921,8 +921,7 @@
       cfg.rehearsed = {};
       save();
       Engine.session = Engine.computeFree();
-      toast('This is ' + guess.name + ': press “Find the snap” once');
-      Engine.logEvent('Film version recognised by its length (' + C.fmtDuration(video.duration) + '): ' + guess.name);
+      Engine.logEvent('Film version: ' + guess.name + ' (by the file name; ' + C.fmtDuration(video.duration) + ' long)');
     },
 
     /** The user picks a cut. `factory` goes back to the round figure even when a better one is known. */
@@ -1793,13 +1792,15 @@
       const toStart = s ? s.startEpoch - now : NaN;
       const soon = Media.ready && Engine.mode === 'free' && !Engine.test && toStart > 0 && toStart <= this.SOON_MS && !quiet;
       setHidden(el.latePill, !((pos != null && dismissed && !quiet) || soon));
-      if (soon) setText(el.latePill, 'NOT ARMED · the movie has to start in ' + C.fmtCountdown(toStart) + ' · click to start the countdown');
-      else if (pos != null && dismissed) setText(el.latePill, 'LATE · the movie should be at ' + C.fmtDuration(pos, { forceHours: true }) + ' · click to join');
+      // (Every time on screen is counted on the clock's seconds, so it ticks with the clock.)
+      const onClock = s ? Math.max(0, C.filmSecondOnClock(s, now)) : 0;
+      if (soon) setText(el.latePill, 'NOT ARMED · the movie has to start in ' + C.fmtCountdown(C.untilClockSecond(s.startEpoch, now)) + ' · click to start the countdown');
+      else if (pos != null && dismissed) setText(el.latePill, 'LATE · the movie should be at ' + C.fmtDuration(onClock, { forceHours: true }) + ' · click to join');
       if (!box) return;
       const toSnap = s.targetEpoch - now;
       setText(el.lateTitle, toSnap > 0 ? 'You are late to the countdown' : 'The movie is already running');
-      setText(el.lateBody, 'The movie had to start at ' + C.fmtClock(new Date(s.startEpoch), cfg.use24h) + '. Right now it should be at ' + C.fmtDuration(pos, { forceHours: true }) + '.');
-      setText(el.lateSub, (toSnap > 0 ? (newYear ? 'New Year in ' : 'The snap in ') + C.fmtCountdown(toSnap) : (newYear ? 'Midnight was ' : 'The snap was ') + C.fmtDuration(-toSnap / 1000) + ' ago') + ' · press Enter or Space');
+      setText(el.lateBody, 'The movie had to start at ' + C.fmtClock(new Date(s.startEpoch), cfg.use24h) + '. Right now it should be at ' + C.fmtDuration(onClock, { forceHours: true }) + '.');
+      setText(el.lateSub, (toSnap > 0 ? (newYear ? 'New Year in ' : 'The snap in ') + C.fmtCountdown(C.untilClockSecond(s.targetEpoch, now)) : (newYear ? 'Midnight was ' : 'The snap was ') + C.fmtDuration(-toSnap / 1000) + ' ago') + ' · press Enter or Space');
     }
   };
 
@@ -2253,8 +2254,11 @@
           if (settled() && !alone) break;
           // 2. Not settled there (or to make sure): sweep a wide stretch quickly (brightness only),
           //    then take the white-out it shows frame by frame.
-          const a = Math.max(0, c - 45);
-          const b = Math.min(dur - 0.5, c + 105);
+          // A copy longer (or shorter) than the 2019 film may have the difference before the snap:
+          // the sweep reaches that much further, up to five minutes either way.
+          const extra = Versions.guess && isFinite(dur) ? dur - C.REFERENCE_SEC : 0;
+          const a = Math.max(0, c - clamp(Math.max(45, 30 - extra), 45, 300));
+          const b = Math.min(dur - 0.5, c + clamp(Math.max(105, extra + 30), 105, 300));
           if (swept.some((w) => a >= w[0] - 5 && b <= w[1] + 5)) { step += 2; continue; }
           swept.push([a, b]);
           const sweep = await this.capture(a, b, 5, false, progress('Searching from ' + C.fmtDuration(a, { forceHours: true }) + ' to ' + C.fmtDuration(b, { forceHours: true }) + '…'));
@@ -3710,7 +3714,7 @@
       const ver = Versions.current();
       el.filmVersion.value = ver.id;
       const g = Versions.guess;
-      setText(el.filmVersionNote, ver.note + (g && g.family !== ver.family && ver.id !== 'custom' ? ' Note: by its length this file looks like ' + g.name + '.' : ''));
+      setText(el.filmVersionNote, ver.note + (g && g.family !== ver.family && ver.id !== 'custom' ? ' Note: by its name this file looks like ' + g.name + '.' : ''));
       setText(el.snapReset, 'back to ' + C.fmtDuration((g && g.snapSec) || C.DEFAULT_SNAP_SEC, { forceHours: true }));
       // A file longer than the 2019 film: say by how much, and what that can mean for the snap.
       const extra = Media.ready ? video.duration - C.REFERENCE_SEC : NaN;
@@ -3808,9 +3812,9 @@
         setText(el.imClock, cp.ampm ? cp.hms + ' ' + cp.ampm : cp.hms);
         setText(el.imDate, dateLine);
         if (s) {
-          setText(el.imToStart, toStart > 0 ? C.fmtCountdown(toStart) : 'RUNNING');
+          setText(el.imToStart, toStart > 0 ? C.fmtCountdown(C.untilClockSecond(s.startEpoch, now)) : 'RUNNING');
           setText(el.imStartAt, C.fmtDateTime(s.startEpoch, cfg.use24h));
-          setText(el.imToSnap, toSnap > 0 ? C.fmtCountdown(toSnap) : 'NOW');
+          setText(el.imToSnap, toSnap > 0 ? C.fmtCountdown(C.untilClockSecond(s.targetEpoch, now)) : 'NOW');
           setText(el.imSnapAt, C.fmtDateTime(s.targetEpoch, cfg.use24h));
           setText(el.imSnapLbl, newYear ? 'NEW YEAR IN' : 'THE SNAP IN');
           setText(el.imStart, C.fmtClock(new Date(s.startEpoch), cfg.use24h));
@@ -3819,7 +3823,7 @@
         const running = !!s && toStart <= 0 && (s.endEpoch != null ? now < s.endEpoch - 5000 : toSnap > -45 * 60000) && !cfg.armed && !(newYear && toSnap <= 0);
         setHidden(el.imLate, !running);
         if (running) {
-          setText(el.imLateText, 'It had to start at ' + C.fmtClock(new Date(s.startEpoch), cfg.use24h) + ' and should be at ' + C.fmtDuration(-toStart / 1000, { forceHours: true }) +
+          setText(el.imLateText, 'It had to start at ' + C.fmtClock(new Date(s.startEpoch), cfg.use24h) + ' and should be at ' + C.fmtDuration(Math.max(0, C.filmSecondOnClock(s, now)), { forceHours: true }) +
             ' now. Import the movie and press JOIN NOW: it jumps straight to where it should be.');
         }
         this.prevNow = now;
@@ -3848,14 +3852,15 @@
         if (cfg.showClock) { setText(el.ovTime, cp.hms); setText(el.ovAmpm, cp.ampm); }
         if (cfg.showDate) this.renderDate(date, now, dateLine);
         // 10, 9, 8 …: for the last ten seconds the countdown row itself becomes the big ticking number.
-        const ten = cfg.finalTen && s && Engine.mode === 'armed' && toSnap > 0 && toSnap <= 10000 ? C.countdownParts(toSnap).total : 0;
+        const cdSnap = s ? C.untilClockSecond(s.targetEpoch, now) : NaN;
+        const ten = cfg.finalTen && s && Engine.mode === 'armed' && toSnap > 0 && toSnap <= 10000 ? C.countdownParts(cdSnap).total : 0;
         let showCount = (cfg.showCount || ten > 0) && !!s;
         let done = false;
         if (showCount) {
           if (toSnap > 0) {
-            const parts = C.countdownParts(toSnap);
+            const parts = C.countdownParts(cdSnap);
             setText(el.ovCountLbl, newYear ? 'NEW YEAR IN' : 'THE SNAP IN');
-            setText(el.ovCountVal, ten ? String(ten) : parts.d > 0 || parts.h > 0 ? C.fmtCountdown(toSnap) : C.pad(parts.m) + ':' + C.pad(parts.s));
+            setText(el.ovCountVal, ten ? String(ten) : parts.d > 0 || parts.h > 0 ? C.fmtCountdown(cdSnap) : C.pad(parts.m) + ':' + C.pad(parts.s));
           } else if (toSnap > -90000 && cfg.showCount) {
             done = true;
             setText(el.ovCountLbl, newYear ? 'HAPPY NEW YEAR' : 'RIGHT ON TIME');
@@ -3887,7 +3892,7 @@
       const standby = Engine.mode === 'armed' && Engine.phase === 'standby' && cfg.standbyScreen && toStart > 250;
       setHidden(el.standby, !standby);
       if (standby) {
-        setText(el.sbCount, C.fmtCountdown(toStart));
+        setText(el.sbCount, C.fmtCountdown(C.untilClockSecond(s.startEpoch, now)));
         setText(el.sbLine, 'Starts by itself at ' + C.fmtClock(new Date(s.startEpoch), cfg.use24h) + ' · ' +
           C.DAYS_LONG[new Date(s.startEpoch).getDay()] + ', ' + C.MONTHS_LONG[new Date(s.startEpoch).getMonth()] + ' ' + new Date(s.startEpoch).getDate());
         setText(el.sbClock, 'Now ' + (cp.ampm ? cp.hms + ' ' + cp.ampm : cp.hms));
@@ -3983,21 +3988,23 @@
       let big;
       let sub;
       const exp = e.expected(now);
+      const cdStart = C.untilClockSecond(s.startEpoch, now);
+      const cdSnap = C.untilClockSecond(s.targetEpoch, now);
       if (e.mode !== 'armed') {
-        if (toStart > 0) { label = 'READY · NOT ARMED'; big = C.fmtCountdown(toStart); sub = 'until the movie has to start'; }
+        if (toStart > 0) { label = 'READY · NOT ARMED'; big = C.fmtCountdown(cdStart); sub = 'until the movie has to start'; }
         else if (newYear && toSnap <= 0) { label = 'MISSED · NOT ARMED'; big = 'HAPPY NEW YEAR'; sub = 'The countdown did not run this time. Better luck next year.'; }
-        else if (Late.position(now) != null) { state = 'slipped'; label = 'LATE · NOT ARMED'; big = C.fmtDuration(exp, { forceHours: true }); sub = 'is where the movie should be now. Press JOIN NOW to jump in.'; }
-        else { label = 'READY · NOT ARMED'; big = C.fmtCountdown(Math.max(0, toStart)); sub = 'until the movie has to start'; }
+        else if (Late.position(now) != null) { state = 'slipped'; label = 'LATE · NOT ARMED'; big = C.fmtDuration(Math.max(0, C.filmSecondOnClock(s, now)), { forceHours: true }); sub = 'is where the movie should be now. Press JOIN NOW to jump in.'; }
+        else { label = 'READY · NOT ARMED'; big = C.fmtCountdown(Math.max(0, cdStart)); sub = 'until the movie has to start'; }
       } else if (e.phase === 'slipped' || e.phase === 'blocked') {
         state = 'slipped'; label = 'OUT OF SYNC';
-        big = exp < 0 ? C.fmtCountdown(toStart) : fmtOff(video.currentTime - exp);
+        big = exp < 0 ? C.fmtCountdown(cdStart) : fmtOff(video.currentTime - exp);
         sub = exp < 0 ? 'until the start. Press Recalibrate.' : (video.currentTime < exp ? 'behind the clock. Press Recalibrate.' : 'ahead of the clock. Press Recalibrate.');
       } else if (toStart > 0) {
         state = e.test ? 'test' : 'standby'; label = e.test ? 'TEST RUN · WAITING FOR THE START' : 'ARMED · THE MOVIE STARTS IN';
-        big = C.fmtCountdown(toStart); sub = 'It starts by itself. Nothing to press.';
+        big = C.fmtCountdown(cdStart); sub = 'It starts by itself. Nothing to press.';
       } else if (toSnap > 0) {
         state = e.test ? 'test' : 'synced'; label = e.test ? 'TEST RUN · THE SNAP IN' : (newYear ? 'PLAYING IN SYNC · NEW YEAR IN' : 'PLAYING IN SYNC · THE SNAP IN');
-        big = C.fmtCountdown(toSnap); sub = this.syncState().short;
+        big = C.fmtCountdown(cdSnap); sub = this.syncState().short;
       } else {
         state = e.test ? 'test' : 'done'; label = e.test ? 'TEST RUN' : 'ON TIME';
         big = newYear ? 'HAPPY NEW YEAR' : 'RIGHT ON TIME'; sub = this.syncState().short;
@@ -4059,7 +4066,10 @@
       const live = exp >= 0 && exp <= dur && (Engine.mode === 'armed' ? Engine.phase === 'slipped' : true);
       el.seekLive.style.display = live ? 'block' : 'none';
       if (live) el.seekLive.style.left = (clamp(exp / dur, 0, 1) * 100).toFixed(3) + '%';
-      setText(el.timeLabel, C.fmtDuration(this.seek.dragging ? pct * dur : cur) + ' / ' + C.fmtDuration(dur));
+      // Locked to the clock, the film's seconds change on the same instant as the clock's.
+      const locked = Engine.mode === 'armed' && !!Engine.session && (Engine.phase === 'synced' || Engine.phase === 'cueing');
+      const shown = this.seek.dragging ? pct * dur : locked ? clamp(C.filmSecondOnClock(Engine.session, now), 0, Math.floor(dur)) : cur;
+      setText(el.timeLabel, C.fmtDuration(shown) + ' / ' + C.fmtDuration(dur));
 
       if (this.dirty.transport || this.dirty.all) {
         this.dirty.transport = false;
