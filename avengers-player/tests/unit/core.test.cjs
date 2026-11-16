@@ -209,6 +209,11 @@ test('sound track choice: English by default, whatever the file calls its main t
   assert.equal(pick(pahe, 'fra'), 0, 'no French track: the file\'s own main track');
   // Languages only in the titles.
   assert.equal(pick([{ lang: '', title: 'Hindi 5.1' }, { lang: 'und', title: 'English 5.1' }]), 1);
+  // No English: a track that does not say what it is beats one that says it is something else.
+  assert.equal(pick([{ lang: 'hin', isDefault: true }, { lang: '' }]), 1, 'next to a labelled dub, the unlabelled track is tried');
+  assert.equal(pick([{ lang: '' }, { lang: 'hin', isDefault: true }]), 0);
+  assert.equal(pick([{ lang: 'hin', isDefault: true }, { lang: 'tam' }]), 0, 'two other languages: the file\'s main track');
+  assert.equal(pick([{ lang: 'hin' }, { lang: 'tam', isDefault: true }]), 1);
   // Nothing known: the default flag, else the first.
   assert.equal(pick([{ lang: '' }, { lang: '', isDefault: true }]), 1);
   assert.equal(pick([{ lang: '' }, { lang: '' }]), 0);

@@ -982,6 +982,54 @@ const scenarios = {
       check('pointing at the frame sets and confirms the snap point', v.version === 'custom' && Math.abs(v.snap - 9020.17) < 0.2 && /Snap point confirmed in this file/.test(v.preflight), v.version + ' ' + v.snap);
       check('no page errors', s.errors.length === 0, s.errors.join(' | '));
     } finally { await s.close(); }
+
+    // ---- an Encore copy of 3:01:36, the length a user reported: 25 s more than the 2019 film
+    const SHORT = path.join(MEDIA, 'encore-short.mp4');
+    if (!fs.existsSync(SHORT)) { console.log('  note  encore-short.mp4 missing: run scripts/make-test-media.sh'); return; }
+    const s2 = await launch(newProfile());
+    try {
+      const look = () => s2.page.evaluate(() => {
+        const g = (id) => document.getElementById(id);
+        return {
+          version: window.__AP.cfg.filmVersion, snap: window.__AP.cfg.snapSec, card: g('fileMeta').textContent, start: g('ktStart').textContent,
+          preflight: g('preflight').textContent, lengthNote: g('filmLengthNote').hidden ? '' : g('filmLengthNote').textContent,
+          tryBtn: g('snapShiftTry').hidden ? '' : g('snapShiftTry').textContent, t: g('video').currentTime, paused: g('video').paused, tab: window.__AP.UI.tab
+        };
+      });
+      await loadMovie(s2.page, SHORT);
+      await sleep(600);
+      let v = await look();
+      check('a 3:01:36 file is taken for the Encore cut, not for the 2019 film', v.version === 'encore' && /^Encore · /.test(v.card), v.version + ' | ' + v.card);
+      check('the snap stays at 2:30:30 until someone has looked', v.snap === 9030 && /9:29:30 PM/.test(v.start), v.snap + ' | ' + v.start);
+      check('pre-flight insists on confirming the snap point', /Snap point not confirmed in this file yet/.test(v.preflight) && /not established/.test(v.preflight));
+      await s2.page.click('.tab[data-tab="setup"]');
+      await sleep(300);
+      v = await look();
+      check('Setup says how much longer the file is and what that can mean', /3:01:36 long, 25 s longer than the 2019 film/.test(v.lengthNote) && /after the snap/.test(v.lengthNote) && /before the film/.test(v.lengthNote), v.lengthNote.slice(0, 120));
+      check('and offers to try the snap 25 s later', /Try 2:30:55 \(25 s later\)/.test(v.tryBtn), v.tryBtn);
+      await shot(s2.page, 'versions-encore-short');
+      await s2.page.click('#snapShiftTry');
+      await sleep(900);
+      v = await look();
+      check('trying it moves the snap to 2:30:55 and the start to 9:29:05 PM', v.snap === 9055 && /9:29:05 PM/.test(v.start), v.snap + ' | ' + v.start);
+      check('and puts the film 12 s before that point, paused, with the frame tools in view', v.tab === 'setup' && v.paused && Math.abs(v.t - 9043) < 0.6, JSON.stringify({ t: v.t, paused: v.paused, tab: v.tab }));
+      check('the offer is gone once it is taken, and the snap still has to be confirmed', v.tryBtn === '' && /Snap point not confirmed/.test(v.preflight), v.tryBtn);
+      await s2.page.click('#snapReset');
+      await sleep(400);
+      v = await look();
+      check('"back to 2:30:30" undoes it', v.snap === 9030 && v.version === 'encore' && /Try 2:30:55/.test(v.tryBtn), v.version + ' ' + v.snap + ' | ' + v.tryBtn);
+
+      // The 2019 film and the long Encore get no such offer.
+      await loadMovie(s2.page, ORIGINAL);
+      await sleep(500);
+      v = await look();
+      check('the 2019 film shows no length note and no offer', v.version === 'original' && v.lengthNote === '' && v.tryBtn === '', v.lengthNote + v.tryBtn);
+      await loadMovie(s2.page, ENCORE);
+      await sleep(500);
+      v = await look();
+      check('a 3:05 Encore shows the length note (3:59 longer) but no "try it later" offer', /3:05:10 long, 3:59 longer/.test(v.lengthNote) && v.tryBtn === '', v.lengthNote.slice(0, 80) + ' | ' + v.tryBtn);
+      check('no page errors', s2.errors.length === 0, s2.errors.join(' | '));
+    } finally { await s2.close(); }
   },
 
   async languages() {
@@ -1007,6 +1055,18 @@ const scenarios = {
     const preflightSays = (page, re) => waitFor(page, (src) => new RegExp(src).test(document.getElementById('preflight').textContent), re.source, 4000);
     const isEng = (r) => r > 3500 && r < 9000;
     const isHin = (r) => r > 18000 && r < 30000;
+    // What Chromium does when tracks are switched in quick succession WITHOUT a seek: the sound dies.
+    // The app never switches like that; this reaches past it to prove the watchdog brings sound back.
+    const killSound = (page, endPos) => page.evaluate(async (endPos) => {
+      const l = document.getElementById('video').audioTracks;
+      for (let k = 0; k < 6; k++) {
+        const to = k % 2 ? endPos : 1 - endPos;
+        for (let i = 0; i < l.length; i++) if (i !== to) l[i].enabled = false;
+        l[to].enabled = true;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+    }, endPos);
+    const logged = (page, text, timeout) => waitFor(page, (t) => window.__AP.Engine.events.some((e) => e.text.includes(t)), text, timeout);
 
     const profile = newProfile();
     let s = await launch(profile);
@@ -1044,6 +1104,21 @@ const scenarios = {
       check('and what plays is what the list says', cur.lang === 'hin' ? isHin(r) : isEng(r), cur.lang + ' ' + r + ' bytes/s');
       check('the film is still playing', !(await state(s.page)).paused);
 
+      // The watchdog, in free play.
+      await killSound(s.page, 1);
+      await sleep(1200);
+      r = await rate(s.page, 1500);
+      if (r === 0) {
+        check('the watchdog notices that the sound stopped and re-cues the film', await logged(s.page, 'The sound stopped being decoded', 9000));
+        await sleep(1500);
+        r = await rate(s.page);
+        const now = await playing(s.page);
+        check('and the sound is back, in the language that was chosen by hand', now.lang === cur.lang && (cur.lang === 'hin' ? isHin(r) : isEng(r)), now.lang + ' ' + r + ' bytes/s');
+        check('with the film still playing', !(await state(s.page)).paused);
+      } else {
+        console.log('  note  the sound survived the bare switching this time (' + r + ' bytes/s): watchdog not exercised in free play');
+      }
+
       // While the countdown runs: a switch re-cues the film and it stays on the clock.
       await s.page.evaluate(() => document.getElementById('video').pause());
       if ((await playing(s.page)).lang !== 'eng') { await s.page.keyboard.press('a'); await sleep(800); }
@@ -1062,6 +1137,22 @@ const scenarios = {
       check('the film stays on the clock after the switch', Math.abs(m.worst) < 0.08, ms(m.worst));
       check('it was a clean re-cue, not a slip', after.slips === before.slips && after.mode === 'armed' && await s.page.isHidden('#slip'), 'slips ' + after.slips);
       check('Hindi is what plays now', isHin(r) && (await playing(s.page)).lang === 'hin', r + ' bytes/s');
+
+      // The watchdog, while armed. The fault above does not strike reliably while the engine steers the
+      // speed, so the sound is stopped another way: every track switched off behind the app's back.
+      const auto0 = (await state(s.page)).autoRecals;
+      await s.page.evaluate(() => { const l = document.getElementById('video').audioTracks; for (let i = 0; i < l.length; i++) l[i].enabled = false; });
+      await sleep(1200);
+      r = await rate(s.page, 1500);
+      check('armed: with every track switched off nothing is decoded', r === 0, r + ' bytes/s');
+      check('armed: the watchdog re-cues the film when the sound stops', await logged(s.page, 'Auto-recalibrating: the sound stopped', 9000));
+      check('armed: back in sync', await waitSynced(s.page, 12000));
+      await sleep(1800);
+      const m2 = await measureSync(s.page, 2500);
+      r = await rate(s.page);
+      const st2 = await state(s.page);
+      check('armed: the chosen language is back and the film is on the clock', isHin(r) && (await playing(s.page)).lang === 'hin' && Math.abs(m2.worst) < 0.08, r + ' bytes/s, ' + ms(m2.worst));
+      check('armed: one automatic recalibration, no slip', st2.autoRecals === auto0 + 1 && st2.slips === before.slips && st2.mode === 'armed', 'auto ' + st2.autoRecals + ', slips ' + st2.slips);
 
       // The controls lock keeps the language where it is.
       await s.page.keyboard.press('l');
@@ -1149,6 +1240,7 @@ const scenarios = {
       await loadMovie(s.page, hindiOnly);
       check('a Hindi-only file plays', await waitFor(s.page, () => window.__AP.Media.hasAudio === true, null, 8000));
       check('and is flagged: the sound is Hindi, not English', await waitFor(s.page, () => /The sound is Hindi, not English/.test(document.getElementById('preflight').textContent), null, 5000), (await preflight(s.page)).slice(0, 200));
+      await waitFor(s.page, () => /no English sound track/.test(document.getElementById('audioWarn').textContent), null, 4000);
       const warn = await s.page.textContent('#audioWarn');
       check('the warning says to import the original file', await s.page.isVisible('#audioWarn') && /no English sound track/.test(warn) && /Import the original movie file/.test(warn), warn);
       check('there is nothing to fix in this file, so no Fix button and no dialog', await s.page.isHidden('#fixAudioBtn') && await s.page.isHidden('#modal'));

@@ -159,6 +159,7 @@
     const ms = Math.round(sec * 1000);
     return (ms > 0 ? '+' : ms < 0 ? '−' : '±') + Math.abs(ms) + ' ms';
   };
+  const fmtSpan = (sec) => (sec < 90 ? Math.round(sec) + ' s' : C.fmtDuration(sec));
   const fmtOff = (sec) => {
     const a = Math.abs(sec);
     if (a < 1) return Math.round(a * 1000) + ' ms';
@@ -281,6 +282,7 @@
       this.lastFrameTime = NaN;
       this.audioReason = '';
       this.byUser = !!opts.byUser;
+      this.inspected = false;
       AudioTracks.clear();
       UI.renderSoundWarning();
       UI.renderSoundTracks();
@@ -370,9 +372,13 @@
 
     /** Decides whether the sound of this movie will work, and in which language. */
     async inspect(token) {
-      if (!this.info || !this.info.path || !native.isNative) return;
+      // Until the file has been looked into, nothing is said about the language of its sound:
+      // a half-informed warning would only be replaced by another one a moment later.
+      this.inspected = false;
+      if (!this.info || !this.info.path || !native.isNative) { this.inspected = true; this.soundChanged(); return; }
       await this.reprobe();
       if (token !== this.loadToken || !this.ready) return;
+      this.inspected = true;
       const a = this.assess;
       if (AudioTracks.supported) {
         const cur = AudioTracks.current();
@@ -400,9 +406,11 @@
       if (!this.ready) return null;
       if (this.hasAudio === false) {
         const fixable = !!(this.info && this.info.path && native.isNative && (!this.probe || (this.probe.audio || []).length > 0));
+        const noTracks = !!this.probe && !(this.probe.audio || []).length;
         return {
           kind: 'silent', fixable: fixable, title: 'This movie would play without sound',
-          text: this.audioReason || 'No sound could be decoded from this file.',
+          // What FFmpeg found in the file says more than the bare fact that nothing was decoded.
+          text: noTracks ? 'This file has no sound track.' : (this.assess && this.assess.audioReason) || this.audioReason || 'No sound could be decoded from this file.',
           short: 'No playable sound in this file', hint: fixable ? 'Use “Fix the sound” below.' : ''
         };
       }
@@ -652,7 +660,7 @@
      *   maybe    another language plays and, without FFmpeg, nothing can look inside the file
      */
     problem() {
-      if (!Media.ready || !this.supported) return null;
+      if (!Media.ready || !Media.inspected || !this.supported) return null;
       const cur = this.current();
       if (!cur || this.pickedByHand(cur)) return null;   // silence is Media's business; a hand-made pick is respected
       const want = C.normLang(cfg.audioLang) || 'eng';
@@ -756,8 +764,9 @@
       }
       this.quietMs = 0;
       this.alive = false;
-      this.heals = this.heals.filter((t) => p - t < 300000);
-      if (this.heals.length >= 2) {
+      // Three attempts per movie, no more: if something about this file fools the check, it must
+      // not be able to disturb the film again and again.
+      if (this.heals.length >= 3) {
         if (!this.gaveUp) {
           this.gaveUp = true;
           Engine.logEvent('The sound stopped and re-cueing did not bring it back');
@@ -765,9 +774,12 @@
         }
         return;
       }
+      if (Engine.mode === 'armed' && Engine.phase !== 'synced') return;      // the engine is already re-cueing
       this.heals.push(p);
       Engine.logEvent('The sound stopped being decoded: re-cueing the film to bring it back');
-      if (Engine.mode === 'armed') { if (Engine.phase === 'synced') Engine.autoRecal('the sound stopped'); return; }
+      const pos = this.choose();
+      if (pos >= 0) this.apply(pos);                     // whatever happened to the switches, the right track is on again
+      if (Engine.mode === 'armed') { Engine.autoRecal('the sound stopped'); return; }
       try { video.currentTime = video.currentTime; } catch (e) { /* not seekable */ }
     }
   };
@@ -784,6 +796,18 @@
     current() { return C.filmVersion(cfg.filmVersion); },
 
     /**
+     * Where the snap would be if everything this file has more than the 2019 film came BEFORE the
+     * film. Only offered for a small surplus: an introduction or a logo, not minutes of new scenes.
+     */
+    laterSnap() {
+      if (!Media.ready) return null;
+      const extra = video.duration - C.REFERENCE_SEC;
+      if (!(extra >= 3 && extra <= 130)) return null;
+      const later = C.DEFAULT_SNAP_SEC + Math.round(extra);
+      return video.duration >= later + 2 ? later : null;
+    },
+
+    /**
      * A movie was imported: if its length says it is another cut than the one selected, switch.
      * A snap point the user set by hand is never overridden.
      */
@@ -797,7 +821,7 @@
       cfg.rehearsed = {};
       save();
       Engine.session = Engine.computeFree();
-      toast('This looks like ' + guess.name);
+      toast('This looks like ' + guess.name + (guess.settled ? '' : ': confirm the snap point in Setup'));
       Engine.logEvent('Film version recognised by its length (' + C.fmtDuration(video.duration) + '): ' + guess.name);
     },
 
@@ -2346,6 +2370,19 @@
       const g = Versions.guess;
       setText(el.filmVersionNote, ver.note + (g && g.family !== ver.family && ver.id !== 'custom' ? ' Note: by its length this file looks like ' + g.name + '.' : ''));
       setText(el.snapReset, 'back to ' + C.fmtDuration((g && g.snapSec) || C.DEFAULT_SNAP_SEC, { forceHours: true }));
+      // A file longer than the 2019 film: say by how much, and what that can mean for the snap.
+      const extra = Media.ready ? video.duration - C.REFERENCE_SEC : NaN;
+      const longer = extra >= 3 && extra <= 600;
+      setHidden(el.filmLengthNote, !longer);
+      if (longer) {
+        setText(el.filmLengthNote, 'This file is ' + C.fmtDuration(video.duration) + ' long, ' + fmtSpan(extra) + ' longer than the 2019 film (3:01:11). ' +
+          'If the extra time comes after the snap (new scenes at the end), the snap is where it always was. If it comes before the film (an introduction, a longer logo), the snap is that much later. ' +
+          'One look settles it: press “Play from 10 s before” below and watch for the snap.');
+      }
+      const later = Versions.laterSnap();
+      const canTry = later != null && Engine.mode !== 'armed' && Math.abs(cfg.snapSec - later) > 0.5;
+      setHidden(el.snapShiftTry, !canTry);
+      if (canTry) setText(el.snapShiftTry, 'Snap not there? Try ' + C.fmtDuration(later, { forceHours: true }) + ' (' + fmtSpan(extra) + ' later)');
       $$('button', el.optCelebration).forEach((b) => b.classList.toggle('on', b.dataset.v === cfg.celebration));
       setText(el.celebHint, CELEB_HINT[cfg.celebration] || '');
       el.overlay.className = 'overlay pos-' + cfg.overlayPos + ' size-' + cfg.overlaySize;
@@ -2990,6 +3027,12 @@
     el.snapInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { applySnap(C.parseDuration(el.snapInput.value)); el.snapInput.blur(); } });
     el.snapInput.addEventListener('input', () => el.snapInput.classList.toggle('bad', !(C.parseDuration(el.snapInput.value) > 0)));
     el.snapReset.addEventListener('click', () => Versions.choose(Versions.guess ? Versions.guess.id : 'original'));
+    el.snapShiftTry.addEventListener('click', () => {
+      const later = Versions.laterSnap();
+      if (later == null || Engine.mode === 'armed') return;
+      applySnap(later);
+      UI.openSnapFinder();
+    });
     el.filmVersion.addEventListener('change', () => Versions.choose(el.filmVersion.value));
     const free = () => Media.ready && Engine.mode === 'free';
     el.snapGoto.addEventListener('click', () => {

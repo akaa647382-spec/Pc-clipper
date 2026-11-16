@@ -132,7 +132,9 @@
 
   /**
    * Which sound track to play: the one in the wanted language (English unless told otherwise),
-   * never a commentary if there is anything else, otherwise the file's own main track.
+   * never a commentary if there is anything else. When no track is in the wanted language, a track
+   * that does not say what it is beats one that says it is something else (next to a track labelled
+   * as a dub, the unlabelled one is usually the original), and after that the file's own main track.
    * Returns the position in `tracks`, or -1 when there are none.
    */
   function pickAudioTrack(tracks, preferLang) {
@@ -143,7 +145,9 @@
     for (let i = 0; i < tracks.length; i++) {
       const t = tracks[i] || {};
       let score = -i * 0.01;                                   // earlier tracks win ties
-      if (trackLang(t) === want) score += 100;
+      const lang = trackLang(t);
+      if (lang === want) score += 100;
+      else if (!lang) score += 20;
       if (/comment|descri|director|isolated|karaoke/i.test(String(t.title || t.label || ''))) score -= 50;
       if (t.isDefault) score += 10;
       if (score > bestScore) { best = i; bestScore = score; }

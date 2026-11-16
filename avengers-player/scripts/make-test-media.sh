@@ -20,7 +20,8 @@ if [[ ! -f "$out/silent.mp4" ]]; then
   ff -f lavfi -i "testsrc2=size=640x360:rate=24,format=yuv420p" -t 30 -c:v libx264 -preset ultrafast -crf 32 -g 48 -an "$out/silent.mp4"
 fi
 # Two tiny clips with the real lengths of the film, to test recognising the cut and the real
-# snap point three hours in: the 2019 original (3:01:11) and the 2026 Encore re-release (about 3:05).
+# snap point three hours in: the 2019 original (3:01:11) and the 2026 Encore re-release (about 3:05
+# by press reports, 3:01:36 by a user's report).
 long_clip() {   # name seconds
   if [[ ! -f "$out/$1" ]]; then
     ff -f lavfi -i "testsrc2=size=160x90:rate=6,format=yuv420p" -f lavfi -i "sine=frequency=220:sample_rate=22050" \
@@ -29,6 +30,7 @@ long_clip() {   # name seconds
 }
 long_clip original-length.mp4 10871
 long_clip encore-length.mp4 11110
+long_clip encore-short.mp4 10896      # 3:01:36, an Encore length reported by a user: 25 s more than the 2019 film
 # Movies with sound in several languages. English must play, whatever the file flags as its main
 # track. The tracks differ in bitrate so a test can tell which one is being decoded.
 LV=(-f lavfi -i "testsrc2=size=640x360:rate=24,format=yuv420p")
