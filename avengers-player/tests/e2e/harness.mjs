@@ -28,7 +28,7 @@ export function ensureDisplay(scriptUrl) {
 }
 
 export function ensureMedia() {
-  if (['movie.mp4', 'dolby.mp4', 'lang-dual.mkv', 'lang-dolby.mkv', 'lang-mixed.mkv', 'lang-hindi.mp4', 'snap-scene.mp4', 'snap-wide.mp4', 'snap-subs.mkv', 'talk.mp4', 'talk-51.mkv', 'talk-long.mp4', 'talk-early.srt', 'encore-subs.mkv'].every((f) => fs.existsSync(path.join(MEDIA, f)))) return;
+  if (['movie.mp4', 'dolby.mp4', 'lang-dual.mkv', 'lang-dolby.mkv', 'lang-mixed.mkv', 'lang-hindi.mp4', 'snap-scene.mp4', 'snap-wide.mp4', 'snap-subs.mkv', 'talk.mp4', 'talk-51.mkv', 'talk-long.mp4', 'talk-early.srt', 'encore-subs.mkv', 'endgame-extended.mp4'].every((f) => fs.existsSync(path.join(MEDIA, f)))) return;
   const r = spawnSync('bash', [path.join(ROOT, 'scripts', 'make-test-media.sh')], { stdio: 'inherit' });
   if (r.status !== 0) throw new Error('Could not generate the test clips (is ffmpeg installed?).');
 }

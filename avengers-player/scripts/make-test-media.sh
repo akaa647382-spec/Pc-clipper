@@ -62,6 +62,10 @@ long_clip() {   # name seconds second-of-the-flash
 long_clip original-length.mp4 10871 9031.5
 long_clip encore-length.mp4 11110 9031.5
 long_clip encore-short.mp4 10896 9056.5
+# A copy far longer than the film (3:20:00), as if four minutes of intro came before it: the flash is
+# 240 s later than in ENDGAME. Named like the 2019 film, it is taken for that film, and the wide
+# search has to reach that far.
+long_clip endgame-extended.mp4 12000 9271.5
 # The ENCORE clip with English subtitles inside: "Iron Man." goes off screen at 2:30:55.75, just under a
 # second before the flash. (And a forced-only English track first, which must not be the one read.)
 if [[ ! -f "$out/encore-subs.mkv" ]]; then

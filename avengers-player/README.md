@@ -2,17 +2,24 @@
 
 A Windows video player that starts *Avengers: Endgame* by itself on December 31, keeps the film locked to the clock
 for the whole two and a half hours, and lands the snap on **12:00:00 AM**: the very frame on which his fingers snap,
-found in your own file and put on midnight to the millisecond. It works with *Avengers: Endgame* (3:01:11) and with
-*Avengers Endgame: Encore* (3:01:36).
+found in your own file and put on midnight to the millisecond. It works with any copy of *Avengers: Endgame* or
+*Avengers Endgame: Encore*: Remux, Blu-ray or WEB rip, 4K or 1080p, whatever its exact length.
 
-**[Download the installer](../download/Avengers-Player-Setup-1.3.1.exe)** (Windows 10 / 11, 64-bit, about 93 MB).
+**[Download the installer](../download/Avengers-Player-Setup-1.4.0.exe)** (Windows 10 / 11, 64-bit, about 93 MB).
 You bring your own copy of the movie. Nothing is uploaded anywhere.
+
+Older version, kept as it was: **[1.3.0 (legacy)](../download/Avengers-Player-Setup-1.3.0-legacy.exe)**. Only one
+version is installed at a time: installing one over the other asks first, then replaces it; settings are kept.
 
 ![The player with the countdown running](docs/player.png)
 
 ## Install
 
-1. Run `Avengers-Player-Setup-1.3.1.exe`. It installs for your user only, so there is no administrator prompt.
+1. Run `Avengers-Player-Setup-1.4.0.exe`. It installs for your user only, so there is no administrator prompt.
+   If Avengers Player is already installed, Setup says so first and asks: *update it to 1.4.0?*, *replace it
+   (install it again)?*, or, when the installed one is newer, *replace it with this version?* **Yes** puts the new
+   version into the folder of the old one (your settings, snap points and an armed countdown stay); **No** leaves
+   everything as it is.
 2. Windows may show a blue box, "Windows protected your PC". That appears for any new app that is not signed by a
    company. Click **More info → Run anyway**. (If *Smart App Control* is switched on, Windows offers no such button.)
 3. Start **Avengers Player** from the desktop or the Start menu.
@@ -70,7 +77,7 @@ The app only says **found** when nothing else could explain what it saw:
 | What the app saw | What it does |
 |---|---|
 | A clean white-out that begins between 0.75 s before and 2 s after the line, and no other flash there | Sets the snap point on its first frame, marked as found |
-| No subtitles to ask: one clean white-out of at least 0.3 s near where the snap is expected, no other flash in sight, and no other white-out in the 150 s the wide search covers | The same |
+| No subtitles to ask: one clean white-out of at least 0.3 s near where the snap is expected, no other flash in sight, and no other white-out in the stretch the wide search covers | The same |
 | One clean white-out, but only the wide search found it, far from where the snap was expected, and no subtitles | Sets the snap point there (the countdown is calibrated) but marks it *not confirmed*: the strip asks you to look, one click confirms it |
 | The line, but no flash anywhere | Sets an estimate 0.1 s after the line, marked *not confirmed*, and asks you to pick the frame |
 | Two flashes (white, or bright but not white) and nothing to choose between them; a flash that is not right after the line; a flash that flickers (white, darker, white); a brief brighter moment right before a cut to white; frames the PC skipped where the flash begins; a climb that began before the stretch looked at; a start too soft to name its first frame; a white-out too short; a subtitle file nobody has checked that puts the line more than 3 s away | Changes nothing, says why, and shows you the frames |
@@ -82,19 +89,24 @@ second (each picture shown two or three times) is handled too.
 
 Where the app looks: every frame from 3 s before to 7 s after where the snap is expected (or, when trusted subtitles
 put the line somewhere else, around the line first); if that does not settle it, a quick sweep of 150 s and a frame by
-frame look at the white-out it shows. Every film file remembers its own snap point, so any number of copies can be set
+frame look at the white-out it shows. For a copy longer or shorter than the 2019 film the sweep reaches as far as the
+difference could have moved the snap, up to five minutes either way. Every film file remembers its own snap point, so any number of copies can be set
 once and then swapped freely. Starting the countdown with a snap point that was never confirmed asks first. **FIND THE
 SNAP** (Mission tab, or Setup → Snap point) runs the search again at any time, and the frame buttons in Setup still
 work by hand. **Setup → Copy the details** copies what the last search saw, frame by frame, as text.
 
 ## Which version of the film?
 
-The app tells the two cuts apart by the length of the file (**Setup → Film version** shows it and lets you change it).
+Copies of the film differ in length: a Remux, a Blu-ray rip and a WEB copy of the same 2019 film can run 3:00:57,
+3:01:11 or 3:02:05, depending on logos, the studio intro and how the credits end. So the length decides only whether
+a file is the film at all: **any file from 2:45:00 to 3:30:00 is taken for the film and searched for the snap
+automatically**, whoever made it. Which cut it is, the app reads from the file's name: *Encore* or *2026* in the name
+is the re-release, any other name the 2019 film. **Setup → Film version** shows what it read and lets you change it.
 
-| Cut | Length | Snap point |
+| Cut | Usual length | Snap point |
 |---|---|---|
-| *Avengers: Endgame* (2019) | 3:01:11 | a moment after 2:30:30; found in the file |
-| *Avengers Endgame: Encore* (2026) | 3:01:36 | found in the file; the search covers the extra 25 seconds |
+| *Avengers: Endgame* (2019) | about 3:01 | a moment after 2:30:30; found in the file |
+| *Avengers Endgame: Encore* (2026) | about 3:01:36 | found in the file; the search covers the extra 25 seconds |
 
 For neither cut is the snap point taken from a table: it is found in the file when the file is imported, as
 described above. Until a snap point has been found or picked, the pre-flight list keeps a line saying so.
@@ -117,8 +129,8 @@ These are subtitle timings, good to a few tenths of a second, not frame counts: 
 picture. For Encore, a scene-by-scene guide puts
 the first new scene at 2:48:50
 ([CinemaBlend](https://www.cinemablend.com/movies/i-grabbed-avengers-endgame-encore-doomsday-scene-timestamps)), after
-the snap. Other lengths than 3:01:36 have been published for Encore; a file longer than 3:01:24 is treated as Encore
-whatever its exact length.
+the snap. Other lengths than 3:01:36 have been published for Encore, which is one more reason the app goes by the
+name and finds the snap in the file instead of trusting any length.
 
 ## If you are late
 
@@ -151,6 +163,13 @@ clock is past it. **L** locks the controls so a slip cannot happen at all.
 Top left of the picture: the **digital clock**, the **date** under it, and the **countdown** under that. For the last ten
 seconds the countdown grows inside that panel and ticks 10, 9, 8 … Nothing is drawn across the picture. At midnight the
 date rolls over from December 31 to January 1.
+
+**Everything ticks with the clock.** Every countdown (overlay, standby screen, Mission tab, the late box) and the
+film's own time on the control bar change on the same instant as the clock's seconds, also when the start time falls
+between two seconds (9:29:28.6, say). While the film is locked to the clock (in sync, and again after a slip, a
+recalibration, or a crash and restart) its time is counted on the clock's seconds, and as the clock turns 12:00:00 it
+shows the second that holds the snap. Only while the film is out of sync (paused, dragged, stuck) does the bar show
+where the film really is, so you can see that it is off; it ticks with the clock again as soon as it is back in sync.
 
 | Key | |
 |---|---|

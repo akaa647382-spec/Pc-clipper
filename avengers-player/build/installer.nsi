@@ -14,9 +14,15 @@
 ; Design notes
 ;   * Per-user install into %LOCALAPPDATA%\Programs. Nothing needs
 ;     administrator rights, so there is never a UAC prompt.
+;   * Already installed: Setup says so and asks first ("update it to x.y.z?",
+;     "replace it?", or "a newer version is installed: replace it?"). On yes
+;     the welcome and folder pages are skipped and the new version goes into
+;     the folder of the old one; on no Setup quits. In silent mode the answer
+;     is yes.
 ;   * Upgrades: a running copy is closed first, then the previous version's
 ;     own uninstaller removes its files, then the new files are copied. The
-;     user's settings live in %APPDATA% and are never touched.
+;     user's settings live in %APPDATA% and are never touched, and a
+;     countdown's "start at sign-in" entry is put back.
 ;   * The uninstaller deletes exactly the files this installer copied (the
 ;     generated list) and then removes the folder only if it is empty. It
 ;     never does "RMDir /r $INSTDIR": if someone installs into a folder that
@@ -76,6 +82,12 @@ InstallDirRegKey HKCU "${UNINSTALL_KEY}" "InstallLocation"
 !include "LogicLib.nsh"
 !include "WinVer.nsh"
 !include "x64.nsh"
+!include "WordFunc.nsh"
+
+; The copy already on this PC, if any (found in .onInit).
+Var OldDir      ; its folder, "" when there is none
+Var OldVer      ; its version, "" when unknown
+Var Replacing   ; "1" once the user agreed to replace it
 
 ; ---------------------------------------------------------------------------
 ; Pages
@@ -92,7 +104,11 @@ InstallDirRegKey HKCU "${UNINSTALL_KEY}" "InstallLocation"
 !define MUI_FINISHPAGE_RUN_TEXT "Launch ${APP_NAME}"
 !define MUI_FINISHPAGE_NOREBOOTSUPPORT
 
+; Replacing a copy that is already installed: no welcome, no folder to choose
+; (the new version goes where the old one is).
+!define MUI_PAGE_CUSTOMFUNCTION_PRE SkipWhenReplacing
 !insertmacro MUI_PAGE_WELCOME
+!define MUI_PAGE_CUSTOMFUNCTION_PRE SkipWhenReplacing
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
@@ -218,6 +234,49 @@ FunctionEnd
 ; Installer
 ; ---------------------------------------------------------------------------
 
+Function SkipWhenReplacing
+  ${If} $Replacing == "1"
+    Abort
+  ${EndIf}
+FunctionEnd
+
+; Finds a copy that is already installed and asks whether to replace it.
+Function AskToReplace
+  StrCpy $Replacing "0"
+  ReadRegStr $OldDir HKCU "${UNINSTALL_KEY}" "InstallLocation"
+  ReadRegStr $OldVer HKCU "${UNINSTALL_KEY}" "DisplayVersion"
+  ${If} $OldDir == ""
+  ${OrIfNot} ${FileExists} "$OldDir\${APP_EXE}"
+    ; Not registered, or not where the registry says: a copy in the folder
+    ; Setup would use still counts.
+    StrCpy $OldVer ""
+    StrCpy $OldDir ""
+    ${If} ${FileExists} "$INSTDIR\${APP_EXE}"
+      StrCpy $OldDir "$INSTDIR"
+    ${EndIf}
+  ${EndIf}
+  ${If} $OldDir == ""
+    Return
+  ${EndIf}
+
+  ${If} $OldVer == ""
+    StrCpy $0 "${APP_NAME} is already installed on this PC.$\r$\n$\r$\nDo you want to replace it with version ${APP_VERSION}?"
+  ${Else}
+    ${VersionCompare} "${APP_VERSION}" "$OldVer" $1
+    ${If} $1 == "1"
+      StrCpy $0 "${APP_NAME} $OldVer is already installed on this PC.$\r$\n$\r$\nDo you want to update it to version ${APP_VERSION}?"
+    ${ElseIf} $1 == "0"
+      StrCpy $0 "${APP_NAME} ${APP_VERSION} is already installed on this PC.$\r$\n$\r$\nDo you want to replace it (install it again)?"
+    ${Else}
+      StrCpy $0 "A newer version of ${APP_NAME} ($OldVer) is already installed on this PC.$\r$\n$\r$\nDo you want to replace it with version ${APP_VERSION}?"
+    ${EndIf}
+  ${EndIf}
+  MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON1 "$0$\r$\n$\r$\nThe program in $OldDir is replaced. Your settings, snap points and countdown are kept. If ${APP_NAME} is open, Setup closes it first.$\r$\n$\r$\nYes: replace it.   No: leave it as it is." /SD IDYES IDYES replace
+  Quit
+  replace:
+  StrCpy $Replacing "1"
+FunctionEnd
+
 Function .onInit
   ${IfNot} ${RunningX64}
     MessageBox MB_OK|MB_ICONSTOP "${APP_NAME} needs a 64-bit version of Windows 10 or Windows 11.$\r$\n$\r$\nThis computer runs 32-bit Windows, so Setup cannot continue." /SD IDOK
@@ -230,11 +289,16 @@ Function .onInit
     Abort
     proceed:
   ${EndIf}
+  Call AskToReplace
 FunctionEnd
 
 Section "${APP_NAME}" SecApp
   SectionIn RO
   SetShellVarContext current
+
+  ; An armed countdown starts the app at sign-in. The old version's uninstaller
+  ; takes that entry away: note it, and put it back for the new version.
+  ReadRegStr $R5 HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "AvengersPlayer"
 
   Call CloseRunningApp
   Call RemovePreviousVersion
@@ -242,6 +306,10 @@ Section "${APP_NAME}" SecApp
   SetOutPath "$INSTDIR"
   SetOverwrite on
   File /r "${SOURCE_DIR}\*"
+
+  ${If} $R5 != ""
+    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "AvengersPlayer" '"$INSTDIR\${APP_EXE}"'
+  ${EndIf}
 SectionEnd
 
 Section "-Register"

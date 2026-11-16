@@ -3929,10 +3929,13 @@
       setText(el.phClock, cp.ampm ? cp.hms + ' ' + cp.ampm : cp.hms);
       setText(el.phDate, C.DAYS[date.getDay()] + ' · ' + C.MONTHS[date.getMonth()] + ' ' + date.getDate() + ' · ' + date.getFullYear());
 
-      /* slower panel work, about 8 times a second */
+      /* slower panel work, about 8 times a second, and always on the frame the clock's second
+         changes, so the countdown on the status card ticks with the clock */
       const p = performance.now();
-      if (p - this.lastSlow > 120 || this.dirty.all) {
+      const second = Math.floor(now / 1000);
+      if (p - this.lastSlow > 120 || this.dirty.all || second !== this.lastSlowSecond) {
         this.lastSlow = p;
+        this.lastSlowSecond = second;
         this.renderStatus(now, toStart, toSnap, newYear);
         if (this.tab === 'sync') this.renderSync(now);
         if (this.tab === 'setup') this.renderSetupLive();

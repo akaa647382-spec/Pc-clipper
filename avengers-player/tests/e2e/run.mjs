@@ -2243,6 +2243,149 @@ const scenarios = {
       check('settings and the last movie survive a restart', kept.theme === 'hotrod' && kept.snap === 83.5 && kept.view === 'player', JSON.stringify(kept));
       check('no page errors', s.errors.length === 0, s.errors.join(' | '));
     } finally { await s.close(); }
+  },
+
+  async ticks() {
+    // Every countdown, and the film's own time while it is locked to the clock, change on the same
+    // frame as the clock's seconds. The snap is put at 1:40.4, so the film starts between two seconds.
+    const s = await launch(newProfile());
+    try {
+      check('loads the movie', await loadMovie(s.page, MOVIE));
+      await setSnap(s.page, SNAP + 0.4);
+      await s.page.evaluate(() => window.__AP.Versions.confirm());
+      // Every frame, what the screen shows.
+      const sample = (forMs, untilEpoch) => s.page.evaluate(async ({ forMs, untilEpoch }) => {
+        const g = (id) => document.getElementById(id).textContent;
+        const { Clock, Engine } = window.__AP;
+        const v = document.getElementById('video');
+        const out = [];
+        const end = performance.now() + forMs;
+        while (performance.now() < end && !(untilEpoch && Clock.now() > untilEpoch)) {
+          await new Promise((r) => requestAnimationFrame(r));
+          const se = Engine.session;
+          out.push({ now: Clock.now(), start: se ? se.startEpoch : 0, target: se ? se.targetEpoch : 0, phase: Engine.phase, cur: v.currentTime,
+            clock: g('phClock'), card: g('stBig'), sb: g('sbCount'), ov: g('ovCountVal'), time: g('timeLabel') });
+        }
+        return out;
+      }, { forMs, untilEpoch: untilEpoch || 0 });
+      // How often `key` changed, how often without the clock, and how often the clock changed without it.
+      const together = (rows, key, when) => {
+        const r = { changes: 0, alone: 0, missed: 0, frames: 0 };
+        for (let i = 1; i < rows.length; i++) {
+          if (!when(rows[i]) || !when(rows[i - 1])) continue;
+          r.frames++;
+          const c = rows[i].clock !== rows[i - 1].clock;
+          const k = rows[i][key] !== rows[i - 1][key];
+          if (k) r.changes++;
+          if (k && !c) r.alone++;
+          if (c && !k) r.missed++;
+        }
+        return r;
+      };
+      const ok = (r, n) => r.changes >= n && r.alone === 0 && r.missed === 0;
+      const secs = (txt) => { const p = txt.split(' / ')[0].split(':').map(Number); return p.reduce((a, x) => a * 60 + x, 0); };
+
+      // 1. Armed, waiting for a start at x.6 s.
+      await armIn(s.page, 7);
+      check('armed, waiting for the start', await waitPhase(s.page, 'standby', 5000));
+      const start = await s.page.evaluate(() => window.__AP.Engine.session.startEpoch);
+      check('the start falls between two seconds', start % 1000 !== 0, String(start % 1000));
+      let rows = await sample(3500);
+      const waiting = (r) => r.phase === 'standby' && r.start - r.now > 1000;
+      let t = together(rows, 'sb', waiting);
+      check('the standby countdown ticks on the same frame as the clock', ok(t, 3), JSON.stringify(t));
+      t = together(rows, 'card', waiting);
+      check('the countdown on the status card too', ok(t, 3), JSON.stringify(t));
+      t = together(rows, 'ov', waiting);
+      check('and the countdown in the clock panel', ok(t, 3), JSON.stringify(t));
+
+      // 2. The film starts by itself and runs locked to the clock: its time ticks with the clock.
+      check('the film starts and syncs', await waitSynced(s.page, 15000));
+      await sleep(300);
+      rows = await sample(3500);
+      const locked = (r) => r.phase === 'synced';
+      t = together(rows, 'time', locked);
+      check('in sync, the film\'s time changes on the same frame as the clock', ok(t, 3), JSON.stringify(t));
+      const far = rows.filter((r) => locked(r) && (Math.floor(r.cur + 1e-6) - secs(r.time) < 0 || Math.floor(r.cur + 1e-6) - secs(r.time) > 1));
+      check('and is the film\'s own second (or the one before, for less than a second)', far.length === 0, far.slice(0, 3).map((r) => r.time + ' at ' + r.cur.toFixed(3)).join(' | '));
+
+      // 3. A slip: the bar shows where the film really is; recalibrated, it ticks with the clock again.
+      await s.page.evaluate(() => document.getElementById('video').pause());
+      check('a pause is a slip', await waitPhase(s.page, 'slipped', 4000));
+      rows = await sample(1600);
+      const stuck = rows.filter((r) => r.phase === 'slipped');
+      check('out of sync, the bar shows the film where it stopped, not the clock', stuck.length > 10 && stuck.every((r) => r.time === stuck[0].time && secs(r.time) === Math.floor(r.cur + 1e-6)), stuck.length ? stuck[0].time + ' at ' + stuck[0].cur.toFixed(3) : 'no rows');
+      await s.page.keyboard.press('r');
+      check('R recalibrates', await waitSynced(s.page, 12000));
+      await sleep(300);
+      rows = await sample(2500);
+      t = together(rows, 'time', locked);
+      check('back in sync, the film\'s time ticks with the clock again', ok(t, 2), JSON.stringify(t));
+
+      // 4. The snap: as the clock's second turns to the target, the film's time turns to 1:40, the
+      //    second that holds the snap (at 1:40.4).
+      await s.page.click('#armBtn');
+      await s.page.click('#armBtn');
+      await aimAt(s.page, -93);
+      await waitFor(s.page, () => !document.getElementById('late').hidden, null, 3000);
+      await s.page.keyboard.press('Enter');
+      check('joined late, in sync', await waitSynced(s.page, 12000));
+      const target = await s.page.evaluate(() => window.__AP.Engine.session.targetEpoch);
+      rows = await sample(12000, target + 1500);
+      const i = rows.findIndex((r) => r.now >= target);
+      const at = i > 0 ? rows[i] : null;
+      const before = i > 0 ? rows[i - 1] : null;
+      check('the frame the clock reaches the target, the film\'s time turns from 1:39 to 1:40',
+        !!at && before.phase === 'synced' && at.clock !== before.clock && /^1:40 \//.test(at.time) && /^1:39 \//.test(before.time),
+        at ? before.time + ' -> ' + at.time + ' (' + before.clock + ' -> ' + at.clock + ', film at ' + at.cur.toFixed(3) + ')' : 'never reached');
+      t = together(rows, 'time', locked);
+      check('and all through the last seconds before it, the film\'s time ticked with the clock', ok(t, 3), JSON.stringify(t));
+      await s.page.click('#armBtn');
+      await s.page.click('#armBtn');
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally { await s.close(); }
+  },
+
+  async anycopy() {
+    // Copies of the film come in any length. A 3:20:00 copy whose snap is four minutes later than in
+    // the 2019 film is searched by itself, as far as its extra length reaches; a copy named as the
+    // 2019 film is that film, whatever its length.
+    const EXTENDED = path.join(MEDIA, 'endgame-extended.mp4');
+    const ENCORE = path.join(MEDIA, 'encore-short.mp4');
+    if (![EXTENDED, ENCORE].every((f) => fs.existsSync(f))) { console.log('  note  long test clips missing: run scripts/make-test-media.sh'); return; }
+    const info = (page) => page.evaluate(() => ({ version: window.__AP.cfg.filmVersion, snap: window.__AP.cfg.snapSec, card: document.getElementById('fileMeta').textContent, preflight: document.getElementById('preflight').textContent }));
+    const searching = (page, timeout) => waitFor(page, () => !document.getElementById('modal').hidden && /Finding the snap in this film/.test(document.getElementById('modalTitle').textContent), null, timeout || 15000);
+    const shows = (page, id, re) => waitFor(page, ({ id, src }) => new RegExp(src).test(document.getElementById(id).textContent), { id, src: re.source }, 5000);
+    const dir = newProfile();
+    const alias = (file, name) => { const to = path.join(dir, name); try { fs.linkSync(file, to); } catch (e) { fs.copyFileSync(file, to); } return to; };
+    const s = await launch(newProfile());
+    try {
+      // A 3:01:36 file named as a 2019 Blu-ray: the 2019 film, searched by itself. (Skipped at once.)
+      await loadMovie(s.page, alias(ENCORE, 'Avengers.Endgame.2019.1080p.BluRay.x264-GROUP.mp4'));
+      await sleep(500);
+      let v = await info(s.page);
+      check('a 3:01:36 copy named as the 2019 film is the 2019 film', v.version === 'original' && /^Endgame · /.test(v.card), v.version + ' | ' + v.card);
+      check('and is searched by itself', await searching(s.page));
+      await s.page.click('#modalActions button');
+      await waitFor(s.page, () => !window.__AP.SnapCam.busy && document.getElementById('modal').hidden, null, 8000);
+
+      // The 3:20:00 copy.
+      await loadMovie(s.page, EXTENDED);
+      await sleep(500);
+      v = await info(s.page);
+      check('a 3:20:00 copy is taken for the film', v.version === 'original' && /^Endgame · /.test(v.card), v.version + ' | ' + v.card);
+      check('it is searched by itself', await searching(s.page));
+      check('the wide search reaches as far as its extra length: to 2:35:30', await waitFor(s.page, () => /Searching from 2:29:45 to 2:35:30/.test(document.getElementById('modalNote').textContent), null, 40000), await s.page.textContent('#modalNote'));
+      check('it ends with the film strip', await stripOpen(s.page, 240000));
+      const f = await stripView(s.page);
+      v = await info(s.page);
+      check('the white-out four minutes on is set: 2:34:31.668', Math.abs(v.snap - 9271.668) < 1e-6 && Math.abs(f.selT - 9271.6667) < 0.01, v.snap + ' | ' + f.title);
+      check('far from where it was expected and with no subtitles: the strip asks for one look', /^Is this the snap\?$/.test(f.title) && /The snap was not where it was expected/.test(f.note), f.title + ' | ' + f.note.slice(0, 200));
+      check('the countdown is calibrated to it: the movie starts at 9:25:28 PM', await shows(s.page, 'ktStart', /Dec 31 · 9:25:28 PM/), await s.page.textContent('#ktStart'));
+      await s.page.keyboard.press('Escape');
+      await stripClosed(s.page);
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally { await s.close(); }
   }
 };
 
