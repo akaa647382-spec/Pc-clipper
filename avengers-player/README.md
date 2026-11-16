@@ -5,14 +5,14 @@ for the whole two and a half hours, and lands the snap on **12:00:00 AM**: the v
 found in your own file and put on midnight to the millisecond. It works with *Avengers: Endgame* (3:01:11) and with
 *Avengers Endgame: Encore* (3:01:36).
 
-**[Download the installer](../download/Avengers-Player-Setup-1.3.0.exe)** (Windows 10 / 11, 64-bit, about 93 MB).
+**[Download the installer](../download/Avengers-Player-Setup-1.3.1.exe)** (Windows 10 / 11, 64-bit, about 93 MB).
 You bring your own copy of the movie. Nothing is uploaded anywhere.
 
 ![The player with the countdown running](docs/player.png)
 
 ## Install
 
-1. Run `Avengers-Player-Setup-1.3.0.exe`. It installs for your user only, so there is no administrator prompt.
+1. Run `Avengers-Player-Setup-1.3.1.exe`. It installs for your user only, so there is no administrator prompt.
 2. Windows may show a blue box, "Windows protected your PC". That appears for any new app that is not signed by a
    company. Click **More info → Run anyway**. (If *Smart App Control* is switched on, Windows offers no such button.)
 3. Start **Avengers Player** from the desktop or the Start menu.
