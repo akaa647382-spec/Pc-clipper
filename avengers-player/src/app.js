@@ -57,7 +57,7 @@
       setArmed() {},
       async measureTime() { return { ok: false, offsetMs: 0, uncertaintyMs: Infinity, method: 'none', servers: [], at: Date.now() }; },
       async ffLocate() { return null; },
-      ffPick: async () => null, ffProbe: no, ffConvert: no, ffDownload: no, ffExtractSub: no,
+      ffPick: async () => null, ffProbe: no, ffConvert: no, ffDownload: no, ffExtractSub: no, ffSubWindow: no,
       async ffCancel() { return true; },
       onFfProgress() {},
       async appInfo() { return { version: 'dev', electron: '', chrome: '', platform: 'browser', logFile: '', isTest: false }; },
@@ -118,7 +118,9 @@
     if (c.snapByFile && typeof c.snapByFile === 'object' && !Array.isArray(c.snapByFile)) {
       for (const k of Object.keys(c.snapByFile).slice(-24)) {
         const m = c.snapByFile[k];
-        if (m && typeof m === 'object' && m.snapSec > 0 && m.snapSec < 86400) byFile[k] = { snapSec: +m.snapSec, version: String(m.version || 'custom'), confirmed: !!m.confirmed };
+        if (m && typeof m === 'object' && m.snapSec > 0 && m.snapSec < 86400) {
+          byFile[k] = { snapSec: +m.snapSec, version: String(m.version || 'custom'), confirmed: !!m.confirmed, how: typeof m.how === 'string' ? m.how.slice(0, 16) : '', searched: !!m.searched };
+        }
       }
     }
     c.snapByFile = byFile;
@@ -343,6 +345,9 @@
       video.playbackRate = 1;
       applyVolume();
       if (cfg.armed) Versions.guess = C.guessFilmVersion(video.duration); else Versions.onImport();
+      // Every copy of the film is timed a little differently: the app looks for the snap in this one.
+      SnapCam.autoFor = opts.retry || opts.afterError ? 0 : token;
+      SnapCam.autoSince = performance.now();
       Engine.session = Engine.computeFree();
       UI.showPlayer();
       UI.refreshAll();
@@ -812,13 +817,23 @@
       const m = info ? cfg.snapByFile[this.key(info)] : null;
       return m && m.snapSec > 0 ? m : null;
     },
-    /** Notes the snap point of the loaded file as it is now. */
-    put() {
+    /**
+     * Notes the snap point of the loaded file as it is now.
+     *   extra.how       how it was arrived at: 'flash+line', 'flash' (found by the app), 'user'
+     *                   (picked from the frames), 'estimate' (from the subtitles), 'typed'
+     *   extra.searched  the app has looked for the snap in this file (it does that once)
+     */
+    put(extra) {
       if (!Media.info) return;
+      extra = extra || {};
       const key = this.key(Media.info);
       const confirmed = snapConfirmed();
+      const was = cfg.snapByFile[key] || {};
       delete cfg.snapByFile[key];                // put back last: the newest entries are the ones kept
-      cfg.snapByFile[key] = { snapSec: cfg.snapSec, version: cfg.filmVersion, confirmed: confirmed };
+      cfg.snapByFile[key] = {
+        snapSec: cfg.snapSec, version: cfg.filmVersion, confirmed: confirmed,
+        how: extra.how != null ? extra.how : (was.how || ''), searched: !!(extra.searched || was.searched)
+      };
       // A point confirmed in one copy of a cut is where any other copy of that cut starts from.
       const cut = Versions.guess;
       if (confirmed && cut) {
@@ -838,7 +853,7 @@
     inherit(from, to) {
       const m = this.get(from);
       if (!m || !to) return;
-      cfg.snapByFile[this.key(to)] = { snapSec: m.snapSec, version: m.version, confirmed: m.confirmed };
+      cfg.snapByFile[this.key(to)] = { snapSec: m.snapSec, version: m.version, confirmed: m.confirmed, how: m.how || '', searched: !!m.searched };
       save();
     }
   };
@@ -919,7 +934,8 @@
     confirm() {
       cfg.snapConfirmedFor = snapKey();
       save();
-      SnapMemory.put();
+      const mem = SnapMemory.get(Media.info);
+      SnapMemory.put(mem && /^flash/.test(mem.how || '') ? null : { how: 'user' });      // somebody looked at it
       UI.dirty.preflight = true;
       Engine.logEvent('Snap point confirmed in this file: ' + C.fmtDuration(cfg.snapSec, { ms: true, forceHours: true }));
     }
@@ -1036,6 +1052,24 @@
           });
           return;
         }
+        if (!opts.snapOk && !snapConfirmed() && Frames.supported && Clock.now() < this.computeFree().startEpoch) {
+          // The mistake this app exists to prevent: a snap that lands a second or two off, because
+          // the snap point was never checked against the picture. (Somebody joining late has no
+          // time for this and is not asked.)
+          Modal.open({
+            title: 'Find the snap first?',
+            html: 'The snap point of this file, <b>' + esc(C.fmtDuration(cfg.snapSec, { ms: cfg.snapSec % 1 !== 0, forceHours: true })) + '</b>, has not been checked against the picture. ' +
+              '“2:30:30” is a round figure: in the film the fingers snap a moment later, so the snap could land a second or two after the clock.' +
+              '<br><br>Finding the exact frame takes about fifteen seconds.',
+            actions: [
+              { label: 'Cancel', onClick: () => Modal.close() },
+              { label: 'Start anyway', onClick: () => { Modal.close(); this.arm(Object.assign({}, opts, { snapOk: true })); } },
+              { label: 'Find the snap', primary: true, onClick: () => { Modal.close(); SnapCam.find(); } }
+            ],
+            onEscape: () => Modal.close()
+          });
+          return;
+        }
         if (cfg.muted || cfg.volume < 0.05) {
           // A mute left over from a rehearsal would make the whole film silent.
           cfg.muted = false;
@@ -1069,11 +1103,26 @@
       tellArmed(true);
       const joining = !opts.restore && Clock.now() >= s.startEpoch;      // the film should already be running
       this.logEvent((opts.restore ? 'Countdown resumed' : joining ? 'Joined late' : 'Countdown armed') + ': movie starts ' + C.fmtDateTime(s.startEpoch, cfg.use24h));
-      if (!opts.restore && !joining && !snapConfirmed()) toast('Armed. The snap point is not confirmed in this file yet: press “Find the snap”.');
+      if (!opts.restore && !joining && !snapConfirmed()) toast('Armed with a snap point that has not been checked. The Snap test shows whether it lands.');
       UI.onMode();
       // Not awaited: before the start time this only finishes when the film starts, and whoever
       // armed (startup, the button) has other things to do meanwhile.
       this.recalibrate(joining ? 'late' : 'arm').catch((e) => this.logEvent('Recalibration failed: ' + (e && e.message)));
+    },
+
+    /**
+     * An armed countdown that is still waiting for the start lets go of the film for a moment
+     * (the app looks for the snap in a movie that was just imported). It stays armed on disk, so
+     * a crash in that moment restarts armed; arm({ restore: true }) takes the film back.
+     */
+    lend() {
+      this.token++;
+      this.dropWaiter();
+      this.mode = 'free';
+      this.lentAt = performance.now();
+      this.setPhase('idle');
+      UI.onMode();
+      this.logEvent('The armed countdown lets go of the film for a moment');
     },
 
     /** Abandons whoever is waiting for the clock, telling them so. */
@@ -1506,6 +1555,19 @@
       if (perf < this.st.settleUntil) return;
 
       const now = Clock.now();
+      SnapCam.autoTick(perf);
+      // Armed on disk but not in memory, with a movie loaded and nothing going on: that must never
+      // last. Whatever let go of the film, the countdown takes it back.
+      if (this.mode !== 'armed' && cfg.armed && Number.isFinite(cfg.armedTarget) && Media.ready && !Media.loading && !SnapCam.busy && !this.test && !Modal.isOpen) {
+        this.strayMs = (this.strayMs || 0) + 200;
+        if (this.strayMs >= 3000) {
+          this.strayMs = 0;
+          this.logEvent('The countdown was armed but not running: taking the film back');
+          this.arm({ restore: true });
+        }
+      } else {
+        this.strayMs = 0;
+      }
       if (this.mode !== 'armed') {
         this.session = this.computeFree();
         this.trackAudio();
@@ -1838,11 +1900,28 @@
 
     /* ---- "Find the snap" ---- */
 
-    /** The line "And I... am... Iron Man." in the loaded subtitles, in film time. */
-    line() {
-      if (!SubsUI.loaded) return null;
-      const hit = C.findSnapLine(SubsUI.cues, cfg.snapSec - cfg.subDelay);
-      return hit ? { start: hit.start + cfg.subDelay, end: hit.end + cfg.subDelay, text: hit.text } : null;
+    /**
+     * The line "And I... am... Iron Man." in film time: from the subtitles that are loaded, or
+     * failing that from the subtitles inside the movie itself (FFmpeg reads them). The snap
+     * follows the end of that line by a second or so in every release, so it finds the scene in
+     * any cut. Returns { start, end, text, from } or null.
+     */
+    async line() {
+      if (SubsUI.loaded) {
+        const hit = C.findSnapLine(SubsUI.cues, cfg.snapSec - cfg.subDelay);
+        if (hit) return { start: hit.start + cfg.subDelay, end: hit.end + cfg.subDelay, text: hit.text, from: 'the subtitles' };
+      }
+      const inside = ((Media.probe && Media.probe.subtitles) || []).some((x) => x.isText);
+      if (!inside || !SubsCore || !Media.info || !Media.info.path || !native.isNative) return null;
+      try {
+        const from = Math.max(0, cfg.snapSec - 240);
+        const r = await native.ffSubWindow(Media.info.path, from, 600, cfg.audioLang);
+        if (!r || !r.srt) return null;
+        const hit = C.findSnapLine(SubsCore.parse(r.srt, 'window.srt').cues || [], cfg.snapSec);
+        return hit ? { start: hit.start, end: hit.end, text: hit.text, from: 'the subtitles inside the movie' } : null;
+      } catch (e) {
+        return null;
+      }
     },
 
     /**
@@ -1923,30 +2002,106 @@
       return frames;
     },
 
-    /** Looks for the snap in the film and opens the strip on it. */
-    async find() {
+    /**
+     * A movie was imported: when nothing is in the way, look for its snap. Called 5 times a second.
+     * Only a file that is a cut of the film and has never been searched or set is looked at; a
+     * countdown that is armed lends the film only when the user has just imported the movie and
+     * the start is more than ten minutes away.
+     */
+    autoTick(perf) {
+      if (!this.autoFor) return;
+      if (this.autoFor !== Media.loadToken || !Media.ready || !Frames.supported || !Versions.guess) { this.autoFor = 0; return; }
+      if (snapConfirmed() || SnapMemory.get(Media.info)) { this.autoFor = 0; return; }     // this file has its answer, or was searched
+      // Wait while something else has the floor: a dialog (the sound fix), the sound check, a test.
+      if (this.busy || this.view || Modal.isOpen || AudioFix.running || Media.checking || !Media.inspected || Media.loading || Engine.test) return;
+      if (el.app.dataset.view !== 'player' || video.seeking || perf - (this.autoSince || 0) < 1500) return;
+      if (Engine.mode === 'armed') {
+        if (!Media.byUser || Engine.phase !== 'standby' || Engine.session.startEpoch - Clock.now() < 10 * 60000) { this.autoFor = 0; return; }
+      } else if (Late.position() != null || !video.paused) {
+        this.autoFor = 0;                      // the film should be running, or somebody is watching: hands off
+        return;
+      }
+      this.autoFor = 0;
+      this.find({ auto: true });
+    },
+
+    /**
+     * After an automatic search: is the evidence good enough to put the snap point on the frame
+     * without asking? Two witnesses: the flash in the picture, and the line "…Iron Man." in the
+     * subtitles, which the snap follows by a moment in every cut.
+     *   both agree, or a clear flash with no subtitles to ask  ->  the snap point is set (found)
+     *   the line but no flash                                  ->  an estimate just after the line
+     *   they disagree, or nothing                              ->  nothing is changed
+     * Returns { how, old, after } or null.
+     */
+    decide(frames, line) {
+      const flash = C.findFlash(frames, { expect: cfg.snapSec });
+      const flashAt = flash ? frames[flash.rise].t : null;
+      const after = line && flash ? flashAt - line.end : null;
+      const agree = after != null && after > -0.75 && after < 4;
+      const old = cfg.snapSec;
+      if (flash && flash.kind === 'white' && (line ? agree : flash.duration >= 0.3)) {
+        const next = Math.round((flashAt + 0.001) * 1000) / 1000;
+        const how = line ? 'flash+line' : 'flash';
+        applySnap(next, { confirmed: true, how: how, quiet: true });
+        if (Math.abs(cfg.snapSec - next) > 0.0005) return null;
+        Engine.logEvent('Snap found by the app at ' + fmtFilm(next) + ' (it was ' + fmtFilm(old) + '): the flash' +
+          (line ? ', ' + after.toFixed(2) + ' s after the line ends at ' + fmtFilm(line.end) : ', with no subtitles to check it against'));
+        return { how: how, old: old, after: after };
+      }
+      if (!flash && line && line.end + 0.3 < video.duration - 2) {
+        const next = Math.round((line.end + 0.3) * 1000) / 1000;
+        applySnap(next, { confirmed: false, how: 'estimate', quiet: true });
+        if (Math.abs(cfg.snapSec - next) > 0.0005) return null;
+        Engine.logEvent('Snap point estimated from the subtitles: ' + fmtFilm(next) + ' (the line ends at ' + fmtFilm(line.end) + ', no flash was found)');
+        return { how: 'estimate', old: old, after: null };
+      }
+      Engine.logEvent('The app looked for the snap and could not decide by itself' + (flash && line ? ': the flash at ' + fmtFilm(flashAt) + ' is not right after the line that ends at ' + fmtFilm(line.end) : flash ? ': the flash it found is not a clear white-out' : ': no flash and no subtitles'));
+      return null;
+    },
+
+    /**
+     * Looks for the snap in the film.
+     *   by hand (the buttons): the strip opens on what was found; nothing changes until the user
+     *     presses the button on a frame.
+     *   opts.auto (after an import): when the evidence is good enough the snap point is put on
+     *     the frame at once and the countdown is calibrated to it; the strip then shows the frame
+     *     that was chosen. Otherwise the strip opens for the user to choose.
+     */
+    async find(opts) {
+      opts = opts || {};
       if (this.busy || this.view || Modal.isOpen) return;
       if (!Media.ready) { toast('Import the movie first'); return; }
-      if (Engine.mode !== 'free' || Engine.test) { toast('Stop the countdown to look for the snap'); return; }
-      if (!Frames.supported) { UI.openSnapFinder(); return; }
+      if (Engine.test) { toast('End the test run first'); return; }
+      if (Engine.mode !== 'free' && !(opts.auto && Engine.phase === 'standby')) { toast('Stop the countdown to look for the snap'); return; }
+      if (!Frames.supported) { if (!opts.auto) UI.openSnapFinder(); return; }
       if (Media.checking) { toast('One moment: the sound is still being checked'); return; }
       this.busy = true;
       this.cancelled = false;
+      // An armed countdown that is still waiting for the start lends the film for the search.
+      const lent = Engine.mode !== 'free';
+      if (lent) Engine.lend();
       const token = Media.loadToken;
       const snap = cfg.snapSec;
       const dur = video.duration;
       const stop = () => { this.cancelled = true; };
       Modal.open({
-        title: 'Looking for the snap',
-        html: 'The app is playing the part of the film around the snap, without sound, and looking at every frame. This takes a few seconds.',
+        title: opts.auto ? 'Finding the snap in this film' : 'Looking for the snap',
+        html: (opts.auto ? 'Every copy of the film is timed a little differently, so the app finds the snap in yours and sets the countdown by it. ' : '') +
+          'The app is playing the part of the film around the snap, without sound, and looking at every frame. This takes a few seconds' + (opts.auto ? ', once per file.' : '.') +
+          (lent ? ' The countdown stays armed.' : ''),
         progress: true, note: 'Starting…',
-        actions: [{ label: 'Cancel', onClick: stop }],
+        actions: [{ label: opts.auto ? 'Skip' : 'Cancel', onClick: stop }],
         onEscape: stop
       });
       let frames = [];
       let wide = false;
-      const line = this.line();
+      let line = null;
+      let applied = null;
       try {
+        Modal.progress(0, 'Reading the subtitles around the snap…');
+        line = await this.line();
+        if (this.cancelled || !Media.ready) throw new Error('cancelled');
         // 1. Around where the snap is thought to be (or just after the line, if the subtitles put
         //    the scene somewhere else in this copy): every frame.
         const centre = line && Math.abs(line.end + 1.5 - snap) > 6 ? line.end + 1.5 : snap;
@@ -1954,32 +2109,45 @@
         let flash = C.findFlash(frames, { expect: snap });
         if (!flash && !this.cancelled && Media.ready) {
           // 2. Not there: this copy is cut differently. Sweep a wide stretch quickly, brightness only.
-          const a = Math.max(0, snap - 45);
-          const b = Math.min(dur - 0.5, snap + 105);
+          const a = Math.max(0, centre - 45);
+          const b = Math.min(dur - 0.5, centre + 105);
           const sweep = await this.capture(a, b, 5, false, (f) => Modal.progress(0.5 + f * 0.35, 'Not there. Searching from ' + C.fmtDuration(a, { forceHours: true }) + ' to ' + C.fmtDuration(b, { forceHours: true }) + '…'));
           const hit = C.findFlash(sweep, { expect: snap, minDur: 0.2 });
           if (hit && !this.cancelled && Media.ready) {
             const c = sweep[hit.start].t;
-            frames = await this.capture(c - 3.5, c + 3.5, 1, true, (f) => Modal.progress(0.85 + f * 0.15, 'Found a flash at ' + C.fmtDuration(c, { forceHours: true }) + '. Taking it frame by frame…'));
-            flash = C.findFlash(frames, { expect: c });
-            wide = true;
+            const closer = await this.capture(c - 3.5, c + 3.5, 1, true, (f) => Modal.progress(0.85 + f * 0.15, 'Found a flash at ' + C.fmtDuration(c, { forceHours: true }) + '. Taking it frame by frame…'));
+            if (closer.length >= 6) { frames = closer; wide = true; }
           }
         }
         if (!this.cancelled && Media.ready) frames = await this.fill(frames);
       } catch (e) {
-        Engine.logEvent('Looking for the snap failed: ' + (e && e.message));
+        if (!this.cancelled) Engine.logEvent('Looking for the snap failed: ' + (e && e.message));
       }
       this.sink = null;
       this.busy = false;
-      if (Media.ready && token === Media.loadToken) {
+      const mine = Media.ready && token === Media.loadToken;
+      if (mine) {
         video.playbackRate = 1;
         if (!video.paused) video.pause();
         applyVolume();                         // the user's own mute and volume come back
       }
       Modal.close();
-      if (this.cancelled || token !== Media.loadToken || !Media.ready || Engine.mode !== 'free') return;
-      if (frames.length < 6) { toast('That part of the film could not be played. Use the frame buttons in Setup.', 'bad'); UI.openSnapFinder(); return; }
-      this.open({ mode: 'find', frames: frames, line: line, wide: wide });
+      const usable = mine && !this.cancelled && Engine.mode === 'free' && frames.length >= 6;
+      try {
+        if (usable && opts.auto) {
+          applied = this.decide(frames, line);
+          SnapMemory.put({ searched: true });    // found or not: this file has been looked at
+        }
+      } finally {
+        // The countdown takes the film back, whatever happened above.
+        if (lent && mine && cfg.armed && Engine.mode === 'free') Engine.arm({ restore: true });
+      }
+      if (!mine || this.cancelled) return;
+      if (frames.length < 6) {
+        if (!opts.auto) { toast('That part of the film could not be played. Use the frame buttons in Setup.', 'bad'); UI.openSnapFinder(); }
+        return;
+      }
+      this.open({ mode: 'find', frames: frames, line: line, wide: wide, applied: applied, auto: !!opts.auto });
     },
 
     /* ---- the strip ---- */
@@ -2038,11 +2206,27 @@
         note = 'The frame marked ' + clockText + ' is the one the app put on that moment: it came on screen ' + arrived + '. ' +
           (v.flash ? (landed ? 'The flash of the snap begins on that very frame.' : 'The flash of the snap begins ' + Math.abs(flashAt - frames[v.now].t).toFixed(3) + ' s ' + (flashAt > frames[v.now].t ? 'later' : 'earlier') + ', on the frame marked SNAP?.') : 'No flash was found in these frames.') +
           ' Pick the frame where his fingers snap and press the button.';
+      } else if (v.applied && v.applied.how !== 'estimate') {
+        const sess = Engine.session;
+        title = 'Snap found: ' + fmtFilm(cfg.snapSec);
+        note = 'The app has put the snap on the frame marked SET NOW: the flash begins there' +
+          (v.applied.how === 'flash+line' ? ', ' + Math.abs(v.applied.after).toFixed(1) + ' s after the line “…Iron Man.” goes off screen' : '') +
+          (sess ? '. The movie now starts at ' + C.fmtClock(new Date(sess.startEpoch), cfg.use24h) : '') +
+          '. If that is the frame where his fingers snap, press the button; if not, ' + (v.readOnly ? 'stop the countdown and use “Find the snap”.' : 'pick the right frame first.');
+      } else if (v.applied) {
+        title = 'Where does he snap?';
+        note = 'No flash was found in the picture. By the subtitles the snap comes a moment after ' + fmtFilm(v.line.end) + ', so the app has set ' + fmtFilm(cfg.snapSec) +
+          ' for now. Step through the frames and press the button on the one where his fingers snap.';
       } else {
         title = v.flash ? 'Found it: check the frame' : 'Where does he snap?';
-        note = (v.line ? 'The line “' + v.line.text.slice(0, 40) + '” ends at ' + fmtFilm(v.line.end) + '. ' : '') +
-          (v.flash ? 'The screen turns ' + (v.flash.kind === 'white' ? 'white' : 'bright') + ' at ' + fmtFilm(frames[v.flash.start].t) + '; the flash begins on the frame marked SNAP?. Check it against the picture, step a frame with ← → if needed, then press the button.'
-            : 'No flash was found' + (v.wide ? '' : ' near the snap point') + '. Step through the frames and press the button on the one where his fingers snap.');
+        // The line and the flash are two independent witnesses: say whether they agree.
+        const afterLine = v.line && v.flash ? flashAt - v.line.end : null;
+        const agree = afterLine != null && afterLine > -0.75 && afterLine < 4;
+        note = (v.line ? 'The line “' + v.line.text.slice(0, 40) + '” ends at ' + fmtFilm(v.line.end) + ' (' + v.line.from + '). ' : '') +
+          (v.flash ? 'The screen turns ' + (v.flash.kind === 'white' ? 'white' : 'bright') + ' at ' + fmtFilm(frames[v.flash.start].t) + '; the flash begins on the frame marked SNAP?' +
+              (afterLine == null ? '' : agree ? ', ' + Math.abs(afterLine).toFixed(1) + ' s ' + (afterLine >= 0 ? 'after' : 'before') + ' the end of that line, as it should' : '. Careful: that is not right after that line, so it may be another flash') +
+              '. Check it against the picture, step a frame with ← → if needed, then press the button.'
+            : 'No flash was found' + (v.wide ? '' : ' near the snap point') + '. Step through the frames and press the button on the one where his fingers snap' + (v.line ? ': it is a moment after that line' : '') + '.');
       }
       setText(el.stripTitle, title);
       setText(el.stripNote, note);
@@ -2053,7 +2237,15 @@
       el.stage.classList.add('has-strip');
       setHidden(el.strip, false);
       UI.hideSlip();
-      this.select(v.flash ? v.flash.rise : (v.ref >= 0 ? v.ref : 0), true);
+      // Where to begin: the flash; with no flash, the end of the line (the snap is a moment after
+      // it) when the search was for the snap, else the frame that is set; else the first frame.
+      let first = v.flash ? v.flash.rise : -1;
+      if (first < 0 && v.line && v.mode === 'find' && v.line.end >= frames[0].t && v.line.end <= frames[frames.length - 1].t) {
+        first = 0;
+        for (let i = 1; i < frames.length; i++) if (Math.abs(frames[i].t - v.line.end) < Math.abs(frames[first].t - v.line.end)) first = i;
+      }
+      if (first < 0) first = v.ref;
+      this.select(Math.max(0, first), true);
       Engine.logEvent('Film strip opened (' + v.mode + '): ' + frames.length + ' frames from ' + fmtFilm(frames[0].t) + ' to ' + fmtFilm(frames[frames.length - 1].t) +
         (v.flash ? ', flash begins at ' + fmtFilm(flashAt) : ', no flash found') +
         (v.offMs != null ? ', the frame at ' + fmtFilm(frames[v.now].t) + ' came on screen ' + arrived : '') +
@@ -2552,7 +2744,7 @@
         save();
         SnapMemory.inherit(source, r.movie);        // the same picture, frame for frame: the same snap point
         Engine.logEvent('Sound fixed: ' + r.movie.name + (what ? ' (' + what + (keep ? ', other languages kept' : '') + ')' : ''));
-        const ok = await Media.load(r.movie);
+        const ok = await Media.load(r.movie, { byUser: true });
         if (ok) toast('Sound fixed' + (what ? ' (' + what + ')' : '') + '. Now using ' + r.movie.name, 'good');
         return;
       }
@@ -3017,8 +3209,16 @@
         if (cfg.muted || cfg.volume < 0.05) items.push([false, 'The player is muted', 'Press M or raise the volume. Starting the countdown switches the sound back on.']);
         if (v.duration >= cfg.snapSec + 2) {
           items.push([true, 'The file reaches the snap point', 'Snap at ' + C.fmtDuration(cfg.snapSec, { ms: cfg.snapSec % 1 !== 0 })]);
-          if (snapConfirmed()) items.push([true, 'Snap point confirmed in this file', '']);
-          else items.push([null, 'Snap point not confirmed in this file yet', '2:30:30 is a round number: the real snap is a moment later. Press “Find the snap” below, or run the Snap test: both show you the frames, and one click sets it.']);
+          const how = (SnapMemory.get(Media.info) || {}).how;
+          const at = C.fmtDuration(cfg.snapSec, { ms: true, forceHours: true });
+          if (snapConfirmed()) {
+            items.push([true, 'Snap point confirmed in this file', at + (how === 'flash+line' ? ' · found by the app: the flash, right after the line “…Iron Man.”'
+              : how === 'flash' ? ' · found by the app: the flash of the snap' : how === 'user' ? ' · picked from the frames' : '')]);
+          } else if (how === 'estimate') {
+            items.push([null, 'Snap point not confirmed in this file yet', at + ' is an estimate from the subtitles: no flash was found. Press “Find the snap” below and pick the frame.']);
+          } else {
+            items.push([null, 'Snap point not confirmed in this file yet', '2:30:30 is a round number: the real snap is a moment later. Press “Find the snap” below, or run the Snap test: both show you the frames, and one click sets it.']);
+          }
         }
         else items.push([false, 'The file ends before the snap point', 'It is only ' + C.fmtDuration(v.duration) + ' long. Wrong file, or set the snap point in Setup.']);
       } else {
@@ -3459,15 +3659,15 @@
     if (Versions.guess) cfg.filmVersion = Versions.guess.id;
     else if (cur.snapSec == null || Math.abs(cur.snapSec - cfg.snapSec) > 0.0005) cfg.filmVersion = 'custom';
     cfg.rehearsed = {};
-    if (opts.confirmed) cfg.snapConfirmedFor = snapKey();      // the user pointed at the frame: that is a confirmation
+    if (opts.confirmed) cfg.snapConfirmedFor = snapKey();      // somebody (or the app) pointed at the frame: that is a confirmation
     save();
-    SnapMemory.put();
+    SnapMemory.put({ how: opts.how || (opts.confirmed ? 'user' : 'typed') });
     Engine.session = Engine.computeFree();
     UI.renderSettings();
     el.snapInput.value = C.fmtDuration(cfg.snapSec, { ms: true, forceHours: true });
     UI.dirty.all = true;
     UI.dirty.preflight = true;
-    toast('Snap point set to ' + C.fmtDuration(cfg.snapSec, { ms: true, forceHours: true }), 'good');
+    if (!opts.quiet) toast('Snap point set to ' + C.fmtDuration(cfg.snapSec, { ms: true, forceHours: true }), 'good');
   }
 
   function wire() {

@@ -503,6 +503,19 @@ function registerIpc() {
 
   ipcMain.handle('ff:cancel', () => { if (ffAbort) ffAbort.abort(); return true; });
 
+  // The subtitles of a stretch of the movie: used to find the line before the snap.
+  ipcMain.handle('ff:sub-window', async (e, file, fromSec, durSec, preferLang) => {
+    if (!own(e) || !ffmpeg || typeof file !== 'string') return { error: 'FFmpeg helper unavailable.' };
+    try {
+      const exe = await ffPath();
+      if (!exe) return { error: 'FFmpeg not found.', missing: true };
+      const r = await ffmpeg.subtitleWindow(exe, file, Number(fromSec) || 0, Number(durSec) || 600, { preferLang: typeof preferLang === 'string' ? preferLang : '' });
+      return r || { none: true };
+    } catch (err) {
+      return ffError(err);
+    }
+  });
+
   ipcMain.handle('ff:extract-sub', async (e, file, subIndex) => {
     if (!own(e) || !ffmpeg || typeof file !== 'string') return { error: 'FFmpeg helper unavailable.' };
     try {

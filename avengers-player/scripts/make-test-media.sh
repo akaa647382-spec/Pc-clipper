@@ -39,6 +39,14 @@ if [[ ! -f "$out/snap-wide.mp4" ]]; then
      -c:v libx264 -preset ultrafast -crf 30 -g 48 -c:a aac -b:a 96k -movflags +faststart "$out/snap-wide.mp4"
 fi
 
+# The same scene with subtitles inside the file: the line before the snap ends at 1:40.6, just
+# under a second before the flash begins.
+if [[ ! -f "$out/snap-subs.mkv" ]]; then
+  printf '1\n00:01:33,000 --> 00:01:35,000\nI am... inevitable.\n\n2\n00:01:36,500 --> 00:01:37,400\nAnd I...\n\n3\n00:01:37,600 --> 00:01:38,300\nam...\n\n4\n00:01:39,100 --> 00:01:40,600\n<i>Iron Man.</i>\n\n5\n00:02:20,000 --> 00:02:22,000\nMr. Stark?\n' > "$out/snap-subs.tmp.srt"
+  ff -i "$out/snap-scene.mp4" -i "$out/snap-subs.tmp.srt" -map 0 -map 1 -c copy -c:s srt -metadata:s:s:0 language=eng "$out/snap-subs.mkv"
+  rm -f "$out/snap-subs.tmp.srt"
+fi
+
 # Tiny clips with the real lengths of the film, to test recognising the cut and finding the snap
 # three hours in: ENDGAME (3:01:11), ENCORE (3:01:36) and a longer copy (3:05:10). Each has the
 # flash of a snap: a second and a half after 2:30:30 in the 3:01:11 and 3:05:10 clips, and 25 s

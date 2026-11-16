@@ -480,6 +480,32 @@ async function extractSubtitle(ffmpegPath, input, subIndex, outputSrt, opts) {
   return outputSrt;
 }
 
+/**
+ * The text subtitles of one stretch of the movie, as SRT text with the cue times as they are in
+ * the film. Reading a few minutes out of a three-hour file takes a second or two, where pulling
+ * out the whole track can take a minute.
+ *
+ *   preferLang  the subtitle language wanted (English unless given); the first text track otherwise
+ * Returns { srt, track: { index, lang, title } }, or null when the movie has no text subtitles.
+ */
+async function subtitleWindow(ffmpegPath, input, fromSec, durSec, opts) {
+  opts = opts || {};
+  const info = await probe(ffmpegPath, input);
+  const text = info.subtitles.filter((sub) => sub.isText);
+  if (!text.length) return null;
+  const want = Core.normLang(opts.preferLang) || 'eng';
+  const track = text.find((sub) => Core.trackLang(sub) === want && !/forced|sign|song/i.test(sub.title || '')) ||
+    text.find((sub) => Core.trackLang(sub) === want) || text[0];
+  const from = Math.max(0, Number(fromSec) || 0);
+  const dur = Math.max(1, Math.min(3600, Number(durSec) || 600));
+  // -copyts keeps the film's own times on the cues although only a stretch is read.
+  const r = await run(ffmpegPath, ['-hide_banner', '-nostdin', '-loglevel', 'error', '-copyts', '-ss', String(from), '-t', String(dur), '-i', input,
+    '-map', '0:s:' + track.index, '-c:s', 'srt', '-f', 'srt', '-'], { timeoutMs: opts.timeoutMs || 25000, maxBytes: 2 * 1024 * 1024 });
+  if (r.timedOut) throw new Error('Reading the subtitles took too long.');
+  if (r.code !== 0 && !r.stdout) throw new Error('The subtitles could not be read from the movie: ' + (lastLines(r.stderr, 2) || 'unknown error'));
+  return { srt: r.stdout, track: { index: track.index, lang: Core.trackLang(track), title: track.title || '' } };
+}
+
 /* ---------------------------------------------------------------- download */
 
 // The same pinned builds PC Clipper uses: fixed URLs with known SHA-256 fingerprints.
@@ -735,6 +761,7 @@ module.exports = {
   convertArgs: convertArgs,
   suggestOutputPath: suggestOutputPath,
   extractSubtitle: extractSubtitle,
+  subtitleWindow: subtitleWindow,
   download: download,
   extractFfmpegFromZip: extractFfmpegFromZip,
   SOURCES: SOURCES

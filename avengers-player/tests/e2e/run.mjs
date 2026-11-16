@@ -35,6 +35,15 @@ async function setSnap(page, sec) {
   await page.click('.tab[data-tab="mission"]');
 }
 
+/** "Find the snap first?": answers the way somebody in a hurry would. Returns whether it was asked. */
+function startAnyway(page) {
+  return page.evaluate(() => {
+    if (document.getElementById('modal').hidden || !/Find the snap first/.test(document.getElementById('modalTitle').textContent)) return false;
+    Array.from(document.querySelectorAll('#modalActions button')).find((b) => /Start anyway/.test(b.textContent)).click();
+    return true;
+  });
+}
+
 /** Arms the real countdown with the movie due to start `startInSec` from now. */
 async function armIn(page, startInSec) {
   await page.evaluate(({ startInSec, snap }) => {
@@ -46,6 +55,7 @@ async function armIn(page, startInSec) {
     Engine.session = Engine.computeFree();
   }, { startInSec, snap: SNAP });
   await page.click('#armBtn');
+  await startAnyway(page);
 }
 
 /** Largest gap between the film and the clock over a stretch of playback, sampled directly from the video element. */
@@ -716,6 +726,7 @@ const scenarios = {
         Engine.session = Engine.computeFree();
       }, { snap: SNAP });
       await s.page.click('#armBtn');
+      await startAnyway(s.page);
       await waitPhase(s.page, 'standby', 5000);
       const toStart = () => s.page.evaluate(() => (window.__AP.Engine.session.startEpoch - window.__AP.Clock.now()) / 1000);
       const t0 = await toStart();
@@ -852,6 +863,38 @@ const scenarios = {
       check('the message names both lengths', /3:20/.test(await s.page.textContent('#modalBody')) && /2:30:30/.test(await s.page.textContent('#modalBody')), await s.page.textContent('#modalBody'));
       await s.page.click('#modalActions .btn-primary');
 
+      // A snap point that was never checked against the picture: the mistake this app exists to prevent.
+      await setSnap(s.page, SNAP);
+      await aimAt(s.page, 600);
+      await s.page.click('#armBtn');
+      const asked = async () => !(await s.page.isHidden('#modal')) && /Find the snap first/.test(await s.page.textContent('#modalTitle'));
+      check('starting the countdown with an unchecked snap point asks first', await asked() && (await state(s.page)).mode === 'free' && /0:01:40/.test(await s.page.textContent('#modalBody')) && /round figure/.test(await s.page.textContent('#modalBody')), await s.page.textContent('#modalBody'));
+      check('with three ways on: cancel, start anyway, find the snap', (await s.page.$$eval('#modalActions button', (b) => b.map((x) => x.textContent).join(' | '))) === 'Cancel | Start anyway | Find the snap');
+      await s.page.click('#modalActions .btn-primary');
+      check('“Find the snap” starts the search', await waitFor(s.page, () => !document.getElementById('modal').hidden && /Looking for the snap/.test(document.getElementById('modalTitle').textContent), null, 3000) && (await state(s.page)).mode === 'free');
+      await s.page.click('#modalActions button');
+      await waitFor(s.page, () => !window.__AP.SnapCam.busy && document.getElementById('modal').hidden, null, 6000);
+      await s.page.click('#armBtn');
+      check('it asks again the next time', await asked());
+      check('“Start anyway” starts the countdown', await startAnyway(s.page) && await waitPhase(s.page, 'standby', 5000) && (await state(s.page)).mode === 'armed');
+      await s.page.click('#armBtn');
+      await s.page.click('#armBtn');
+      await s.page.evaluate(() => window.__AP.Versions.confirm());
+      await s.page.click('#armBtn');
+      check('with the snap point confirmed nothing is asked', !(await asked()) && await waitPhase(s.page, 'standby', 5000));
+      await s.page.click('#armBtn');
+      await s.page.click('#armBtn');
+      await aimAt(s.page, -20);
+      await waitFor(s.page, () => !document.getElementById('late').hidden, null, 3000);
+      await setSnap(s.page, SNAP + 1);
+      await aimAt(s.page, -20);
+      await s.page.keyboard.press('Enter');
+      check('somebody joining late is not held up by the question', !(await asked()) && await waitSynced(s.page, 12000));
+      await s.page.click('.tab[data-tab="mission"]');
+      await s.page.click('#armBtn');
+      await s.page.click('#armBtn');
+      await s.page.evaluate(() => { window.__AP.cfg.targetMode = 'newyear'; window.__AP.Engine.session = window.__AP.Engine.computeFree(); });
+
       // A mute left over from a rehearsal.
       await setSnap(s.page, SNAP);
       await s.page.keyboard.press('m');
@@ -939,119 +982,169 @@ const scenarios = {
     // Tiny clips with the real lengths: ENDGAME (3:01:11), ENCORE (3:01:36) and a longer copy (3:05:10).
     // Each has the flash of a snap in it: 1.67 s after 2:30:30 in the first and the last, 25 s later
     // than that in the 3:01:36 clip. They run at 6 frames a second, so a frame is 0.167 s long.
+    // The app is expected to find the snap in each of them BY ITSELF when the file is imported.
     const ENDGAME = path.join(MEDIA, 'original-length.mp4');
     const ENCORE = path.join(MEDIA, 'encore-short.mp4');
     const LONGER = path.join(MEDIA, 'encore-length.mp4');
     if (![ENDGAME, ENCORE, LONGER].every((f) => fs.existsSync(f))) { console.log('  note  long test clips missing: run scripts/make-test-media.sh'); return; }
     const info = (page) => page.evaluate(() => {
       const g = (id) => document.getElementById(id);
+      const mem = window.__AP.cfg.snapByFile;
       return {
         version: window.__AP.cfg.filmVersion, snap: window.__AP.cfg.snapSec, dur: g('video').duration, card: g('fileMeta').textContent, point: g('ktPoint').textContent,
         start: g('ktStart').textContent, target: g('ktSnap').textContent, preflight: g('preflight').textContent, picker: g('filmVersion').value,
         options: Array.from(g('filmVersion').options).map((o) => o.textContent), note: g('filmVersionNote').textContent,
-        lengthNote: g('filmLengthNote').hidden ? '' : g('filmLengthNote').textContent, findBtn: !g('findSnapBtn').hidden
+        lengthNote: g('filmLengthNote').hidden ? '' : g('filmLengthNote').textContent, findBtn: !g('findSnapBtn').hidden,
+        files: Object.keys(mem).length, mode: window.__AP.Engine.mode, phase: window.__AP.Engine.phase, armed: window.__AP.cfg.armed
       };
     });
+    const searching = (page, timeout) => waitFor(page, () => !document.getElementById('modal').hidden && /Finding the snap in this film/.test(document.getElementById('modalTitle').textContent), null, timeout || 12000);
+    // The panel is redrawn a few times a second: wait for a text rather than read it at once.
+    const shows = (page, id, re) => waitFor(page, ({ id, src }) => new RegExp(src).test(document.getElementById(id).textContent), { id, src: re.source }, 4000);
+    const quiet = async (page, forMs) => {       // nothing starts by itself for a while
+      const end = Date.now() + forMs;
+      while (Date.now() < end) {
+        if (await page.evaluate(() => window.__AP.SnapCam.busy || !!window.__AP.SnapCam.view || !document.getElementById('modal').hidden)) return false;
+        await sleep(250);
+      }
+      return true;
+    };
+    // The same film under another name, without using more disk: a second name for the same file.
+    const dir = newProfile();
+    const alias = (file, name) => { const to = path.join(dir, name); try { fs.linkSync(file, to); } catch (e) { fs.copyFileSync(file, to); } return to; };
+    const importAsUser = (page, file) => page.evaluate(async (f) => window.__AP.Media.load(await window.apNative.openMovie(f), { byUser: true }), file);
+
     const s = await launch(newProfile());
     try {
-      // 1. ENDGAME, 3:01:11.
+      // 1. ENDGAME, 3:01:11: imported, and the app finds the snap by itself.
       await loadMovie(s.page, ENDGAME);
-      await sleep(600);
+      await sleep(500);
       let v = await info(s.page);
       check('the version list is ENDGAME 3:01:11, ENCORE 3:01:36 and a custom cut', v.options.length === 3 && /Endgame \(2019\) · 3:01:11/.test(v.options[0]) && /Encore \(2026\) · 3:01:36/.test(v.options[1]), JSON.stringify(v.options));
-      check('a 3:01:11 file is ENDGAME', v.version === 'original' && v.picker === 'original' && /^Endgame · /.test(v.card), v.version + ' | ' + v.card);
-      check('it starts from 2:30:30 and the 9:29:30 PM start', v.snap === 9030 && /Dec 31 · 9:29:30 PM/.test(v.start) && /Jan 1 · 12:00:00 AM/.test(v.target), v.point + ' | ' + v.start);
-      check('and says that 2:30:30 is not the last word', /Snap point not confirmed in this file yet/.test(v.preflight) && /round number/.test(v.preflight) && v.findBtn);
+      check('a 3:01:11 file is ENDGAME, starting from the round figure 2:30:30', v.version === 'original' && /^Endgame · /.test(v.card) && v.snap === 9030 && /Dec 31 · 9:29:30 PM/.test(v.start), v.version + ' | ' + v.card + ' | ' + v.snap);
+      check('the app starts looking for the snap by itself', await searching(s.page));
+      check('and says what it is doing', /Every copy of the film is timed a little differently/.test(await s.page.textContent('#modalBody')) && /once per file/.test(await s.page.textContent('#modalBody')));
+      check('it ends with the film strip', await stripOpen(s.page, 60000));
+      let f = await stripView(s.page);
+      v = await info(s.page);
+      check('the snap point is already set: 2:30:31.668, where the flash begins, 1.668 s after the round figure', Math.abs(v.snap - 9031.668) < 1e-6 && v.version === 'original', v.snap + ' ' + v.version);
+      check('the countdown is calibrated to it: the movie starts at 9:29:28 PM', await shows(s.page, 'ktStart', /Dec 31 · 9:29:28 PM/) && /Jan 1 · 12:00:00 AM/.test(v.target), v.start);
+      check('the pre-flight list says the app found it, and how', await shows(s.page, 'preflight', /Snap point confirmed in this file2:30:31\.668 · found by the app: the flash of the snap/) && !(await info(s.page)).findBtn, v.preflight.slice(0, 260));
+      check('the strip shows the frame it chose', /^Snap found: 2:30:31\.668$/.test(f.title) && /The app has put the snap on the frame marked SET NOW/.test(f.note) && /The movie now starts at 9:29:28 PM/.test(f.note) &&
+        Math.abs(f.selT - 9031.6667) < 0.01 && Math.abs(f.nowT - 9031.6667) < 0.01 && f.ok === 'Yes, the snap is on this frame' && f.tags.includes('now:SET NOW') && f.tags.includes('pick:SNAP?'), f.title + ' | ' + f.note.slice(0, 200) + ' | ' + f.tags.join(','));
+      check('with the film itself paused on that frame, sound and speed untouched', f.paused && f.videoT >= 9031.666 && f.videoT < 9031.834 && !f.muted && f.rate === 1, JSON.stringify({ t: f.videoT, muted: f.muted, rate: f.rate }));
+      await shot(s.page, 'versions-auto-endgame');
+      await s.page.keyboard.press('Enter');
+      check('Enter agrees and closes the strip', await stripClosed(s.page) && Math.abs((await info(s.page)).snap - 9031.668) < 1e-6);
 
-      // 2. The Snap test with the round number: the film is on the clock, the snap is not.
+      // 2. The Snap test proves it.
       await s.page.click('.tab[data-tab="test"]');
       await s.page.selectOption('#tsLeadSnap', '20');
       await s.page.click('[data-test="snap"]');
-      check('locks on 20 s before the snap, two and a half hours into the file', await waitSynced(s.page, 12000));
-      let st = await state(s.page);
-      check('the film is at about 2:30:10', Math.abs(st.t - 9010) < 6, C_fmt(st.t));
-      const toSnap = await s.page.evaluate(() => window.__AP.Engine.session.targetEpoch - window.__AP.Clock.now());
-      await sleep(Math.max(0, toSnap + 1500));
-      const at = await s.page.evaluate(() => ({ since: (window.__AP.Clock.now() - window.__AP.Engine.session.targetEpoch) / 1000, t: document.getElementById('video').currentTime }));
-      check('at midnight the film is exactly at 2:30:30', at.since > 0 && Math.abs((at.t - 9030) - at.since) < 0.25, 'film ' + (at.t - 9030).toFixed(3) + ' s past 2:30:30, clock ' + at.since.toFixed(3) + ' s past midnight');
-      check('after the test the film strip opens', await stripOpen(s.page, 40000));
-      let f = await stripView(s.page);
-      check('it shows the frame the app put on 12:00:00: the one at 2:30:30', f.mode === 'test' && Math.abs(f.nowT - 9030) < 0.01 && Math.abs(f.offMs) < 60, f.nowT + ', ' + Math.round(f.offMs) + ' ms');
-      check('and finds the flash of the snap 1.667 s later', !!f.flash && Math.abs(f.flash.rise - 9031.6667) < 0.01 && /1\.667 s later/.test(f.note), JSON.stringify(f.flash) + ' | ' + f.note.slice(0, 190));
-      check('the frame of the flash is selected, with its film time to the millisecond', Math.abs(f.selT - 9031.6667) < 0.01 && f.time === '2:30:31.667' && /^1\.667 s after the frame put on 12:00:00$/.test(f.rel), f.time + ' | ' + f.rel);
-      await shot(s.page, 'versions-strip-endgame');
-      await s.page.click('#stripOk');
-      await sleep(500);
-      v = await info(s.page);
-      check('one click puts the snap on the moment that frame comes on screen: 2:30:31.668', Math.abs(v.snap - 9031.668) < 1e-6 && /Snap point confirmed in this file/.test(v.preflight), v.snap + ' | ' + v.point);
-      check('the start moves with it, to 9:29:28 PM', /Dec 31 · 9:29:28 PM/.test(v.start), v.start);
-      check('a dialog offers the Snap test again', await s.page.isVisible('#modal') && /Snap point set to 2:30:31\.668/.test(await s.page.textContent('#modalTitle')) && /1\.668 s later/.test(await s.page.textContent('#modalBody')), await s.page.textContent('#modalTitle'));
-      await s.page.click('#modalActions .btn-primary');
-      check('the second test runs', await waitSynced(s.page, 12000));
-      check('and its strip opens', await stripOpen(s.page, 60000));
+      check('Snap test: locks on 20 s before the snap, two and a half hours into the file', await waitSynced(s.page, 12000));
+      const st = await state(s.page);
+      check('the film is at about 2:30:11', Math.abs(st.t - 9011.7) < 6, C_fmt(st.t));
+      check('after the test the strip opens', await stripOpen(s.page, 60000));
       f = await stripView(s.page);
-      check('now the frame put on 12:00:00 is the frame of the flash, and it came on screen within 60 ms of it', Math.abs(f.nowT - 9031.6667) < 0.01 && !!f.flash && Math.abs(f.flash.rise - f.nowT) < 0.01 && Math.abs(f.offMs) < 60, JSON.stringify({ now: f.nowT, flash: f.flash, offMs: Math.round(f.offMs) }));
+      check('the frame put on 12:00:00 is the frame of the flash, and it came on screen within 60 ms of the clock', f.mode === 'test' && Math.abs(f.nowT - 9031.6667) < 0.01 && !!f.flash && Math.abs(f.flash.rise - f.nowT) < 0.01 && Math.abs(f.offMs) < 60, JSON.stringify({ now: f.nowT, flash: f.flash, offMs: Math.round(f.offMs) }));
       check('the strip says the snap landed', /The snap landed on 12:00:00/.test(f.title) && f.ok === 'Yes, the snap is on this frame', f.title + ' | ' + f.ok);
       await shot(s.page, 'versions-strip-landed');
       await s.page.keyboard.press('Enter');
-      check('Enter confirms and closes the strip', await stripClosed(s.page) && /Snap point confirmed in this file/.test((await info(s.page)).preflight));
+      await stripClosed(s.page);
+      await s.page.click('.tab[data-tab="mission"]');
 
-      // 3. ENCORE, 3:01:36: recognised, and its snap found by the app, 25 s further in.
+      // 3. ENCORE, 3:01:36: its snap is 25 s further in, and the app finds that too.
       await loadMovie(s.page, ENCORE);
-      await sleep(600);
-      v = await info(s.page);
-      check('a 3:01:36 file is ENCORE', v.version === 'encore' && v.picker === 'encore' && /^Encore · /.test(v.card), v.version + ' | ' + v.card);
-      check('the search starts from 2:30:30 and nothing is confirmed', v.snap === 9030 && /Snap point not confirmed in this file yet/.test(v.preflight) && v.findBtn, v.snap + '');
-      await s.page.click('.tab[data-tab="setup"]');
-      await sleep(300);
-      v = await info(s.page);
-      check('Setup says the file is 25 s longer than the 2019 film', /3:01:36 long, 25 s longer than the 2019 film/.test(v.lengthNote), v.lengthNote.slice(0, 90));
-      await s.page.click('#snapFind');
-      check('“Find the snap” searches', await waitFor(s.page, () => !document.getElementById('modal').hidden && /Looking for the snap/.test(document.getElementById('modalTitle').textContent), null, 4000));
-      check('not near 2:30:30, so it sweeps a wider stretch', await waitFor(s.page, () => /Not there\. Searching from 2:29:45 to 2:32:15/.test(document.getElementById('modalNote').textContent), null, 30000), await s.page.textContent('#modalNote'));
-      check('and opens the strip', await stripOpen(s.page, 90000));
-      f = await stripView(s.page);
-      check('on the flash at 2:30:56.667, 26.7 s after 2:30:30', f.mode === 'find' && !!f.flash && Math.abs(f.flash.rise - 9056.6667) < 0.01 && Math.abs(f.selT - 9056.6667) < 0.01 && f.time === '2:30:56.667', JSON.stringify(f.flash) + ' ' + f.time);
-      check('the film itself is paused on that frame', f.paused && f.videoT >= 9056.666 && f.videoT < 9056.834 && !f.muted && f.rate === 1, JSON.stringify({ t: f.videoT, muted: f.muted, rate: f.rate }));
-      await shot(s.page, 'versions-strip-encore');
-      await s.page.click('#stripOk');
       await sleep(500);
       v = await info(s.page);
-      check('ENCORE: snap at 2:30:56.668, the movie starts at 9:29:03 PM', Math.abs(v.snap - 9056.668) < 1e-6 && /Dec 31 · 9:29:03 PM/.test(v.start) && /Snap point confirmed/.test(v.preflight), v.snap + ' | ' + v.start);
-      await s.page.keyboard.press('Escape');
+      check('a 3:01:36 file is ENCORE', v.version === 'encore' && v.picker === 'encore' && /^Encore · /.test(v.card), v.version + ' | ' + v.card);
+      check('the search starts from 2:30:30', v.snap === 9030 && /Snap point not confirmed in this file yet/.test(v.preflight), v.snap + '');
+      check('it starts by itself', await searching(s.page));
+      check('the snap is not near 2:30:30 in this cut, so the app sweeps a wider stretch', await waitFor(s.page, () => /Not there\. Searching from 2:29:45 to 2:32:15/.test(document.getElementById('modalNote').textContent), null, 30000), await s.page.textContent('#modalNote'));
+      check('and ends with the strip', await stripOpen(s.page, 90000));
+      f = await stripView(s.page);
+      v = await info(s.page);
+      check('ENCORE: snap found at 2:30:56.668, 26.7 s after the round figure', Math.abs(v.snap - 9056.668) < 1e-6 && /^Snap found: 2:30:56\.668$/.test(f.title) && Math.abs(f.selT - 9056.6667) < 0.01, v.snap + ' | ' + f.title);
+      check('ENCORE: the movie starts at 9:29:03 PM', await shows(s.page, 'ktStart', /Dec 31 · 9:29:03 PM/) && await shows(s.page, 'preflight', /Snap point confirmed in this file/), (await info(s.page)).start);
+      await s.page.click('.tab[data-tab="setup"]');
+      await sleep(300);
+      check('Setup says the file is 25 s longer than the 2019 film', /3:01:36 long, 25 s longer than the 2019 film/.test((await info(s.page)).lengthNote));
+      await shot(s.page, 'versions-auto-encore');
+      await s.page.click('#stripCancel');
+      check('closing the strip without pressing the button keeps what the app set', await stripClosed(s.page) && Math.abs((await info(s.page)).snap - 9056.668) < 1e-6);
+      await s.page.click('.tab[data-tab="mission"]');
 
       // 4. Each file remembers its own snap point: swapping the two films needs no second search.
       await loadMovie(s.page, ENDGAME);
-      await sleep(600);
+      check('back to ENDGAME: nothing is searched again', await quiet(s.page, 4000));
       v = await info(s.page);
-      check('back to ENDGAME: its own snap point is back, confirmed', v.version === 'original' && Math.abs(v.snap - 9031.668) < 1e-6 && /Snap point confirmed in this file/.test(v.preflight) && !v.findBtn && /9:29:28 PM/.test(v.start), v.version + ' ' + v.snap);
+      check('its own snap point is back, confirmed', v.version === 'original' && Math.abs(v.snap - 9031.668) < 1e-6 && /Snap point confirmed in this file/.test(v.preflight) && /9:29:28 PM/.test(v.start), v.version + ' ' + v.snap);
       await loadMovie(s.page, ENCORE);
-      await sleep(600);
+      check('back to ENCORE: nothing is searched again', await quiet(s.page, 4000));
       v = await info(s.page);
-      check('back to ENCORE: its own snap point is back, confirmed', v.version === 'encore' && Math.abs(v.snap - 9056.668) < 1e-6 && /Snap point confirmed in this file/.test(v.preflight) && /9:29:03 PM/.test(v.start), v.version + ' ' + v.snap);
+      check('its own snap point is back, confirmed', v.version === 'encore' && Math.abs(v.snap - 9056.668) < 1e-6 && /Snap point confirmed in this file/.test(v.preflight) && /9:29:03 PM/.test(v.start), v.version + ' ' + v.snap);
 
-      // 5. The same film in another folder is still the same film; another copy of the cut starts
-      //    from what was confirmed in the first, but has to be looked at itself.
-      const elsewhere = path.join(newProfile(), path.basename(ENDGAME));
-      fs.copyFileSync(ENDGAME, elsewhere);
-      await loadMovie(s.page, elsewhere);
-      await sleep(600);
+      // 5. The same film in another folder is the same film. Another copy of a cut is searched itself.
+      const moved = path.join(newProfile(), path.basename(ENDGAME));
+      try { fs.linkSync(ENDGAME, moved); } catch (e) { fs.copyFileSync(ENDGAME, moved); }
+      await loadMovie(s.page, moved);
+      check('the ENDGAME file in another folder: not searched again', await quiet(s.page, 4000));
       v = await info(s.page);
-      check('the ENDGAME file moved to another folder keeps its confirmed snap point', Math.abs(v.snap - 9031.668) < 1e-6 && /Snap point confirmed in this file/.test(v.preflight), v.snap + '');
-      fs.unlinkSync(elsewhere);
+      check('and its confirmed snap point is kept', Math.abs(v.snap - 9031.668) < 1e-6 && /Snap point confirmed in this file/.test(v.preflight), v.snap + '');
+      fs.unlinkSync(moved);
 
       await loadMovie(s.page, LONGER);
-      await sleep(600);
+      await sleep(500);
       v = await info(s.page);
-      check('a 3:05:10 file is taken for Encore too', v.version === 'encore' && /Encore/.test(v.card), v.card);
-      check('it starts from the point confirmed in the other Encore copy, unconfirmed', Math.abs(v.snap - 9056.668) < 1e-6 && /Snap point not confirmed in this file yet/.test(v.preflight) && v.findBtn, v.snap + '');
-      await s.page.click('.tab[data-tab="mission"]');
-      await s.page.click('#findSnapBtn');
-      check('its own snap is found all the same', await stripOpen(s.page, 120000));
-      f = await stripView(s.page);
-      check('25 s earlier in this copy: 2:30:31.667', !!f.flash && Math.abs(f.flash.rise - 9031.6667) < 0.01, JSON.stringify(f.flash));
+      check('a 3:05:10 file is taken for Encore too, starting from the point found in the other Encore copy', v.version === 'encore' && Math.abs(v.snap - 9056.668) < 1e-6 && /Snap point not confirmed in this file yet/.test(v.preflight), v.card + ' ' + v.snap);
+      check('it is searched itself', await searching(s.page) && await stripOpen(s.page, 120000));
+      v = await info(s.page);
+      check('and its own snap is found, 25 s earlier in this copy: 2:30:31.668', Math.abs(v.snap - 9031.668) < 1e-6 && await shows(s.page, 'preflight', /Snap point confirmed in this file/), v.snap + '');
       await s.page.keyboard.press('Escape');
-      check('Esc closes the strip and changes nothing', await stripClosed(s.page) && Math.abs((await info(s.page)).snap - 9056.668) < 1e-6);
+      await stripClosed(s.page);
+
+      // 6. "Skip" leaves everything alone, and the file is tried again the next time it is imported.
+      const copy1 = alias(ENDGAME, 'Endgame copy one.mp4');
+      await loadMovie(s.page, copy1);
+      check('another copy of ENDGAME: searched by itself', await searching(s.page));
+      await sleep(1500);
+      await s.page.click('#modalActions button');
+      await sleep(1200);
+      const after = await s.page.evaluate(() => { const vid = document.getElementById('video'); return { strip: !!window.__AP.SnapCam.view, busy: window.__AP.SnapCam.busy, modal: !document.getElementById('modal').hidden, paused: vid.paused, muted: vid.muted, rate: vid.playbackRate }; });
+      v = await info(s.page);
+      check('Skip stops the search and changes nothing', !after.strip && !after.busy && !after.modal && after.paused && !after.muted && after.rate === 1 && /Snap point not confirmed in this file yet/.test(v.preflight), JSON.stringify(after));
+      check('the Mission tab still offers to find it', v.findBtn);
+      await loadMovie(s.page, copy1);
+      check('imported again, it is searched again', await searching(s.page) && await stripOpen(s.page, 60000));
+      check('and found', Math.abs((await info(s.page)).snap - 9031.668) < 1e-6);
+      await s.page.keyboard.press('Escape');
+      await stripClosed(s.page);
+
+      // 7. While a countdown is armed: a movie the user imports is still searched (the countdown
+      //    lends the film and takes it back); a restart after a crash searches nothing.
+      await aimAt(s.page, 1800);
+      await s.page.evaluate(() => { window.__AP.cfg.targetMode = 'newyear'; window.__AP.Engine.session = window.__AP.Engine.computeFree(); });
+      await s.page.click('#armBtn');
+      check('armed for New Year with a confirmed snap point: nothing is asked', await waitPhase(s.page, 'standby', 6000) && (await info(s.page)).mode === 'armed');
+      const copy2 = alias(ENDGAME, 'Endgame copy two.mp4');
+      await importAsUser(s.page, copy2);
+      check('armed, and the user imports another copy: the app looks for its snap', await searching(s.page, 15000));
+      check('telling the user the countdown stays armed', /The countdown stays armed/.test(await s.page.textContent('#modalBody')));
+      v = await info(s.page);
+      check('the countdown is still armed on disk while the film is lent', v.armed === true && v.mode === 'free', v.mode + ' ' + v.armed);
+      check('the strip opens', await stripOpen(s.page, 60000));
+      v = await info(s.page);
+      f = await stripView(s.page);
+      check('the countdown has the film back: armed, waiting at the start', v.mode === 'armed' && v.phase === 'standby' && v.armed === true && (await state(s.page)).t < 0.1, v.mode + ' ' + v.phase);
+      check('the snap is confirmed in the new copy, and the strip is for looking only', await shows(s.page, 'preflight', /Snap point confirmed in this file/) && Math.abs(v.snap - 9031.668) < 1e-6 && f.readOnly && f.preview, v.snap + ' ' + f.readOnly);
+      check('the start time is the calibrated one', await shows(s.page, 'ktStart', /Dec 31 · 9:29:28 PM/), v.start);
+      await s.page.keyboard.press('Escape');
+      await stripClosed(s.page);
+      const copy3 = alias(ENDGAME, 'Endgame copy three.mp4');
+      await loadMovie(s.page, copy3);
+      check('armed, and a movie is loaded without the user (a restart): nothing is searched', await quiet(s.page, 5000) && (await info(s.page)).mode === 'armed');
+      await s.page.click('#armBtn');
+      await s.page.click('#armBtn');
       check('no page errors', s.errors.length === 0, s.errors.join(' | '));
     } finally { await s.close(); }
   },
@@ -1475,6 +1568,91 @@ const scenarios = {
       check('the bars do not hide the flash: begins at 0:21.542', !!f.flash && f.flash.kind === 'white' && Math.abs(f.flash.rise - 517 / 24) < 0.002, JSON.stringify(f.flash));
       await s2.page.keyboard.press('Escape');
 
+      // Subtitles inside the movie: nothing is loaded by hand, the app reads them itself.
+      if (await s2.page.evaluate(() => window.apNative.ffLocate())) {
+        await loadMovie(s2.page, path.join(MEDIA, 'snap-subs.mkv'));
+        await setSnap(s2.page, 20);
+        await waitFor(s2.page, () => !!window.__AP.Media.probe, null, 6000);
+        check('no subtitle file is loaded', !(await s2.page.evaluate(() => window.__AP.SubsUI.loaded)));
+        await s2.page.click('#findSnapBtn');
+        check('the app reads the subtitles inside the movie and goes to the line, 80 s from the point that is set', await waitFor(s2.page, () => /Looking near 0:01:42/.test(document.getElementById('modalNote').textContent), null, 15000), await s2.page.textContent('#modalNote'));
+        check('strip', await stripOpen(s2.page, 40000));
+        f = await stripView(s2.page);
+        // (this file's times run 0.021 s later than the plain clip's: its sound starts that much before its picture)
+        check('line and flash agree, and the strip says so', !!f.flash && Math.abs(f.flash.rise - 2437 / 24) < 0.03 &&
+          /The line “And I\.\.\. am\.\.\. Iron Man\.” ends at 0:01:40\.6\d\d \(the subtitles inside the movie\)/.test(f.note) && /0\.9 s after the end of that line, as it should/.test(f.note), f.note.slice(0, 260));
+        await s2.page.keyboard.press('Escape');
+      } else {
+        console.log('  note  FFmpeg not found on this machine: subtitles inside the movie are not read');
+      }
+
+      // ---- what the app decides by itself after an import (started here the way an import starts it)
+      const auto = (page) => page.evaluate(() => { window.__AP.SnapCam.find({ auto: true }); });
+      const verdict = (page) => page.evaluate(() => {
+        const { cfg, SnapCam, Engine } = window.__AP;
+        const mem = Object.values(cfg.snapByFile).slice(-1)[0] || {};
+        return { snap: cfg.snapSec, how: mem.how, searched: mem.searched, confirmed: mem.confirmed, applied: SnapCam.view && SnapCam.view.applied ? SnapCam.view.applied.how : null,
+          title: document.getElementById('stripTitle').textContent, note: document.getElementById('stripNote').textContent, pre: document.getElementById('preflight').textContent,
+          log: Engine.events.slice(-3).map((e) => e.text).join(' | ') };
+      });
+      if (await s2.page.evaluate(() => window.apNative.ffLocate())) {
+        // Both witnesses, and they agree: the flash, right after the line in the movie's own subtitles.
+        await loadMovie(s2.page, path.join(MEDIA, 'snap-subs.mkv'));
+        await setSnap(s2.page, 20);
+        await s2.page.evaluate(() => { window.__AP.cfg.snapByFile = {}; });
+        await waitFor(s2.page, () => !!window.__AP.Media.probe, null, 6000);
+        await auto(s2.page);
+        check('flash and subtitles agree: the strip opens with the snap already set', await stripOpen(s2.page, 40000));
+        let d = await verdict(s2.page);
+        check('the snap point is on the frame of the flash, found by both witnesses', Math.abs(d.snap - 101.564) < 0.0015 && d.how === 'flash+line' && d.confirmed && d.searched && d.applied === 'flash+line', JSON.stringify({ snap: d.snap, how: d.how, confirmed: d.confirmed }));
+        check('and the strip says so', /^Snap found: 0:01:41\.56\d$/.test(d.title) && /0\.9 s after the line “…Iron Man\.” goes off screen/.test(d.note), d.title + ' | ' + d.note.slice(0, 160));
+        check('the pre-flight list names both witnesses', await waitFor(s2.page, () => /found by the app: the flash, right after the line “…Iron Man\.”/.test(document.getElementById('preflight').textContent), null, 3000));
+        await s2.page.keyboard.press('Escape');
+      }
+
+      // The witnesses disagree: a flash, but six seconds after the line. Nothing is set; the user decides.
+      await loadMovie(s2.page, path.join(MEDIA, 'snap-scene.mp4'));
+      await setSnap(s2.page, SNAP);
+      await s2.page.evaluate(() => { window.__AP.cfg.snapByFile = {}; });
+      const early = path.join(newProfile(), 'early.srt');
+      fs.writeFileSync(early, '1\n00:01:31,000 --> 00:01:33,000\nAnd I...\n\n2\n00:01:33,500 --> 00:01:35,000\nam... Iron Man.\n');
+      await s2.page.evaluate(async (file) => { await window.__AP.SubsUI.loadFrom(await window.apNative.readSubtitle(file), { quiet: true }); }, early);
+      await auto(s2.page);
+      check('flash and subtitles disagree: the strip opens', await stripOpen(s2.page, 40000));
+      let d = await verdict(s2.page);
+      check('nothing is set by the app', d.snap === SNAP && d.applied === null && !d.confirmed && d.searched, JSON.stringify({ snap: d.snap, how: d.how }));
+      check('and the strip warns that the flash is not where the line says', /Careful: that is not right after that line/.test(d.note) && /Found it: check the frame/.test(d.title), d.note.slice(0, 220));
+      await s2.page.keyboard.press('Escape');
+      await s2.page.evaluate(() => window.__AP.SubsUI.clear());
+
+      // Only the subtitles: no flash in the picture. An estimate just after the line, and it says so.
+      await loadMovie(s2.page, MOVIE);
+      await setSnap(s2.page, SNAP);
+      await s2.page.evaluate(() => { window.__AP.cfg.snapByFile = {}; });
+      const only = path.join(newProfile(), 'only.srt');
+      fs.writeFileSync(only, '1\n00:01:36,500 --> 00:01:37,400\nAnd I...\n\n2\n00:01:37,600 --> 00:01:38,300\nam...\n\n3\n00:01:39,100 --> 00:01:40,600\nIron Man.\n');
+      await s2.page.evaluate(async (file) => { await window.__AP.SubsUI.loadFrom(await window.apNative.readSubtitle(file), { quiet: true }); }, only);
+      await auto(s2.page);
+      check('subtitles but no flash: the strip opens after the wider search', await stripOpen(s2.page, 120000));
+      d = await verdict(s2.page);
+      check('the snap point is an estimate, 0.3 s after the line, and not called confirmed', Math.abs(d.snap - 100.9) < 0.0015 && d.how === 'estimate' && !d.confirmed && d.applied === 'estimate', JSON.stringify({ snap: d.snap, how: d.how, confirmed: d.confirmed }));
+      check('the strip asks the user to pick the frame', /Where does he snap/.test(d.title) && /No flash was found in the picture\. By the subtitles the snap comes a moment after 0:01:40\.600/.test(d.note), d.note.slice(0, 200));
+      const sel = await stripView(s2.page);
+      check('and starts at the end of the line', Math.abs(sel.selT - 100.6) < 0.03, String(sel.selT));
+      check('the pre-flight list says it is an estimate', await waitFor(s2.page, () => /0:01:40\.900 is an estimate from the subtitles/.test(document.getElementById('preflight').textContent), null, 3000));
+      await s2.page.keyboard.press('Escape');
+      await s2.page.evaluate(() => window.__AP.SubsUI.clear());
+
+      // No witness at all.
+      await loadMovie(s2.page, MOVIE);
+      await setSnap(s2.page, SNAP);
+      await s2.page.evaluate(() => { window.__AP.cfg.snapByFile = {}; });
+      await auto(s2.page);
+      check('no flash and no subtitles: the strip opens for the user', await stripOpen(s2.page, 120000));
+      d = await verdict(s2.page);
+      check('nothing is set, and the file is noted as searched', d.snap === SNAP && d.applied === null && !d.confirmed && d.searched && /could not decide by itself: no flash and no subtitles/.test(d.log), JSON.stringify({ snap: d.snap, searched: d.searched }) + ' ' + d.log.slice(-120));
+      await s2.page.keyboard.press('Escape');
+
       await loadMovie(s2.page, MOVIE);
       await setSnap(s2.page, SNAP);
       await s2.page.click('#findSnapBtn');
@@ -1518,7 +1696,7 @@ const scenarios = {
       L = await box(s.page);
       check('the reminder counts down and says what to press', /^NOT ARMED · the movie has to start in 00:0(4:5\d|5:00) · click to start the countdown$/.test(L.pillText) && !L.box, L.pillText);
       await s.page.click('#latePill');
-      check('clicking it starts the countdown', await waitPhase(s.page, 'standby', 5000) && (await state(s.page)).mode === 'armed' && await s.page.isHidden('#latePill'));
+      check('clicking it starts the countdown (after the question about the unchecked snap point)', await startAnyway(s.page) && await waitPhase(s.page, 'standby', 5000) && (await state(s.page)).mode === 'armed' && await s.page.isHidden('#latePill'));
       await stop(s.page);
 
       // the movie should have started half a minute ago

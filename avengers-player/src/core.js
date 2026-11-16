@@ -141,26 +141,29 @@
   }
 
   /**
-   * Finds the line "And I... am... Iron Man." in a list of subtitle cues ({ start, end, text }),
-   * also when it is split over two cues. Of several, the one nearest to `expect` wins.
-   * Returns { start, end, text } or null.
+   * Finds the line "And I... am... Iron Man." in a list of subtitle cues ({ start, end, text }).
+   * On the discs it is split over three cues several seconds apart ("And I..." / "am..." /
+   * "Iron Man."), and captions for the hard of hearing put sounds such as (PANTING) in between,
+   * so up to five cues in a row are read as one sentence. Of several places where the words
+   * occur, the one whose end is nearest to `expect` wins.
+   * Returns { start, end, text } (end = when the last cue of the line goes off screen) or null.
    */
   function findSnapLine(cues, expect) {
     if (!cues || !cues.length) return null;
     const re = /\bi\b[^a-z0-9]{0,12}am[^a-z0-9]{0,12}iron[^a-z0-9]{0,3}man\b/i;
-    const plain = (c) => String(c && c.text != null ? c.text : '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    // Tags, and sound captions in brackets, are not part of what is said.
+    const plain = (c) => String(c && c.text != null ? c.text : '').replace(/<[^>]*>/g, ' ').replace(/\([^)]*\)|\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim();
     let best = null;
-    const take = (start, end, text) => {
-      const d = Math.abs(end - (isFinite(expect) ? expect : end));
-      if (!best || d < best.d) best = { start: start, end: end, text: text, d: d };
-    };
     for (let i = 0; i < cues.length; i++) {
-      const a = plain(cues[i]);
-      if (re.test(a)) { take(cues[i].start, cues[i].end, a); continue; }
-      const next = cues[i + 1];
-      if (next && next.start - cues[i].end < 4) {
-        const both = a + ' ' + plain(next);
-        if (re.test(both) && !re.test(plain(next))) take(cues[i].start, next.end, both);
+      let text = '';
+      for (let j = i; j < cues.length && j < i + 5; j++) {
+        if (j > i && (cues[j].start - cues[j - 1].end > 8 || cues[j].end - cues[i].start > 25)) break;
+        text = (text + ' ' + plain(cues[j])).trim();
+        if (!re.test(text)) continue;
+        const d = Math.abs(cues[j].end - (isFinite(expect) ? expect : cues[j].end));
+        // Nearest to where the snap is expected; of runs that end on the same cue, the tightest.
+        if (!best || d < best.d - 1e-6 || (Math.abs(d - best.d) <= 1e-6 && cues[i].start > best.start)) best = { start: cues[i].start, end: cues[j].end, text: text, d: d };
+        break;
       }
     }
     return best ? { start: best.start, end: best.end, text: best.text } : null;

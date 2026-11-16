@@ -400,6 +400,22 @@ const zipFiles = {
   'ffmpeg-8.1-essentials_build/presets/x.ffpreset': 'preset'
 };
 
+test('subtitleWindow: the subtitles of one stretch, with the film\'s own times', { skip }, async () => {
+  // The clip's subtitles: 0.5-2.0 "First line", 2.5-4.0 "Second line".
+  const all = await ff.subtitleWindow(exe, clips.pahe, 0, 60, {});
+  assert.equal(all.track.lang, 'eng');
+  assert.match(all.srt, /First line[\s\S]*Second/);
+  const late = await ff.subtitleWindow(exe, clips.pahe, 2.2, 10, {});
+  assert.doesNotMatch(late.srt, /First line/);
+  const m = /(\d\d):(\d\d):(\d\d),(\d\d\d) --> /.exec(late.srt);
+  assert.ok(m, late.srt);
+  const start = (+m[1]) * 3600 + (+m[2]) * 60 + (+m[3]) + (+m[4]) / 1000;
+  assert.ok(Math.abs(start - 2.5) < 0.1, 'the cue keeps its time in the film, not its time in the stretch: ' + start);
+  // A movie without text subtitles has nothing to give; a missing file is an error.
+  assert.equal(await ff.subtitleWindow(exe, clips.aac, 0, 10, {}), null);
+  await assert.rejects(ff.subtitleWindow(exe, path.join(tmp, 'nope.mkv'), 0, 10, {}), /does not exist/);
+});
+
 test('zip: extracts exactly bin/ffmpeg.exe, deflated or stored', { skip: HAVE_PY ? false : 'python3 is not installed' }, async () => {
   for (const compress of [true, false]) {
     const zip = buildZip('pkg-' + compress + '.zip', zipFiles, compress);

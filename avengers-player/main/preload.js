@@ -51,6 +51,7 @@ contextBridge.exposeInMainWorld('apNative', {
   ffDownload: () => ipcRenderer.invoke('ff:download'),
   ffCancel: () => ipcRenderer.invoke('ff:cancel'),
   ffExtractSub: (file, subIndex) => ipcRenderer.invoke('ff:extract-sub', file, subIndex),
+  ffSubWindow: (file, fromSec, durSec, preferLang) => ipcRenderer.invoke('ff:sub-window', file, fromSec, durSec, preferLang),
   onFfProgress: (cb) => on('ff:progress', cb),
 
   // misc

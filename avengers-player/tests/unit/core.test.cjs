@@ -258,6 +258,29 @@ test('findFlash: the white-out of the snap, and the frame on which it begins', (
 });
 
 test('findSnapLine: the line before the snap, wherever the subtitles put it', () => {
+  // The cues of the 4K Blu-ray, as published: the line is split over three, seconds apart.
+  const disc = [
+    { start: 8998.198, end: 9001.702, text: 'I am... inevitable.' },
+    { start: 9021.847, end: 9023.390, text: 'And I...' },
+    { start: 9025.058, end: 9026.226, text: 'am...' },
+    { start: 9029.938, end: 9031.440, text: 'Iron Man.' },
+    { start: 9150.142, end: 9151.852, text: 'Mr. Stark?' }
+  ];
+  assert.deepEqual(C.findSnapLine(disc, 9030), { start: 9021.847, end: 9031.440, text: 'And I... am... Iron Man.' });
+  // Captions for the hard of hearing put sounds in between, in brackets.
+  const sdh = [
+    { start: 8996.610, end: 9000.213, text: 'I am inevitable.' },
+    { start: 9018.2, end: 9019.9, text: 'And I...' },
+    { start: 9021.835, end: 9023.501, text: '(PANTING)' },
+    { start: 9023.503, end: 9024.637, text: 'am...' },
+    { start: 9026.0, end: 9027.0, text: '[GAUNTLET POWERS UP]' },
+    { start: 9028.408, end: 9029.809, text: '<i>Iron Man.</i>' }
+  ];
+  const hit = C.findSnapLine(sdh, 9030);
+  assert.equal(hit.end, 9029.809);
+  assert.equal(hit.start, 9018.2);
+  assert.equal(hit.text, 'And I... am... Iron Man.');
+  // Two cues, one cue, other punctuation.
   const cues = [
     { start: 100, end: 102, text: 'I am... inevitable.' },
     { start: 9021.2, end: 9023.0, text: 'And I...' },
@@ -274,6 +297,7 @@ test('findSnapLine: the line before the snap, wherever the subtitles put it', ()
   // Not the line.
   assert.equal(C.findSnapLine([{ start: 1, end: 2, text: 'I am inevitable.' }, { start: 3, end: 4, text: 'Iron Man is here.' }, { start: 30, end: 31, text: 'I am' }], 0), null);
   assert.equal(C.findSnapLine([{ start: 1, end: 2, text: 'And I...' }, { start: 60, end: 62, text: 'am Iron Man' }], 0), null, 'two cues a minute apart are not one line');
+  assert.equal(C.findSnapLine([{ start: 1, end: 2, text: 'I am... inevitable.' }, { start: 22, end: 23, text: 'Iron Man.' }], 0), null, 'the other man\'s "I am" is not the beginning of this line');
   assert.equal(C.findSnapLine([], 0), null);
   assert.equal(C.findSnapLine(null, 0), null);
 });

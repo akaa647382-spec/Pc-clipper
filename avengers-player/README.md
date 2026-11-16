@@ -56,9 +56,14 @@ later, and how much later differs between cuts. So the app does not take the fig
 5. Run the **Snap test**. Afterwards the strip opens again and shows the frame the app put on 12:00:00 and how many
    milliseconds from the clock it came on screen. If that is the snap, press **Yes**.
 
-If the snap is nowhere near 2:30:30 in your copy, the app sweeps a wider stretch (45 s before to 105 s after) by
-itself. With subtitles loaded it also goes by the line *"And I… am… Iron Man."* Every film file remembers its own snap
-point, so ENDGAME and ENCORE can both be set once and then swapped freely.
+The app has two witnesses. One is the picture: the flash. The other is the subtitles, either a file you loaded or
+the subtitles inside the movie itself (FFmpeg reads them): the snap comes a moment after the line *"And I… am… Iron
+Man."* goes off screen, in every cut. The strip says where the line ends and whether the flash it found is where it
+should be. If the snap is nowhere near 2:30:30 in your copy, the app goes to the line, or sweeps a wider stretch
+(45 s before to 105 s after) by itself.
+
+Every film file remembers its own snap point, so ENDGAME and ENCORE can both be set once and then swapped freely.
+Starting the countdown with a snap point that was never checked asks first.
 
 The old way still works: **Setup → Snap point**, play from 10 s before, pause, step with the frame buttons and press
 *The snap is on this frame*.
@@ -76,10 +81,15 @@ For neither cut is the snap point taken from a table: it is found in the file, o
 has been done the pre-flight list keeps a line saying so, and the countdown can still be started with the round
 figure.
 
-What is known from outside the file: on the 4K Blu-ray, the line *"And I…"* begins at 2:30:21.8 (from a subtitle
-file of that release), so the snap cannot be at 2:30:30.000 sharp; published start times are 9:29:30 PM
-([ComicBook](https://comicbook.com/2019/12/31/avengers-endgame-what-time-when-start-movie-iron-man-snap-midnight-new-years/))
-and 9:29:31 PM in a few places, which shows that nobody was counting frames. For Encore, a scene-by-scene guide puts
+What is known from outside the file. A published subtitle file made from the 4K Blu-ray's own subtitle track
+shows *"Iron Man."* from 2:30:29.9 to 2:30:31.4, so on a Blu-ray copy the snap is at about 2:30:31.5, a second and a
+half after the round figure. The same lines sit about 1.5 s earlier in subtitles of the iTunes version, which fits
+the figure everybody quotes, 9:29:30 PM
+([Looper](https://www.looper.com/1475223/avengers-thanos-iron-man-snaps-marvel-timestamps-start-new-year)), having
+been worked out on a streaming service
+([Laughing Place](https://www.laughingplace.com/w/articles/2021/12/31/ring-in-the-new-year-by-timing-up-these-5-mcu-moments-to-the-stroke-of-midnight/)).
+These are subtitle timings, good to a few tenths of a second, not frame counts: which is why the app looks at the
+picture. For Encore, a scene-by-scene guide puts
 the first new scene at 2:48:50
 ([CinemaBlend](https://www.cinemablend.com/movies/i-grabbed-avengers-endgame-encore-doomsday-scene-timestamps)), after
 the snap. Other lengths than 3:01:36 have been published for Encore; a file longer than 3:01:24 is treated as Encore
