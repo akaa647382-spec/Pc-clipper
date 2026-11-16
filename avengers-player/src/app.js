@@ -2608,7 +2608,9 @@
       this.bytes = sub.bytes instanceof Uint8Array ? sub.bytes : new Uint8Array(sub.bytes);
       this.name = sub.name || 'subtitles';
       this.path = sub.path || '';
-      if (!opts.keepDelay) { cfg.subDelay = 0; cfg.subScale = 1; }
+      // A fresh load starts from the file as it is: what an earlier check found about it (with the
+      // shift it gave) no longer applies, and the file is checked again.
+      if (!opts.keepDelay) { cfg.subDelay = 0; cfg.subScale = 1; cfg.subSyncKey = ''; cfg.subSyncState = ''; }
       const ok = this.parse();
       if (!ok) {
         toast('No subtitles found in that file', 'bad');
