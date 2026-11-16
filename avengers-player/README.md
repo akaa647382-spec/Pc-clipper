@@ -5,14 +5,14 @@ for the whole two and a half hours, and lands the snap on **12:00:00 AM**: the v
 found in your own file and put on midnight to the millisecond. It works with *Avengers: Endgame* (3:01:11) and with
 *Avengers Endgame: Encore* (3:01:36).
 
-**[Download the installer](../download/Avengers-Player-Setup-1.2.0.exe)** (Windows 10 / 11, 64-bit, about 93 MB).
+**[Download the installer](../download/Avengers-Player-Setup-1.3.0.exe)** (Windows 10 / 11, 64-bit, about 93 MB).
 You bring your own copy of the movie. Nothing is uploaded anywhere.
 
 ![The player with the countdown running](docs/player.png)
 
 ## Install
 
-1. Run `Avengers-Player-Setup-1.2.0.exe`. It installs for your user only, so there is no administrator prompt.
+1. Run `Avengers-Player-Setup-1.3.0.exe`. It installs for your user only, so there is no administrator prompt.
 2. Windows may show a blue box, "Windows protected your PC". That appears for any new app that is not signed by a
    company. Click **More info → Run anyway**. (If *Smart App Control* is switched on, Windows offers no such button.)
 3. Start **Avengers Player** from the desktop or the Start menu.
@@ -60,20 +60,32 @@ file by itself and sets the countdown by it.**
    milliseconds from the clock it came on screen.
 
 The app has two witnesses. One is the picture: the flash that fills the screen when the fingers snap. The other is
-the subtitles, either a file you loaded or the subtitles inside the movie itself (FFmpeg reads them): the snap comes
-a moment after the line *"And I… am… Iron Man."* goes off screen, in every cut.
+the line *"And I… am… Iron Man."* in subtitles that are known to be in step with the film: the subtitles inside the
+movie (FFmpeg reads every English text track until it finds the line, skipping forced-only and commentary tracks),
+or a subtitle file the app has put on the voices (see *Subtitles*). The snap comes a moment after that line goes off
+screen, in every cut. A subtitle file nobody has checked is only a hint where else to look, never a witness.
 
-| What the app found | What it does |
+The app only says **found** when nothing else could explain what it saw:
+
+| What the app saw | What it does |
 |---|---|
-| The flash, right after the line (or a clear flash and no subtitles to ask) | Sets the snap point on that frame and shows it |
-| The line, but no flash in the picture | Sets an estimate just after the line, says that it is an estimate, and asks you to pick the frame |
-| A flash that is not where the line says | Changes nothing, warns you, and lets you pick |
-| Nothing | Changes nothing and shows you the frames around 2:30:30 |
+| A clean white-out that begins between 0.75 s before and 2 s after the line, and no other white-out there | Sets the snap point on its first frame, marked as found |
+| No subtitles to ask: one clean white-out of at least 0.3 s near where the snap is expected, and no other white-out in sight | The same |
+| One clean white-out, but only the wide search found it, far from where the snap was expected, and no subtitles | Sets the snap point there (the countdown is calibrated) but marks it *not confirmed*: the strip asks you to look, one click confirms it |
+| The line, but no flash anywhere | Sets an estimate 0.1 s after the line, marked *not confirmed*, and asks you to pick the frame |
+| Two white-outs and nothing to choose between them, a flash that is not right after the line, frames the PC skipped where the flash begins, a flash that starts too softly to name its first frame, or a white-out shorter than that | Changes nothing, says why, and shows you the frames |
 
-If the snap is nowhere near 2:30:30 in a copy, the app goes to the line, or sweeps a wider stretch (45 s before to
-105 s after). Every film file remembers its own snap point, so any number of copies can be set once and then swapped
-freely. Starting the countdown with a snap point that was never checked asks first. **FIND THE SNAP** (Mission tab,
-or Setup → Snap point) runs the search again at any time, and the frame buttons in Setup still work by hand.
+"Clean" means: every frame of the climb was seen (frames the PC skipped are fetched one by one), the first frame is
+clearly brighter than the flicker of that shot, and the climb began inside the stretch that was looked at. A brighter
+shot or a glow right before a cut to white does not fool it: the cut is the flash. A film stored at 50 or 60 frames a
+second (each picture shown two or three times) is handled too.
+
+Where the app looks: every frame from 3 s before to 7 s after where the snap is expected (or, when trusted subtitles
+put the line somewhere else, around the line first); if that does not settle it, a quick sweep of 150 s and a frame by
+frame look at the white-out it shows. Every film file remembers its own snap point, so any number of copies can be set
+once and then swapped freely. Starting the countdown with a snap point that was never confirmed asks first. **FIND THE
+SNAP** (Mission tab, or Setup → Snap point) runs the search again at any time, and the frame buttons in Setup still
+work by hand. **Setup → Copy the details** copies what the last search saw, frame by frame, as text.
 
 ## Which version of the film?
 
@@ -86,6 +98,13 @@ The app tells the two cuts apart by the length of the file (**Setup → Film ver
 
 For neither cut is the snap point taken from a table: it is found in the file when the file is imported, as
 described above. Until a snap point has been found or picked, the pre-flight list keeps a line saying so.
+
+**Importing ENCORE runs the same calibration.** The search starts from the snap point already confirmed in your
+ENDGAME file, if there is one (it is the same film), else from 2:30:30. If the extra 25 seconds come after the snap,
+the snap is right there and it is found. If they come before it, the wide search finds it 25 s further in: with
+subtitles inside the file it is found outright; without, the app sets it, calibrates the countdown, and asks you for
+one look in the strip, because a white-out 25 s from where it was expected, with nothing else to back it up, is
+something a person should see once.
 
 What is known from outside the file. A published subtitle file made from the 4K Blu-ray's own subtitle track
 shows *"Iron Man."* from 2:30:29.9 to 2:30:31.4, so on a Blu-ray copy the snap is at about 2:30:31.5, a second and a
@@ -111,6 +130,9 @@ movie should have started (even at 11:59 PM), or the PC crashed with no countdow
 Press the button, **Enter**, **Space** or the play button: the film jumps to where the clock says it should be and
 stays locked to it, exactly as if the countdown had been armed all along. *Not now* puts the box away and leaves a
 small reminder at the top. In the ten minutes before the start, a player that is not armed shows a reminder too.
+
+If midnight comes and the countdown is not running (never started, or late and never joined), the app says
+**Better luck next year**, once. If the countdown was running, it says nothing of the kind.
 
 ## If someone slips
 
@@ -222,10 +244,14 @@ want, and switches the sound back on if the player was left muted.
 - Switching the sound language uses a part of Chromium that is still marked experimental. The app works around its
   one known weakness (it re-cues the film on every switch, and brings the sound back by itself if it ever stops), and
   the language is normally chosen once, before the countdown. Choose it during a rehearsal, not during the film.
-- The app finds the snap by the flash that fills the screen when the fingers snap. That was tested on clips made
-  for the purpose, not on the film itself, which the author does not have. So the frame it marks is a suggestion:
-  look at the picture and move a frame or two if needed. If it finds no flash at all, the strip still opens and the
-  frame is picked by eye.
+- The app finds the snap by the flash that fills the screen when the fingers snap. Fan descriptions of the scene speak
+  of "a blinding flash of white" at the snap, but no official source says how long it lasts or on which frame it
+  begins, and the author does not have the film. The finder was put through an adversarial review: about eight
+  thousand generated flashes at eight frame rates (cuts, ramps, soft starts, a brighter shot or a glow just before,
+  flicker inside the white, decoy white-outs, lightning, explosions, skipped frames, repeated pictures in 50 and 60
+  frame files). In every case where it says *found*, it named the first frame of the flash or the one next to it; in
+  the cases it cannot settle it says so and asks. It has not seen the real film: look at the frame it marks once,
+  and move a frame or two if needed.
 - Around the snap the film is held to within about a hundredth of a second of the clock. On a 60 Hz screen a film
   frame can only come on screen at one of 60 moments a second, so a few milliseconds either way are the limit of
   any player; the strip shows the figure that was measured.

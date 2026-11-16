@@ -224,7 +224,7 @@ function parseProbe(stderr) {
         result.audio.push(current);
       } else {
         const c = codec.toLowerCase();
-        current = { index: counts.Subtitle++, codec: c, lang: lang, title: '', isText: TEXT_SUBTITLES.includes(c) };
+        current = { index: counts.Subtitle++, codec: c, lang: lang, title: '', isText: TEXT_SUBTITLES.includes(c), forced: /\(forced\)/.test(rest), isDefault: isDefault };
         result.subtitles.push(current);
       }
       continue;
@@ -523,7 +523,8 @@ async function extractSubtitle(ffmpegPath, input, subIndex, outputSrt, opts) {
  * out the whole track can take a minute.
  *
  *   preferLang  the subtitle language wanted (English unless given); the first text track otherwise
- * Returns { srt, track: { index, lang, title } }, or null when the movie has no text subtitles.
+ *   trackIndex  this subtitle track and no other (its number among the subtitle tracks)
+ * Returns { srt, track: { index, lang, title } }, or null when the movie has no such text subtitles.
  */
 async function subtitleWindow(ffmpegPath, input, fromSec, durSec, opts) {
   opts = opts || {};
@@ -531,8 +532,10 @@ async function subtitleWindow(ffmpegPath, input, fromSec, durSec, opts) {
   const text = info.subtitles.filter((sub) => sub.isText);
   if (!text.length) return null;
   const want = Core.normLang(opts.preferLang) || 'eng';
-  const track = text.find((sub) => Core.trackLang(sub) === want && !/forced|sign|song/i.test(sub.title || '')) ||
-    text.find((sub) => Core.trackLang(sub) === want) || text[0];
+  const plain = (sub) => !sub.forced && !/forced|sign|song|commentary/i.test(sub.title || '');
+  const track = Number.isInteger(opts.trackIndex) ? text.find((sub) => sub.index === opts.trackIndex)
+    : text.find((sub) => Core.trackLang(sub) === want && plain(sub)) || text.find((sub) => Core.trackLang(sub) === want) || text[0];
+  if (!track) return null;
   const from = Math.max(0, Number(fromSec) || 0);
   const dur = Math.max(1, Math.min(3600, Number(durSec) || 600));
   // -copyts keeps the film's own times on the cues although only a stretch is read.
@@ -540,7 +543,7 @@ async function subtitleWindow(ffmpegPath, input, fromSec, durSec, opts) {
     '-map', '0:s:' + track.index, '-c:s', 'srt', '-f', 'srt', '-'], { timeoutMs: opts.timeoutMs || 25000, maxBytes: 2 * 1024 * 1024 });
   if (r.timedOut) throw new Error('Reading the subtitles took too long.');
   if (r.code !== 0 && !r.stdout) throw new Error('The subtitles could not be read from the movie: ' + (lastLines(r.stderr, 2) || 'unknown error'));
-  return { srt: r.stdout, track: { index: track.index, lang: Core.trackLang(track), title: track.title || '' } };
+  return { srt: r.stdout, track: { index: track.index, lang: Core.trackLang(track), title: track.title || '', forced: !!track.forced } };
 }
 
 /**

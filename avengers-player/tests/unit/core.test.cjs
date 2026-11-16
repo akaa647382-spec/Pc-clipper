@@ -257,6 +257,115 @@ test('findFlash: the white-out of the snap, and the frame on which it begins', (
   assert.ok(sp && Math.abs(sparse[sp.start].t - 101.7) < 0.25, String(sp && sparse[sp.start].t));
 });
 
+test('findFlash and judgeSnap: what a real film can do to the flash, and when the app may say "found"', () => {
+  // Frames of a 24 fps film with a little grain; a white-out begins at `at`.
+  const film = (o) => {
+    let seed = o.seed || 7;
+    const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+    const fps = o.fps || 24;
+    const out = [];
+    for (let i = 0; i < Math.round((o.to - o.from) * fps); i++) {
+      const t = o.from + i / fps;
+      let mean = (o.level == null ? 0.2 : o.level) + (rnd() - 0.5) * 0.02;
+      let white = 0;
+      for (const w of o.whites || []) {
+        const k = Math.floor((t - w.at) * fps + 1e-6);
+        const ramp = w.ramp || 0;
+        if (k < 0 || t > w.at + ramp / fps + (w.hold || 1)) continue;
+        const a = ramp ? Math.min(1, (k + 1) / (ramp + 1)) : 1;
+        mean = mean + (1 - mean) * a;
+        white = a >= 0.999 ? 1 : a > 0.8 ? 0.8 : 0;
+      }
+      for (const b of o.shots || []) if (t >= b.at && t < b.at + b.dur) mean = b.level + (rnd() - 0.5) * 0.02;
+      out.push({ t: t, mean: mean, white: white });
+    }
+    return out;
+  };
+  const at = (fr, t) => fr.findIndex((f) => f.t >= t - 1e-6);
+  const SNAP = 9031.5;
+  const line = { end: 9031.44, checked: true };
+
+  // One clean white-out where the snap is expected: found, with or without the line.
+  const clean = film({ from: 9027, to: 9037, whites: [{ at: SNAP, ramp: 3 }] });
+  let j = C.judgeSnap(clean, null, { expect: 9030 });
+  assert.equal(j.verdict, 'found');
+  assert.equal(j.why, 'flash');
+  assert.equal(j.flash.rise, at(clean, SNAP));
+  j = C.judgeSnap(clean, line, { expect: 9030 });
+  assert.equal(j.verdict, 'found');
+  assert.equal(j.why, 'flash+line');
+  assert.ok(Math.abs(j.after - 0.06) < 0.01);
+
+  // A brighter shot (the glowing gauntlet) half a second before the cut to white: the cut is the flash.
+  const shot = film({ from: 9027, to: 9037, shots: [{ at: SNAP - 0.5, dur: 0.5, level: 0.55 }], whites: [{ at: SNAP }] });
+  assert.equal(C.findFlash(shot, { expect: 9030 }).rise, at(shot, SNAP));
+
+  // A frame on the way up that is nearly white does not hide the white-out.
+  const band = film({ from: 9027, to: 9037, whites: [{ at: SNAP, ramp: 5, hold: 4 }] });
+  assert.equal(C.findFlash(band).kind, 'white');
+
+  // A frame that flickers darker inside the white-out does not split it.
+  const flicker = film({ from: 9027, to: 9037, whites: [{ at: SNAP, ramp: 2 }] });
+  const s0 = flicker.findIndex((f) => f.white >= 0.88);
+  flicker[s0 + 2].white = 0.5; flicker[s0 + 2].mean = 0.9;
+  assert.equal(C.findFlash(flicker).rise, at(flicker, SNAP));
+
+  // Two white-outs and no line: nothing says which is the snap, so the app asks.
+  const two = film({ from: 9027, to: 9037, whites: [{ at: SNAP }, { at: SNAP + 3, hold: 1.5 }] });
+  j = C.judgeSnap(two, null, { expect: 9030 });
+  assert.equal(j.verdict, 'ask');
+  assert.equal(j.why, 'rivals');
+  // With the line, the one right after it is the snap, even though the other is longer.
+  j = C.judgeSnap(two, line, { expect: 9030 });
+  assert.equal(j.verdict, 'found');
+  assert.equal(j.flash.rise, at(two, SNAP));
+
+  // A white-out that is not right after the line: the witnesses disagree, nothing is set.
+  const late = film({ from: 9030, to: 9040, whites: [{ at: 9035 }] });
+  assert.equal(C.judgeSnap(late, line, { expect: 9030 }).why, 'disagree');
+
+  // Frames the PC skipped right where the flash begins: the app asks.
+  const holey = film({ from: 9027, to: 9037, whites: [{ at: SNAP, ramp: 2 }] });
+  holey.splice(at(holey, SNAP) - 1, 3);
+  assert.equal(C.judgeSnap(holey, null, { expect: 9030 }).why, 'holes');
+
+  // Found far from where it was expected (the wide search), with no line: set, but not marked.
+  const far = film({ from: 9053, to: 9060, whites: [{ at: 9056.5 }] });
+  assert.equal(C.judgeSnap(far, null, { expect: 9030, wide: true }).verdict, 'likely');
+  // ...unless an armed countdown lent the film: then only a sure find may change it.
+  assert.equal(C.judgeSnap(far, null, { expect: 9030, wide: true, lent: true }).verdict, 'ask');
+  // ...and not when the wide search saw another white-out that could be it.
+  assert.equal(C.judgeSnap(far, null, { expect: 9030, wide: true, rivals: 1 }).why, 'rivals');
+
+  // A white-out shorter than 0.3 s with no line, or shorter than 0.2 s with one: too short to be sure.
+  const blink = film({ from: 9027, to: 9037, whites: [{ at: SNAP, hold: 0.15 }] });
+  assert.equal(C.judgeSnap(blink, null, { expect: 9030 }).why, 'short');
+  assert.equal(C.judgeSnap(blink, line, { expect: 9030 }).why, 'short');
+
+  // No flash at all: a checked line gives an estimate a moment after it; an unchecked one nothing.
+  const none = film({ from: 9027, to: 9037 });
+  j = C.judgeSnap(none, line, { expect: 9030 });
+  assert.equal(j.verdict, 'estimate');
+  assert.equal(j.at, 9031.54);
+  assert.equal(C.judgeSnap(none, { end: 9031.44, checked: false }, { expect: 9030 }).verdict, 'ask');
+  assert.equal(C.judgeSnap(none, line, { expect: 9030, lent: true }).verdict, 'ask');
+  // An unchecked line is no witness: the flash is judged as if there were no line.
+  assert.equal(C.judgeSnap(clean, { end: 9020, checked: false }, { expect: 9030 }).verdict, 'found');
+
+  // 24 fps pictures in a 60 fps file (each shown two or three times): the first frame of the flash.
+  const src = film({ from: 9027, to: 9037, whites: [{ at: SNAP, ramp: 2 }] });
+  const sixty = [];
+  for (let i = 0; i < 590; i++) {
+    const t = 9027 + i / 60;
+    let k = 0;
+    while (k + 1 < src.length && src[k + 1].t <= t + 1e-9) k++;
+    sixty.push({ t: t, mean: src[k].mean, white: src[k].white });
+  }
+  const first = sixty.findIndex((f) => f.t >= SNAP - 1e-6);
+  const f60 = C.findFlash(sixty);
+  assert.ok(Math.abs(f60.rise - first) <= 1, 'rise ' + f60.rise + ' / ' + first);
+});
+
 test('findSnapLine: the line before the snap, wherever the subtitles put it', () => {
   // The cues of the 4K Blu-ray, as published: the line is split over three, seconds apart.
   const disc = [
@@ -300,6 +409,19 @@ test('findSnapLine: the line before the snap, wherever the subtitles put it', ()
   assert.equal(C.findSnapLine([{ start: 1, end: 2, text: 'I am... inevitable.' }, { start: 22, end: 23, text: 'Iron Man.' }], 0), null, 'the other man\'s "I am" is not the beginning of this line');
   assert.equal(C.findSnapLine([], 0), null);
   assert.equal(C.findSnapLine(null, 0), null);
+  // Real files: machine-read discs write "l" for "I", some put the speaker's name in front, captions
+  // for the hard of hearing come between the words, and "I'm" is said for "I am".
+  const three = (x, y, z, more) => [{ start: 9021.847, end: 9023.390, text: x }].concat(more || [], [{ start: 9025.058, end: 9026.226, text: y }, { start: 9029.938, end: 9031.440, text: z }]).sort((p, q) => p.start - q.start);
+  assert.equal(C.findSnapLine(three('And l...', 'am...', 'lron Man.'), 9030).end, 9031.44);
+  assert.equal(C.findSnapLine(three('TONY: And I...', 'TONY: am...', 'TONY: Iron Man.'), 9030).end, 9031.44);
+  assert.equal(C.findSnapLine(three('And I...', 'am...', 'Iron Man.', [{ start: 9023.5, end: 9024, text: '(PANTING)' }, { start: 9024.1, end: 9024.9, text: '[GRUNTS]' }, { start: 9026.4, end: 9029.8, text: '[energy crackling]' }]), 9030).end, 9031.44);
+  assert.equal(C.findSnapLine(three('And I...', '[grunting\nam...', 'Iron Man.'), 9030).end, 9031.44);
+  assert.equal(C.findSnapLine([{ start: 9024, end: 9031.44, text: "And I'm... Iron Man." }], 9030).end, 9031.44);
+  // Only near where the snap is expected: the words said five minutes into the film do not count.
+  assert.equal(C.findSnapLine([{ start: 300, end: 302, text: 'I am Iron Man.' }], 9030, { before: 240, after: 360 }), null);
+  assert.equal(C.findSnapLine([{ start: 9300, end: 9302, text: 'I am Iron Man.' }], 9030, { before: 240, after: 360 }).end, 9302);
+  // Another language: no line, rather than a wrong one.
+  assert.equal(C.findSnapLine(three('Y yo...', 'soy...', 'Iron Man.'), 9030), null);
 });
 
 test('languages: codes, names and titles', () => {

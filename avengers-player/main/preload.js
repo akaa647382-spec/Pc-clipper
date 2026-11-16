@@ -51,7 +51,7 @@ contextBridge.exposeInMainWorld('apNative', {
   ffDownload: () => ipcRenderer.invoke('ff:download'),
   ffCancel: () => ipcRenderer.invoke('ff:cancel'),
   ffExtractSub: (file, subIndex) => ipcRenderer.invoke('ff:extract-sub', file, subIndex),
-  ffSubWindow: (file, fromSec, durSec, preferLang) => ipcRenderer.invoke('ff:sub-window', file, fromSec, durSec, preferLang),
+  ffSubWindow: (file, fromSec, durSec, preferLang, trackIndex) => ipcRenderer.invoke('ff:sub-window', file, fromSec, durSec, preferLang, trackIndex),
   ffSpeech: (file, audioIndex, windows, preferLang) => ipcRenderer.invoke('ff:speech', file, audioIndex, windows, preferLang),
   ffSpeechCancel: () => ipcRenderer.invoke('ff:speech-cancel'),
   onFfProgress: (cb) => on('ff:progress', cb),

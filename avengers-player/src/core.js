@@ -67,42 +67,134 @@
   /* ------------------------------------------------------------- the snap */
 
   /**
+   * Where the climb to a white-out begins: the first frame that is clearly brighter than the
+   * picture was a moment before it, with every frame after it climbing on to the white.
+   *   F      frames in time order, [{ t, mean }]
+   *   start  the first white frame
+   *   dt     the time from one frame to the next (the usual gap)
+   *   frameDt  the length of one frame (the shortest gaps), when frames may be missing
+   * "Clearly" is measured against how much this picture flickers by itself. A brighter shot that
+   * only holds its level is not a climb; a glow that builds up and then a cut to white: the flash
+   * is the cut. A picture shown twice in a row (a film of 24 frames in a file of 50 or 60) does
+   * not end a climb.
+   * Returns { rise, open, holes, fuzzy }:
+   *   open   the climb reaches back to the first frame looked at: where it began was not seen
+   *   holes  frames are missing in the climb or just before it
+   *   fuzzy  the first step is hardly bigger than the flicker: the frame may be a frame or two off
+   */
+  function climbStart(F, start, dt, frameDt) {
+    const level = (i) => {
+      const v = [];
+      for (let k = i - 1; k >= 0 && (F[i].t - F[k].t <= 0.105 + 1e-6 || v.length < 2); k--) v.push(F[k].mean);
+      return v.length ? median(v) : F[i].mean;
+    };
+    // The flicker: how far each frame of the two seconds before is from the average of its two
+    // neighbours (a steady climb, however long, is no flicker). Pictures repeated in a 50 or 60
+    // frame file say nothing about flicker and are left out.
+    const dev = [];
+    for (let i = start - 2; i > 0 && F[start].t - F[i].t <= 2; i--) dev.push(Math.abs(F[i].mean - (F[i - 1].mean + F[i + 1].mean) / 2));
+    const moving = dev.filter((d) => d > 1e-5);
+    const repeated = dev.length >= 4 && moving.length < dev.length * 0.75;
+    // (A picture that does not move at all has no flicker: the corners of the climb itself, which
+    // are the only frames that "move" then, must not be taken for it.)
+    const sigma = dev.length < 4 ? 0.01 : repeated ? (moving.length >= 4 ? 1.4826 * median(moving) / 0.7071 : 0) : 1.4826 * median(dev) / 1.2247;
+    const g = Math.max(0.015, 3.5 * sigma);
+    const bridge = Math.max(1, Math.round(0.06 / dt));
+    let rise = start;
+    let open = false;
+    while (rise > 0) {
+      if (F[start].t - F[rise - 1].t > 2.5) { open = true; break; }
+      let q = -1;
+      for (let k = rise - 1; k >= Math.max(1, rise - 1 - bridge); k--) {
+        if (F[k].mean > F[rise].mean + g) break;                     // brighter than what follows: not this climb
+        if (F[k].mean - level(k) >= g) { q = k; break; }
+      }
+      if (q < 0) break;
+      rise = q;
+    }
+    if (rise === 0) open = true;
+    // One big step out of a picture that held still right before it: the flash is that step.
+    const still = dt >= 0.036 ? 1 : dt >= 0.027 ? 2 : 3;
+    const big = Math.max(0.2, 4 * g);
+    for (let j = start; j > rise; j--) {
+      const step = F[j].mean - F[j - 1].mean;
+      if (step < big) continue;
+      let calm = j - still >= rise;
+      for (let k = j - 1; calm && k >= j - still && k > 0; k--) if (F[k].mean - F[k - 1].mean >= step / 4) calm = false;
+      if (calm) { rise = j; break; }
+    }
+    const fuzzy = F[rise].mean - level(rise) < 1.5 * g || g >= 0.1;
+    // A missing frame is a gap longer than one frame. (When many frames are missing, the usual gap
+    // is no longer one frame long: the shortest gaps are.)
+    const step = Math.min(dt, frameDt > 0 ? frameDt : dt);
+    let holes = false;
+    for (let i = Math.max(1, rise - 2); i <= start; i++) if (F[i].t - F[i - 1].t > step * 1.6) holes = true;
+    return { rise: rise, open: open, holes: holes, fuzzy: fuzzy };
+  }
+
+  /**
    * Looks for the flash of the snap in a run of frames: the picture going white all over, out of
-   * a normal picture, for at least a moment.
+   * a picture that was not.
    *
    *   frames  [{ t, mean, white }]  t = film time of the frame, mean = average brightness (0..1)
    *           of the middle of the picture, white = share of that area that is nearly white
-   *   opts    { expect, minDur }    expect = where the snap is thought to be (breaks ties)
+   *   opts    expect  where the snap is thought to be (breaks ties)
+   *           after   when the line "...Iron Man." goes off screen, if that is known: then the
+   *                   first white-out that begins between 0.75 s before and 4 s after it is taken
+   *           minDur  how long a white-out has to last to count (0.12 s)
    *
-   * Returns null, or { start, rise, end, kind, duration } as positions in `frames`:
-   *   start  the first frame that is white all over
-   *   rise   the frame on which the brightness began to climb towards it: the suggested snap frame
-   *   kind   'white' (the screen whites out) or 'bright' (only a clear peak of brightness)
+   * Returns null, or { start, rise, end, kind, duration, rivals, open, holes, fuzzy, runs } with
+   * positions in `frames`:
+   *   start   the first frame that is white all over
+   *   rise    the frame on which the brightness began to climb towards it: the snap frame
+   *   kind    'white' (the screen whites out) or 'bright' (only a clear peak of brightness)
+   *   rivals  how many other white-outs there are in the frames
+   *   open, holes, fuzzy  see climbStart: any of them makes the frame a suggestion, not a find
+   *   runs    every white-out (or the peak), as { start, rise, end, kind, duration }
    */
   function findFlash(frames, opts) {
     opts = opts || {};
-    const n = frames ? frames.length : 0;
+    // Only frames that follow each other in time count: a re-cue shows a stretch twice.
+    const idx = [];
+    for (let i = 0; i < (frames ? frames.length : 0); i++) {
+      const f = frames[i];
+      if (!f || !isFinite(f.t)) continue;
+      while (idx.length && frames[idx[idx.length - 1]].t >= f.t) idx.pop();
+      idx.push(i);
+    }
+    const F = idx.map((i) => frames[i]);
+    const n = F.length;
     if (n < 4) return null;
     const gaps = [];
-    for (let i = 1; i < n; i++) gaps.push(frames[i].t - frames[i - 1].t);
+    for (let i = 1; i < n; i++) gaps.push(F[i].t - F[i - 1].t);
     const dt = Math.max(1e-3, median(gaps));
+    const frameDt = Math.max(1e-3, percentile(gaps, 0.15));
     const minDur = opts.minDur != null ? opts.minDur : 0.12;
-    const expect = isFinite(opts.expect) ? opts.expect : (frames[0].t + frames[n - 1].t) / 2;
+    const expect = isFinite(opts.expect) ? opts.expect : (F[0].t + F[n - 1].t) / 2;
+    const EPS = 1e-6;
 
-    // 1. runs of frames that are white all over, each starting out of a picture that is not
+    // 1. White-outs. A frame on the way up that is only nearly white does not hide what follows,
+    //    and a frame that flickers darker inside the white-out does not end it.
     const runs = [];
-    for (let i = 1; i < n; i++) {
-      if (!(frames[i].white >= 0.88) || frames[i - 1].white >= 0.75) continue;
+    let armed = false;
+    for (let i = 0; i < n; i++) {
+      if (!(F[i].white >= 0.75)) { armed = true; continue; }
+      if (!armed || !(F[i].white >= 0.88)) continue;
       let j = i;
-      while (j + 1 < n && frames[j + 1].white >= 0.75 && frames[j + 1].t - frames[j].t < Math.max(0.3, dt * 4)) j++;
-      const duration = frames[j].t - frames[i].t + dt;
-      if (duration >= minDur) runs.push({ start: i, end: j, duration: duration, kind: 'white' });
+      for (let k = i + 1; k < n; k++) {
+        if (F[k].t - F[k - 1].t >= Math.max(0.3, dt * 4)) break;
+        if (F[k].white >= 0.75) j = k;
+        else if (F[k].t - F[j].t > 0.15 + EPS) break;
+      }
+      const duration = F[j].t - F[i].t + dt;
+      if (duration >= minDur - EPS) runs.push({ start: i, end: j, duration: duration, kind: 'white' });
       i = j;
+      armed = false;
     }
 
-    // 2. failing that, one clear peak of brightness (a flash that does not reach pure white)
+    // 2. Failing that, one clear peak of brightness (a flash that does not reach pure white).
     if (!runs.length) {
-      const means = frames.map((f) => f.mean);
+      const means = F.map((f) => f.mean);
       const base = median(means);
       let top = 0;
       for (let i = 1; i < n; i++) if (means[i] > means[top]) top = i;
@@ -113,56 +205,130 @@
         let b = top;
         while (a > 0 && means[a - 1] >= half) a--;
         while (b + 1 < n && means[b + 1] >= half) b++;
-        const duration = frames[b].t - frames[a].t + dt;
-        if (a > 0 && duration >= Math.min(minDur, 0.08) && duration <= 4) runs.push({ start: a, end: b, duration: duration, kind: 'bright' });
+        const duration = F[b].t - F[a].t + dt;
+        if (a > 0 && duration >= Math.min(minDur, 0.08) - EPS && duration <= 4) runs.push({ start: a, end: b, duration: duration, kind: 'bright' });
       }
     }
     if (!runs.length) return null;
+    for (const r of runs) Object.assign(r, climbStart(F, r.start, dt, frameDt));
 
-    // The longest white-out wins; between (nearly) equals, the one nearest to where the snap is expected.
-    const same = Math.max(dt * 1.5, 0.08);
-    let run = runs[0];
-    for (const r of runs) {
-      const longer = Math.min(r.duration, 1.5) - Math.min(run.duration, 1.5);
-      if (longer > same || (Math.abs(longer) <= same && Math.abs(frames[r.start].t - expect) < Math.abs(frames[run.start].t - expect))) run = r;
+    // Which one. With the line known: the first white-out that begins right after it. Otherwise
+    // the longest; between (nearly) equals, the one nearest to where the snap is expected.
+    let run = null;
+    if (isFinite(opts.after)) {
+      for (const r of runs) {
+        const d = F[r.rise].t - opts.after;
+        if (d > -0.75 && d < 4) { run = r; break; }
+      }
     }
+    if (!run) {
+      const same = Math.max(dt * 1.5, 0.08);
+      run = runs[0];
+      for (const r of runs) {
+        const longer = Math.min(r.duration, 1.5) - Math.min(run.duration, 1.5);
+        if (longer > same || (Math.abs(longer) <= same && Math.abs(F[r.start].t - expect) < Math.abs(F[run.start].t - expect))) run = r;
+      }
+    }
+    return {
+      start: idx[run.start], rise: idx[run.rise], end: idx[run.end], kind: run.kind, duration: run.duration,
+      rivals: runs.filter((r) => r !== run && r.kind === 'white').length,
+      open: run.open, holes: run.holes, fuzzy: run.fuzzy,
+      runs: runs.map((r) => ({ start: idx[r.start], rise: idx[r.rise], end: idx[r.end], kind: r.kind, duration: r.duration }))
+    };
+  }
 
-    // Where the brightness began to climb: walk back from the white-out while the picture is still
-    // clearly brighter than it was before the flash.
-    const before = [];
-    for (let i = run.start - 1; i >= 0 && frames[run.start].t - frames[i].t <= 1.6; i--) {
-      if (frames[run.start].t - frames[i].t >= 0.35) before.push(frames[i].mean);
+  /**
+   * What may be done with what a search for the snap saw. There are two witnesses: the white-out
+   * in the picture, and the line "...Iron Man." in subtitles that are known to be in step with the
+   * film (the movie's own, or a file the app has put on the voices). The snap follows that line
+   * by a moment in every copy.
+   *
+   *   frames  the frames looked at, [{ t, mean, white }]
+   *   line    { end, checked } or null; only a checked line is a witness
+   *   opts    expect  where the snap is thought to be
+   *           wide    the frames come from the wide search, far from where the snap was expected
+   *           lent    an armed countdown lent the film for the search: only a find may change it
+   *           rivals  white-outs seen elsewhere (by the wide search) that could be the snap too
+   *
+   * Returns { verdict, at, flash, why, after }:
+   *   'found'     set as found. A clean white-out (every frame there, a climb that starts clearly,
+   *               white for at least 0.2 s) that begins between 0.75 s before and 2 s after a
+   *               checked line, with no other white-out beginning there; or, with no checked line,
+   *               a clean white-out of at least 0.3 s near where the snap was expected, the only
+   *               white-out in sight
+   *   'likely'    set, not marked as found: the same, but only the wide search saw it
+   *   'estimate'  set, not marked as found: no flash at all, and a checked line: 0.1 s after it
+   *   'ask'       nothing set: what was seen does not settle it, and the film strip asks
+   *   why         'flash+line', 'flash', 'far', 'line', or what stood in the way: 'disagree',
+   *               'crowd', 'rivals', 'holes', 'open', 'fuzzy', 'short', 'bright', 'nothing', 'armed'
+   *   after       seconds from the end of the line to the flash (null without both)
+   */
+  function judgeSnap(frames, line, opts) {
+    opts = opts || {};
+    const EPS = 1e-6;
+    const checked = !!(line && line.checked && isFinite(line.end));
+    const flash = findFlash(frames, { expect: checked ? line.end + 0.1 : opts.expect, after: checked ? line.end : undefined });
+    const at = flash ? frames[flash.rise].t : null;
+    const after = checked && flash ? at - line.end : null;
+    const res = (verdict, why, t) => ({ verdict: verdict, at: t != null ? t : at, flash: flash, why: why, after: after });
+    const flaw = !flash ? 'nothing' : flash.kind !== 'white' ? 'bright' : flash.holes ? 'holes' : flash.open ? 'open' : flash.fuzzy ? 'fuzzy' : '';
+    if (checked) {
+      if (!flash) return opts.lent ? res('ask', 'armed') : res('estimate', 'line', Math.round((line.end + 0.1) * 1000) / 1000);
+      const near = (t) => t - line.end > -0.75 - EPS && t - line.end < 2 + EPS;
+      if (!near(at)) return res('ask', 'disagree');
+      const crowd = flash.runs.filter((r) => r.kind === 'white' && r.start !== flash.start && near(frames[r.rise].t)).length;
+      if (flaw) return res('ask', flaw);
+      if (crowd) return res('ask', 'crowd');
+      if (flash.duration < 0.2 - EPS) return res('ask', 'short');
+      return res('found', 'flash+line');
     }
-    const calm = before.length ? median(before) : frames[0].mean;
-    const lift = Math.max(0.06, 0.15 * (1 - calm));
-    let rise = run.start;
-    while (rise > 0 && frames[run.start].t - frames[rise - 1].t <= 0.6 && frames[rise - 1].mean > calm + lift && frames[rise - 1].mean <= frames[rise].mean + 0.02) rise--;
-    return { start: run.start, rise: rise, end: run.end, kind: run.kind, duration: run.duration };
+    if (flaw) return res('ask', flaw);
+    if (flash.rivals || opts.rivals > 0) return res('ask', 'rivals');
+    if (flash.duration < 0.3 - EPS) return res('ask', 'short');
+    const close = isFinite(opts.expect) && at >= opts.expect - 3.5 && at <= opts.expect + 7.5;
+    if (!opts.wide && close) return res('found', 'flash');
+    return opts.lent ? res('ask', 'armed') : res('likely', 'far');
   }
 
   /**
    * Finds the line "And I... am... Iron Man." in a list of subtitle cues ({ start, end, text }).
-   * On the discs it is split over three cues several seconds apart ("And I..." / "am..." /
-   * "Iron Man."), and captions for the hard of hearing put sounds such as (PANTING) in between,
-   * so up to five cues in a row are read as one sentence. Of several places where the words
-   * occur, the one whose end is nearest to `expect` wins.
+   * On the discs it is split over three cues several seconds apart, captions for the hard of
+   * hearing put sounds such as (PANTING) in between, subtitles read off a disc by machine write
+   * "l" for "I", and some files put the speaker's name in front: up to five cues with words in a
+   * row are read as one sentence, and sound captions and names are left out.
+   *   expect  where the snap is thought to be: of several places, the one nearest to it wins
+   *   opts    before, after: only a line that ends within this many seconds of `expect` counts
    * Returns { start, end, text } (end = when the last cue of the line goes off screen) or null.
    */
-  function findSnapLine(cues, expect) {
+  function findSnapLine(cues, expect, opts) {
     if (!cues || !cues.length) return null;
-    const re = /\bi\b[^a-z0-9]{0,12}am[^a-z0-9]{0,12}iron[^a-z0-9]{0,3}man\b/i;
-    // Tags, and sound captions in brackets, are not part of what is said.
-    const plain = (c) => String(c && c.text != null ? c.text : '').replace(/<[^>]*>/g, ' ').replace(/\([^)]*\)|\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim();
+    opts = opts || {};
+    const re = /(?:^|[^a-z0-9])[il|](?:[^a-z0-9]{0,12}am|['’]m)[^a-z0-9]{0,12}[il|]ron[^a-z0-9]{0,3}man(?![a-z0-9])/i;
+    // Tags, sound captions in brackets (closed or not) and speaker names are not part of what is said.
+    const plain = (c) => String(c && c.text != null ? c.text : '').replace(/<[^>]*>|\{[^}]*\}/g, ' ').replace(/\\N/g, '\n')
+      .replace(/\([^)]*\)|\[[^\]]*\]/g, ' ').replace(/[(\[][^\n)\]]*$/gm, ' ')
+      .replace(/(^|\n)\s*[-–—]?\s*[A-Za-z][A-Za-z .'\-]{0,24}:\s*/g, '$1')
+      .replace(/\s+/g, ' ').trim();
+    const said = cues.map(plain);
+    const known = isFinite(expect);
     let best = null;
     for (let i = 0; i < cues.length; i++) {
+      if (!said[i]) continue;
       let text = '';
-      for (let j = i; j < cues.length && j < i + 5; j++) {
-        if (j > i && (cues[j].start - cues[j - 1].end > 8 || cues[j].end - cues[i].start > 25)) break;
-        text = (text + ' ' + plain(cues[j])).trim();
+      let spoken = 0;
+      let last = i;
+      for (let j = i; j < cues.length && spoken < 5; j++) {
+        if (j > i && (cues[j].start - cues[last].end > 8 || cues[j].end - cues[i].start > 25)) break;
+        if (!said[j]) continue;                        // a sound caption: not one of the five
+        spoken++;
+        last = j;
+        text = (text + ' ' + said[j]).trim();
         if (!re.test(text)) continue;
-        const d = Math.abs(cues[j].end - (isFinite(expect) ? expect : cues[j].end));
+        const end = cues[j].end;
+        if (known && ((opts.before != null && end < expect - opts.before) || (opts.after != null && end > expect + opts.after))) break;
+        const d = Math.abs(end - (known ? expect : end));
         // Nearest to where the snap is expected; of runs that end on the same cue, the tightest.
-        if (!best || d < best.d - 1e-6 || (Math.abs(d - best.d) <= 1e-6 && cues[i].start > best.start)) best = { start: cues[i].start, end: cues[j].end, text: text, d: d };
+        if (!best || d < best.d - 1e-6 || (Math.abs(d - best.d) <= 1e-6 && cues[i].start > best.start)) best = { start: cues[i].start, end: end, text: text, d: d };
         break;
       }
     }
@@ -869,7 +1035,7 @@
     FILM_VERSIONS: FILM_VERSIONS, filmVersion: filmVersion, guessFilmVersion: guessFilmVersion, REFERENCE_SEC: REFERENCE_SEC,
     normLang: normLang, langName: langName, langFromTitle: langFromTitle, trackLang: trackLang, pickAudioTrack: pickAudioTrack,
     LANG_NAMES: LANG_NAMES, playableAudioCodec: playableAudioCodec, audioCodecName: audioCodecName,
-    findFlash: findFlash, findSnapLine: findSnapLine, median: median,
+    findFlash: findFlash, findSnapLine: findSnapLine, judgeSnap: judgeSnap, climbStart: climbStart, median: median,
     percentile: percentile, speechScore: speechScore, cueTimeline: cueTimeline, speechPlan: speechPlan, alignCues: alignCues, SUB_SCALES: SUB_SCALES, betterFit: betterFit, ALIGN: ALIGN,
     MONTHS: MONTHS, MONTHS_LONG: MONTHS_LONG, DAYS: DAYS, DAYS_LONG: DAYS_LONG,
     clamp: clamp, pad: pad, median: median,

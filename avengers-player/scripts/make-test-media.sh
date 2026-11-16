@@ -62,6 +62,15 @@ long_clip() {   # name seconds second-of-the-flash
 long_clip original-length.mp4 10871 9031.5
 long_clip encore-length.mp4 11110 9031.5
 long_clip encore-short.mp4 10896 9056.5
+# The ENCORE clip with English subtitles inside: "Iron Man." goes off screen at 2:30:55.75, just under a
+# second before the flash. (And a forced-only English track first, which must not be the one read.)
+if [[ ! -f "$out/encore-subs.mkv" ]]; then
+  printf '1\n02:30:20,000 --> 02:30:22,000\nI am... inevitable.\n\n2\n02:30:47,800 --> 02:30:49,300\nAnd I...\n\n3\n02:30:51,000 --> 02:30:52,100\nam...\n\n4\n02:30:54,250 --> 02:30:55,750\nIron Man.\n' > "$out/encore-subs.tmp.srt"
+  printf '1\n02:10:00,000 --> 02:10:02,000\n[SIGN: NEW YORK]\n' > "$out/encore-forced.tmp.srt"
+  ff -i "$out/encore-short.mp4" -i "$out/encore-forced.tmp.srt" -i "$out/encore-subs.tmp.srt" -map 0 -map 1 -map 2 -c copy -c:s srt \
+     -metadata:s:s:0 language=eng -disposition:s:0 forced -metadata:s:s:1 language=eng "$out/encore-subs.mkv"
+  rm -f "$out/encore-subs.tmp.srt" "$out/encore-forced.tmp.srt"
+fi
 # Movies with sound in several languages. English must play, whatever the file flags as its main
 # track. The tracks differ in bitrate so a test can tell which one is being decoded.
 LV=(-f lavfi -i "testsrc2=size=640x360:rate=24,format=yuv420p")
