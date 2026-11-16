@@ -1461,6 +1461,7 @@ const scenarios = {
       await sleep(2500);
       check('it is said once', !(await popup(s.page)) && await s.page.evaluate((x) => window.__AP.cfg.newYearSeen === x, t.target));
       check('and after midnight there is no late box or reminder', await s.page.evaluate(() => document.getElementById('late').hidden && document.getElementById('latePill').hidden));
+      check('the Mission card says it was missed, not late', await waitFor(s.page, () => /MISSED · NOT ARMED/.test(document.getElementById('stLabel').textContent) && /HAPPY NEW YEAR/.test(document.getElementById('stBig').textContent), null, 3000) && !/JOIN/.test(await s.page.textContent('#armBtn')), await s.page.textContent('#stLabel') + ' | ' + await s.page.textContent('#armBtn'));
       await sleep(400);
       await s.close();
       s = await launch(profile, { AP_FAKE_NTP: t.fake });

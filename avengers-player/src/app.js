@@ -3956,6 +3956,7 @@
       const exp = e.expected(now);
       if (e.mode !== 'armed') {
         if (toStart > 0) { label = 'READY · NOT ARMED'; big = C.fmtCountdown(toStart); sub = 'until the movie has to start'; }
+        else if (newYear && toSnap <= 0) { label = 'MISSED · NOT ARMED'; big = 'HAPPY NEW YEAR'; sub = 'The countdown did not run this time. Better luck next year.'; }
         else if (Late.position(now) != null) { state = 'slipped'; label = 'LATE · NOT ARMED'; big = C.fmtDuration(exp, { forceHours: true }); sub = 'is where the movie should be now. Press JOIN NOW to jump in.'; }
         else { label = 'READY · NOT ARMED'; big = C.fmtCountdown(Math.max(0, toStart)); sub = 'until the movie has to start'; }
       } else if (e.phase === 'slipped' || e.phase === 'blocked') {
