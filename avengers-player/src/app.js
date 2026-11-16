@@ -1991,7 +1991,7 @@
       const order = (x) => { const l = C.trackLang(x); return l === 'eng' && plain(x) ? 0 : !l && plain(x) ? 1 : l === 'eng' ? 2 : 3; };
       const list = tracks.slice().sort((a, b) => order(a) - order(b) || a.index - b.index).slice(0, 4);
       for (const t of list) {
-        if (this.cancelled || !Media.ready) return null;
+        if ((this.busy && this.cancelled) || !Media.ready) return null;          // the search was called off
         const name = 'subtitle track ' + (t.index + 1) + (C.trackLang(t) ? ' (' + C.trackLang(t) + ')' : '') + ' inside the movie';
         try {
           const r = await native.ffSubWindow(Media.info.path, Math.max(0, snap - span.before), span.before + span.after, '', t.index);
