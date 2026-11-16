@@ -19,10 +19,11 @@ You bring your own copy of the movie. Nothing is uploaded anywhere.
 
 ## On the night
 
-1. **Import the movie.** Drop the file on the window or click to browse.
+1. **Import the movie.** Drop the file on the window or click to browse. The app finds the snap in it (see below).
 2. Click **START THE COUNTDOWN**. You can do this days ahead: the movie waits for December 31.
 3. Press **F** for fullscreen. A standby screen counts down to the start.
-4. Walk away. At 9:29:30 PM the movie starts by itself.
+4. Walk away. The movie starts by itself at the time shown in the Mission tab: a second or two before 9:29:30 PM,
+   exactly as early as the snap in your copy needs.
 
 **If the app crashes, it comes back by itself.** While the countdown is armed a small watchdog keeps an eye on the
 app. If the app crashes or is killed, the watchdog starts it again within a couple of seconds; after a restart of the PC,
@@ -42,31 +43,37 @@ A test run moves the app's own clock, not your PC clock, so you can try the whol
 
 Each test prints a result with the measured error in milliseconds.
 
-## Find the snap (do this once per film)
+## The snap is found for you
 
 "Start at 9:29:30 PM" puts the snap at 2:30:30, and that is a round number. In the film the fingers snap a moment
-later, and how much later differs between cuts. So the app does not take the figure on trust: it finds the frame.
+later, and how much later differs from copy to copy: a Blu-ray copy, a streaming copy and the 2026 Encore cut are
+all timed differently. So the app takes nothing from a table. **When you import a movie, it finds the snap in that
+file by itself and sets the countdown by it.**
 
-1. Import the movie. The pre-flight list says *Snap point not confirmed in this file yet*.
-2. Press **FIND THE SNAP IN THIS FILE**. The app plays that part of the film without sound, looks at every frame and
-   opens a **film strip**: one small picture per frame, with the film itself paused on the selected frame above it.
-3. The app marks the frame where the flash of the snap begins (**SNAP?**). Check it against the picture; step a frame
-   with **←** **→** if it is one off. The film time of the frame is shown to the millisecond.
-4. Press **Put the snap on this frame** (or **Enter**). The start time of the movie moves with it.
-5. Run the **Snap test**. Afterwards the strip opens again and shows the frame the app put on 12:00:00 and how many
-   milliseconds from the clock it came on screen. If that is the snap, press **Yes**.
+1. Import the movie. After a moment a box says *Finding the snap in this film*: the app plays that part of the film
+   without sound and looks at every frame. It takes ten seconds or so, once per file.
+2. A **film strip** opens: one small picture per frame, with the film itself paused on the chosen frame above it.
+   The title reads *Snap found: 2:30:31.5…* and the start time of the movie has already moved with it.
+3. Look at the picture. If it is the frame where his fingers snap, press **Yes** (or just close the strip). If it is
+   a frame off, step with **←** **→** and press **Put the snap on this frame**.
+4. Run the **Snap test** when you like. Afterwards the strip shows the frame the app put on 12:00:00 and how many
+   milliseconds from the clock it came on screen.
 
-The app has two witnesses. One is the picture: the flash. The other is the subtitles, either a file you loaded or
-the subtitles inside the movie itself (FFmpeg reads them): the snap comes a moment after the line *"And I… am… Iron
-Man."* goes off screen, in every cut. The strip says where the line ends and whether the flash it found is where it
-should be. If the snap is nowhere near 2:30:30 in your copy, the app goes to the line, or sweeps a wider stretch
-(45 s before to 105 s after) by itself.
+The app has two witnesses. One is the picture: the flash that fills the screen when the fingers snap. The other is
+the subtitles, either a file you loaded or the subtitles inside the movie itself (FFmpeg reads them): the snap comes
+a moment after the line *"And I… am… Iron Man."* goes off screen, in every cut.
 
-Every film file remembers its own snap point, so ENDGAME and ENCORE can both be set once and then swapped freely.
-Starting the countdown with a snap point that was never checked asks first.
+| What the app found | What it does |
+|---|---|
+| The flash, right after the line (or a clear flash and no subtitles to ask) | Sets the snap point on that frame and shows it |
+| The line, but no flash in the picture | Sets an estimate just after the line, says that it is an estimate, and asks you to pick the frame |
+| A flash that is not where the line says | Changes nothing, warns you, and lets you pick |
+| Nothing | Changes nothing and shows you the frames around 2:30:30 |
 
-The old way still works: **Setup → Snap point**, play from 10 s before, pause, step with the frame buttons and press
-*The snap is on this frame*.
+If the snap is nowhere near 2:30:30 in a copy, the app goes to the line, or sweeps a wider stretch (45 s before to
+105 s after). Every film file remembers its own snap point, so any number of copies can be set once and then swapped
+freely. Starting the countdown with a snap point that was never checked asks first. **FIND THE SNAP** (Mission tab,
+or Setup → Snap point) runs the search again at any time, and the frame buttons in Setup still work by hand.
 
 ## Which version of the film?
 
@@ -77,9 +84,8 @@ The app tells the two cuts apart by the length of the file (**Setup → Film ver
 | *Avengers: Endgame* (2019) | 3:01:11 | a moment after 2:30:30; found in the file |
 | *Avengers Endgame: Encore* (2026) | 3:01:36 | found in the file; the search covers the extra 25 seconds |
 
-For neither cut is the snap point taken from a table: it is found in the file, once, as described above. Until that
-has been done the pre-flight list keeps a line saying so, and the countdown can still be started with the round
-figure.
+For neither cut is the snap point taken from a table: it is found in the file when the file is imported, as
+described above. Until a snap point has been found or picked, the pre-flight list keeps a line saying so.
 
 What is known from outside the file. A published subtitle file made from the 4K Blu-ray's own subtitle track
 shows *"Iron Man."* from 2:30:29.9 to 2:30:31.4, so on a Blu-ray copy the snap is at about 2:30:31.5, a second and a
