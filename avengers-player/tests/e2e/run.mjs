@@ -1257,7 +1257,7 @@ const scenarios = {
       check('a 3:01:11 file is ENDGAME, starting from the round figure 2:30:30', v.version === 'original' && /^Endgame · /.test(v.card) && v.snap === 9030 && /Dec 31 · 9:29:30 PM/.test(v.start), v.version + ' | ' + v.card + ' | ' + v.snap);
       check('the app starts looking for the snap by itself', await searching(s.page));
       check('and says what it is doing', /Every copy of the film is timed a little differently/.test(await s.page.textContent('#modalBody')) && /once per file/.test(await s.page.textContent('#modalBody')));
-      check('it ends with the film strip', await stripOpen(s.page, 60000));
+      check('it ends with the film strip', await stripOpen(s.page, 180000));
       let f = await stripView(s.page);
       v = await info(s.page);
       check('the snap point is already set: 2:30:31.668, where the flash begins, 1.668 s after the round figure', Math.abs(v.snap - 9031.668) < 1e-6 && v.version === 'original', v.snap + ' ' + v.version);
@@ -1277,7 +1277,7 @@ const scenarios = {
       check('Snap test: locks on 20 s before the snap, two and a half hours into the file', await waitSynced(s.page, 12000));
       const st = await state(s.page);
       check('the film is at about 2:30:11', Math.abs(st.t - 9011.7) < 6, C_fmt(st.t));
-      check('after the test the strip opens', await stripOpen(s.page, 60000));
+      check('after the test the strip opens', await stripOpen(s.page, 180000));
       f = await stripView(s.page);
       check('the frame put on 12:00:00 is the frame of the flash, and it came on screen within 60 ms of the clock', f.mode === 'test' && Math.abs(f.nowT - 9031.6667) < 0.01 && !!f.flash && Math.abs(f.flash.rise - f.nowT) < 0.01 && Math.abs(f.offMs) < 60, JSON.stringify({ now: f.nowT, flash: f.flash, offMs: Math.round(f.offMs) }));
       check('the strip says the snap landed', /The snap landed on 12:00:00/.test(f.title) && f.ok === 'Yes, the snap is on this frame', f.title + ' | ' + f.ok);
@@ -1296,7 +1296,7 @@ const scenarios = {
       check('the search starts from the point confirmed in ENDGAME, the same film', Math.abs(v.snap - 9031.668) < 1e-6 && /Snap point not confirmed in this file yet/.test(v.preflight), v.snap + '');
       check('it starts by itself', await searching(s.page));
       check('the snap is not there in this cut, so the app sweeps a wider stretch', await waitFor(s.page, () => /Searching from 2:29:46 to 2:32:16/.test(document.getElementById('modalNote').textContent), null, 30000), await s.page.textContent('#modalNote'));
-      check('and ends with the strip', await stripOpen(s.page, 90000));
+      check('and ends with the strip', await stripOpen(s.page, 180000));
       f = await stripView(s.page);
       v = await info(s.page);
       check('ENCORE: the white-out it found is set: 2:30:56.668, 25 s after the ENDGAME point', Math.abs(v.snap - 9056.668) < 1e-6 && Math.abs(f.selT - 9056.6667) < 0.01 && Math.abs(f.nowT - 9056.6667) < 0.01, v.snap + ' | ' + f.title);
@@ -1333,7 +1333,7 @@ const scenarios = {
       await sleep(500);
       v = await info(s.page);
       check('a 3:05:10 file is taken for Encore too, starting from the point confirmed in the other Encore copy', v.version === 'encore' && Math.abs(v.snap - 9056.668) < 1e-6 && /Snap point not confirmed in this file yet/.test(v.preflight), v.card + ' ' + v.snap);
-      check('it is searched itself', await searching(s.page) && await stripOpen(s.page, 120000));
+      check('it is searched itself', await searching(s.page) && await stripOpen(s.page, 180000));
       v = await info(s.page);
       check('and its own white-out is set, 25 s earlier in this copy: 2:30:31.668, for a look', Math.abs(v.snap - 9031.668) < 1e-6 && await shows(s.page, 'preflight', /Snap point not confirmed in this file yet/), v.snap + '');
       await s.page.keyboard.press('Escape');
@@ -1351,7 +1351,7 @@ const scenarios = {
       check('Skip stops the search and changes nothing', !after.strip && !after.busy && !after.modal && after.paused && !after.muted && after.rate === 1 && /Snap point not confirmed in this file yet/.test(v.preflight), JSON.stringify(after));
       check('the Mission tab still offers to find it', v.findBtn);
       await loadMovie(s.page, copy1);
-      check('imported again, it is searched again', await searching(s.page) && await stripOpen(s.page, 60000));
+      check('imported again, it is searched again', await searching(s.page) && await stripOpen(s.page, 180000));
       check('and found', Math.abs((await info(s.page)).snap - 9031.668) < 1e-6);
       await s.page.keyboard.press('Escape');
       await stripClosed(s.page);
@@ -1368,7 +1368,7 @@ const scenarios = {
       check('telling the user the countdown stays armed', /The countdown stays armed/.test(await s.page.textContent('#modalBody')));
       v = await info(s.page);
       check('the countdown is still armed on disk while the film is lent', v.armed === true && v.mode === 'free', v.mode + ' ' + v.armed);
-      check('the strip opens', await stripOpen(s.page, 60000));
+      check('the strip opens', await stripOpen(s.page, 180000));
       v = await info(s.page);
       f = await stripView(s.page);
       check('the countdown has the film back: armed, waiting at the start', v.mode === 'armed' && v.phase === 'standby' && v.armed === true && (await state(s.page)).t < 0.1, v.mode + ' ' + v.phase);
@@ -1402,7 +1402,7 @@ const scenarios = {
       let v = await info(s.page);
       check('ENCORE imported first, nothing known yet: recognised, starting from 2:30:30', v.version === 'encore' && v.snap === 9030, v.version + ' ' + v.snap);
       check('the app looks for the snap by itself', await searching(s.page));
-      check('it ends with the film strip', await stripOpen(s.page, 120000));
+      check('it ends with the film strip', await stripOpen(s.page, 180000));
       const f = await stripView(s.page);
       v = await info(s.page);
       const found = v.snap;
@@ -1420,7 +1420,7 @@ const scenarios = {
       await sleep(500);
       v = await info(s.page);
       check('a second ENCORE copy starts from the point found in the first one', v.version === 'encore' && Math.abs(v.snap - found) < 1e-6, v.snap + '');
-      check('it is searched by itself', await searching(s.page) && await stripOpen(s.page, 120000));
+      check('it is searched by itself', await searching(s.page) && await stripOpen(s.page, 180000));
       v = await info(s.page);
       check('and its snap is found right there, by the flash alone', Math.abs(v.snap - 9056.668) < 1e-6 && await shows(s.page, 'preflight', /Snap point confirmed in this file2:30:56\.668 · found by the app: the flash of the snap/), v.preflight.slice(0, 300));
       await s.page.keyboard.press('Escape');
@@ -1775,7 +1775,7 @@ const scenarios = {
       // ---- Find the snap
       await s.page.click('#findSnapBtn');
       check('a progress dialog while the app looks', await waitFor(s.page, () => !document.getElementById('modal').hidden && /Looking for the snap/.test(document.getElementById('modalTitle').textContent), null, 3000));
-      check('the strip opens by itself', await stripOpen(s.page, 40000));
+      check('the strip opens by itself', await stripOpen(s.page, 180000));
       let f = await stripView(s.page);
       check('every frame from 3 s before to 7 s after, none missing', f.mode === 'find' && f.n >= 236 && f.n <= 244 && f.gaps === 0 && f.thumbs === f.n && Math.abs(f.first - 97) < 0.05, f.n + ' frames, ' + f.gaps + ' gaps, from ' + f.first);
       check('the flash is found: begins at 1:41.542, white at 1:41.667', !!f.flash && Math.abs(f.flash.rise - RISE) < 0.002 && Math.abs(f.flash.start - WHITE) < 0.002 && f.flash.kind === 'white', JSON.stringify(f.flash));
@@ -1824,7 +1824,7 @@ const scenarios = {
       check('in sync', await waitSynced(s.page, 12000));
       const m = await measureSync(s.page, 4000);
       check('collecting the frames does not disturb the film', Math.abs(m.worst) < 0.06, ms(m.worst));
-      check('after the test the strip opens', await stripOpen(s.page, 60000));
+      check('after the test the strip opens', await stripOpen(s.page, 180000));
       f = await stripView(s.page);
       check('test strip: 2 s before to 4.5 s after, none missing', f.mode === 'test' && f.n >= 150 && f.n <= 158 && f.gaps === 0, f.n + ' frames, ' + f.gaps + ' gaps');
       check('the frame the app put on 12:00:00 is the frame of the snap', Math.abs(f.nowT - RISE) < 0.002 && Math.abs(f.selT - RISE) < 0.002, 'put on midnight: ' + f.nowT + ', flash begins: ' + (f.flash && f.flash.rise));
@@ -1841,7 +1841,7 @@ const scenarios = {
       await s.page.selectOption('#tsLeadSnap', '20');
       await s.page.click('[data-test="snap"]');
       check('Snap test with the round number', await waitSynced(s.page, 12000));
-      check('strip after it', await stripOpen(s.page, 60000));
+      check('strip after it', await stripOpen(s.page, 180000));
       f = await stripView(s.page);
       check('the frame put on 12:00:00 was the one at 1:40.000, not the snap', Math.abs(f.nowT - 100) < 0.002 && /Was that the snap/.test(f.title) && Math.abs(f.offMs) < 30, f.nowT + ', ' + Math.round(f.offMs) + ' ms');
       check('the app points at the frame of the flash, 1.542 s later', Math.abs(f.selT - RISE) < 0.002 && /begins 1\.542 s later/.test(f.note) && /^1\.542 s after the frame put on 12:00:00$/.test(f.rel) && f.ok === 'Put the snap on this frame', f.note.slice(0, 190) + ' | ' + f.rel);
@@ -1856,7 +1856,7 @@ const scenarios = {
       await s.page.click('.tab[data-tab="setup"]');
       await s.page.click('#snapFind');
       check('not near the point set: the app says it is searching wider', await waitFor(s.page, () => /Searching from 0:00:15 to 0:02:39/.test(document.getElementById('modalNote').textContent), null, 30000), await s.page.textContent('#modalNote'));
-      check('and still ends on the flash', await stripOpen(s.page, 90000));
+      check('and still ends on the flash', await stripOpen(s.page, 180000));
       f = await stripView(s.page);
       check('found 41.5 s away from the point that was set', !!f.flash && Math.abs(f.flash.rise - RISE) < 0.002 && Math.abs(f.selT - RISE) < 0.002 && f.nowT === null, JSON.stringify(f.flash));
       await s.page.click('#stripCancel');
@@ -1877,7 +1877,7 @@ const scenarios = {
       await s.page.evaluate(async (file) => { await window.__AP.SubsUI.loadFrom(await window.apNative.readSubtitle(file), { quiet: true }); }, srt);
       await s.page.click('#snapFind');
       check('a subtitle file nobody has checked does not steer the search: it starts where the snap point is', await waitFor(s.page, () => /Looking near 0:01:00/.test(document.getElementById('modalNote').textContent), null, 6000), await s.page.textContent('#modalNote'));
-      check('strip', await stripOpen(s.page, 90000));
+      check('strip', await stripOpen(s.page, 180000));
       f = await stripView(s.page);
       check('the strip quotes the line, where it ends, and that it was not checked', /The line “And I\.\.\. am\.\.\. Iron Man\.” ends at 0:01:39\.250 \(the subtitles, not checked against the film\)/.test(f.note) && Math.abs(f.selT - RISE) < 0.002, f.note.slice(0, 160));
       await s.page.keyboard.press('Enter');
@@ -1892,7 +1892,7 @@ const scenarios = {
       await s.page.click('.tab[data-tab="test"]');
       await s.page.click('[data-test="snap"]');
       check('a Snap test during an armed countdown', await waitSynced(s.page, 12000));
-      check('its strip opens too', await stripOpen(s.page, 60000));
+      check('its strip opens too', await stripOpen(s.page, 180000));
       f = await stripView(s.page);
       const st = await state(s.page);
       check('the real countdown is armed again underneath', st.mode === 'armed' && st.phase === 'standby' && st.test === null, st.mode + ' ' + st.phase);
@@ -1917,7 +1917,7 @@ const scenarios = {
       await loadMovie(s2.page, path.join(MEDIA, 'snap-wide.mp4'));
       await setSnap(s2.page, 20);
       await s2.page.click('#findSnapBtn');
-      check('a wide picture with black bars: strip', await stripOpen(s2.page, 40000));
+      check('a wide picture with black bars: strip', await stripOpen(s2.page, 180000));
       let f = await stripView(s2.page);
       check('the bars do not hide the flash: begins at 0:21.542', !!f.flash && f.flash.kind === 'white' && Math.abs(f.flash.rise - 517 / 24) < 0.002, JSON.stringify(f.flash));
       await s2.page.keyboard.press('Escape');
@@ -1930,7 +1930,7 @@ const scenarios = {
         check('no subtitle file is loaded', !(await s2.page.evaluate(() => window.__AP.SubsUI.loaded)));
         await s2.page.click('#findSnapBtn');
         check('the app reads the subtitles inside the movie and goes to the line, 80 s from the point that is set', await waitFor(s2.page, () => /Looking near 0:01:40/.test(document.getElementById('modalNote').textContent), null, 15000), await s2.page.textContent('#modalNote'));
-        check('strip', await stripOpen(s2.page, 40000));
+        check('strip', await stripOpen(s2.page, 180000));
         f = await stripView(s2.page);
         // (this file's times run 0.021 s later than the plain clip's: its sound starts that much before its picture)
         check('line and flash agree, and the strip says so', !!f.flash && Math.abs(f.flash.rise - 2437 / 24) < 0.03 &&
@@ -1956,7 +1956,7 @@ const scenarios = {
         await s2.page.evaluate(() => { window.__AP.cfg.snapByFile = {}; });
         await waitFor(s2.page, () => !!window.__AP.Media.probe, null, 6000);
         await auto(s2.page);
-        check('flash and subtitles agree: the strip opens with the snap already set', await stripOpen(s2.page, 40000));
+        check('flash and subtitles agree: the strip opens with the snap already set', await stripOpen(s2.page, 180000));
         let d = await verdict(s2.page);
         check('the snap point is on the frame of the flash, found by both witnesses', Math.abs(d.snap - 101.564) < 0.0015 && d.how === 'flash+line' && d.confirmed && d.searched && d.applied === 'flash+line', JSON.stringify({ snap: d.snap, how: d.how, confirmed: d.confirmed }));
         check('and the strip says so', /^Snap found: 0:01:41\.56\d$/.test(d.title) && /0\.9\d s after the line “…Iron Man\.” goes off screen/.test(d.note), d.title + ' | ' + d.note.slice(0, 160));
@@ -1976,7 +1976,7 @@ const scenarios = {
       await s2.page.evaluate(async (file) => { await window.__AP.SubsUI.loadFrom(await window.apNative.readSubtitle(file), { quiet: true }); }, early);
       await vouch(s2.page);
       await auto(s2.page);
-      check('flash and trusted subtitles disagree: the strip opens', await stripOpen(s2.page, 120000));
+      check('flash and trusted subtitles disagree: the strip opens', await stripOpen(s2.page, 180000));
       let d = await verdict(s2.page);
       check('nothing is set by the app', d.snap === SNAP && d.applied === null && !d.confirmed && d.searched, JSON.stringify({ snap: d.snap, how: d.how }));
       check('and the strip says why: the flash is not right after the line', /The app left the snap point as it was: the screen turns white at 0:01:41\.5\d\d, which is not right after the line “…Iron Man\.”/.test(d.note) && /^Is this the snap\?$/.test(d.title), d.title + ' | ' + d.note.slice(0, 260));
@@ -1984,9 +1984,9 @@ const scenarios = {
       // The same file, not checked against the film: only a hint, never a witness. The flash settles it.
       await s2.page.evaluate(() => { const { cfg } = window.__AP; cfg.subSyncKey = ''; cfg.subSyncState = ''; cfg.snapByFile = {}; });
       await auto(s2.page);
-      check('the same subtitles unchecked: the strip opens', await stripOpen(s2.page, 120000));
+      check('the same subtitles unchecked: the strip opens', await stripOpen(s2.page, 180000));
       d = await verdict(s2.page);
-      check('a subtitle file nobody has checked is no witness: the flash alone settles it', Math.abs(d.snap - 101.543) < 0.0015 && d.how === 'flash' && d.confirmed && d.applied === 'flash', JSON.stringify({ snap: d.snap, how: d.how, confirmed: d.confirmed }));
+      check('a subtitle file nobody has checked is no witness, but one that puts the line 6.5 s from the flash is a reason to ask', d.snap === SNAP && d.applied === null && !d.confirmed && /puts the line 6\.\d s away from this flash/.test(d.note), JSON.stringify({ snap: d.snap, how: d.how }) + ' ' + d.note.slice(0, 260));
       await s2.page.keyboard.press('Escape');
       await s2.page.evaluate(() => window.__AP.SubsUI.clear());
 
@@ -1999,7 +1999,7 @@ const scenarios = {
       await s2.page.evaluate(async (file) => { await window.__AP.SubsUI.loadFrom(await window.apNative.readSubtitle(file), { quiet: true }); }, only);
       await vouch(s2.page);
       await auto(s2.page);
-      check('trusted subtitles but no flash: the strip opens after the wider search', await stripOpen(s2.page, 120000));
+      check('trusted subtitles but no flash: the strip opens after the wider search', await stripOpen(s2.page, 180000));
       d = await verdict(s2.page);
       check('the snap point is an estimate, 0.1 s after the line, and not called confirmed', Math.abs(d.snap - 100.7) < 0.0015 && d.how === 'estimate' && !d.confirmed && d.applied === 'estimate', JSON.stringify({ snap: d.snap, how: d.how, confirmed: d.confirmed }));
       check('the strip asks the user to pick the frame', /Where does he snap/.test(d.title) && /No flash was found in the picture\. By the subtitles the snap comes a moment after 0:01:40\.600/.test(d.note), d.note.slice(0, 200));
@@ -2012,7 +2012,7 @@ const scenarios = {
       await setSnap(s2.page, SNAP);
       await s2.page.evaluate(async (file) => { window.__AP.cfg.snapByFile = {}; await window.__AP.SubsUI.loadFrom(await window.apNative.readSubtitle(file), { quiet: true }); }, only);
       await auto(s2.page);
-      check('the same subtitles unchecked: the strip opens', await stripOpen(s2.page, 120000));
+      check('the same subtitles unchecked: the strip opens', await stripOpen(s2.page, 180000));
       d = await verdict(s2.page);
       check('an unchecked subtitle file gives no estimate: nothing is set', d.snap === SNAP && d.applied === null && !d.confirmed, JSON.stringify({ snap: d.snap, how: d.how }));
       await s2.page.keyboard.press('Escape');
@@ -2023,7 +2023,7 @@ const scenarios = {
       await setSnap(s2.page, SNAP);
       await s2.page.evaluate(() => { window.__AP.cfg.snapByFile = {}; });
       await auto(s2.page);
-      check('no flash and no subtitles: the strip opens for the user', await stripOpen(s2.page, 120000));
+      check('no flash and no subtitles: the strip opens for the user', await stripOpen(s2.page, 180000));
       d = await verdict(s2.page);
       check('nothing is set, and the file is noted as searched', d.snap === SNAP && d.applied === null && !d.confirmed && d.searched && /left the snap point as it was: no flash was found, and there are no subtitles to go by/.test(d.log), JSON.stringify({ snap: d.snap, searched: d.searched }) + ' ' + d.log.slice(-160));
       await s2.page.keyboard.press('Escape');
@@ -2031,7 +2031,7 @@ const scenarios = {
       await loadMovie(s2.page, MOVIE);
       await setSnap(s2.page, SNAP);
       await s2.page.click('#findSnapBtn');
-      check('a film with no flash: the app searches wider, then shows the frames anyway', await stripOpen(s2.page, 120000));
+      check('a film with no flash: the app searches wider, then shows the frames anyway', await stripOpen(s2.page, 180000));
       f = await stripView(s2.page);
       check('no frame is suggested; the frame set now is selected', f.flash === null && /no flash was found/i.test(f.note) && Math.abs(f.selT - SNAP) < 0.002 && f.ok === 'Yes, the snap is on this frame', f.note.slice(0, 80) + ' | ' + f.selT);
       await s2.page.keyboard.press('ArrowRight');

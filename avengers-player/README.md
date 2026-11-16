@@ -69,11 +69,11 @@ The app only says **found** when nothing else could explain what it saw:
 
 | What the app saw | What it does |
 |---|---|
-| A clean white-out that begins between 0.75 s before and 2 s after the line, and no other white-out there | Sets the snap point on its first frame, marked as found |
-| No subtitles to ask: one clean white-out of at least 0.3 s near where the snap is expected, and no other white-out in sight | The same |
+| A clean white-out that begins between 0.75 s before and 2 s after the line, and no other flash there | Sets the snap point on its first frame, marked as found |
+| No subtitles to ask: one clean white-out of at least 0.3 s near where the snap is expected, no other flash in sight, and no other white-out in the 150 s the wide search covers | The same |
 | One clean white-out, but only the wide search found it, far from where the snap was expected, and no subtitles | Sets the snap point there (the countdown is calibrated) but marks it *not confirmed*: the strip asks you to look, one click confirms it |
 | The line, but no flash anywhere | Sets an estimate 0.1 s after the line, marked *not confirmed*, and asks you to pick the frame |
-| Two white-outs and nothing to choose between them, a flash that is not right after the line, frames the PC skipped where the flash begins, a flash that starts too softly to name its first frame, or a white-out shorter than that | Changes nothing, says why, and shows you the frames |
+| Two flashes (white, or bright but not white) and nothing to choose between them; a flash that is not right after the line; a flash that flickers (white, darker, white); a brief brighter moment right before a cut to white; frames the PC skipped where the flash begins; a climb that began before the stretch looked at; a start too soft to name its first frame; a white-out too short; a subtitle file nobody has checked that puts the line more than 3 s away | Changes nothing, says why, and shows you the frames |
 
 "Clean" means: every frame of the climb was seen (frames the PC skipped are fetched one by one), the first frame is
 clearly brighter than the flicker of that shot, and the climb began inside the stretch that was looked at. A brighter
@@ -246,12 +246,13 @@ want, and switches the sound back on if the player was left muted.
   the language is normally chosen once, before the countdown. Choose it during a rehearsal, not during the film.
 - The app finds the snap by the flash that fills the screen when the fingers snap. Fan descriptions of the scene speak
   of "a blinding flash of white" at the snap, but no official source says how long it lasts or on which frame it
-  begins, and the author does not have the film. The finder was put through an adversarial review: about eight
-  thousand generated flashes at eight frame rates (cuts, ramps, soft starts, a brighter shot or a glow just before,
-  flicker inside the white, decoy white-outs, lightning, explosions, skipped frames, repeated pictures in 50 and 60
-  frame files). In every case where it says *found*, it named the first frame of the flash or the one next to it; in
-  the cases it cannot settle it says so and asks. It has not seen the real film: look at the frame it marks once,
-  and move a frame or two if needed.
+  begins, and the author does not have the film. The finder was put through two independent adversarial reviews and
+  about sixteen thousand generated flashes at eight frame rates (cuts, ramps, soft starts, a brighter shot or a glow
+  just before, flicker inside the white, white bursts before it, flashes that are bright but not white, decoy
+  white-outs, lightning, explosions, skipped frames, pictures repeated in 25, 30, 50 and 60 frame files). In every
+  case where it says *found*, it named the first frame of the flash or the one next to it; in the cases it cannot
+  settle it says so and asks. It has not seen the real film: look at the frame it marks once, and move a frame or
+  two if needed.
 - Around the snap the film is held to within about a hundredth of a second of the clock. On a 60 Hz screen a film
   frame can only come on screen at one of 60 moments a second, so a few milliseconds either way are the limit of
   any player; the strip shows the figure that was measured.

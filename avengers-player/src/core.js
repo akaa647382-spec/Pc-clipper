@@ -77,10 +77,12 @@
    * only holds its level is not a climb; a glow that builds up and then a cut to white: the flash
    * is the cut. A picture shown twice in a row (a film of 24 frames in a file of 50 or 60) does
    * not end a climb.
-   * Returns { rise, open, holes, fuzzy }:
-   *   open   the climb reaches back to the first frame looked at: where it began was not seen
-   *   holes  frames are missing in the climb or just before it
-   *   fuzzy  the first step is hardly bigger than the flicker: the frame may be a frame or two off
+   * Returns { rise, open, holes, fuzzy, unclear, burst }:
+   *   open     the climb begins at the very start of what was looked at: where it began was not seen
+   *   holes    frames are missing in the climb or just before it
+   *   fuzzy    the first step is hardly bigger than the flicker: the frame may be a frame or two off
+   *   unclear  a short brighter moment, then a cut to white: either could be the flash
+   *   burst    a white flash comes just before the climb: either could be the snap
    */
   function climbStart(F, start, dt, frameDt) {
     const level = (i) => {
@@ -92,12 +94,21 @@
     // neighbours (a steady climb, however long, is no flicker). Pictures repeated in a 50 or 60
     // frame file say nothing about flicker and are left out.
     const dev = [];
-    for (let i = start - 2; i > 0 && F[start].t - F[i].t <= 2; i--) dev.push(Math.abs(F[i].mean - (F[i - 1].mean + F[i + 1].mean) / 2));
-    const moving = dev.filter((d) => d > 1e-5);
-    const repeated = dev.length >= 4 && moving.length < dev.length * 0.75;
+    const diff = [];                                   // between one picture and the next different one
+    let same = 0;
+    let pairs = 0;
+    for (let i = start - 2; i > 0 && F[start].t - F[i].t <= 2; i--) {
+      dev.push(Math.abs(F[i].mean - (F[i - 1].mean + F[i + 1].mean) / 2));
+      const d = Math.abs(F[i].mean - F[i - 1].mean);
+      pairs++;
+      if (d < 1e-5) same++; else diff.push(d);
+    }
+    // A film of 24 pictures a second in a file of 25, 30, 50 or 60 frames shows some pictures twice
+    // or three times: then the flicker is measured from one picture to the next different one.
     // (A picture that does not move at all has no flicker: the corners of the climb itself, which
     // are the only frames that "move" then, must not be taken for it.)
-    const sigma = dev.length < 4 ? 0.01 : repeated ? (moving.length >= 4 ? 1.4826 * median(moving) / 0.7071 : 0) : 1.4826 * median(dev) / 1.2247;
+    const repeated = pairs >= 8 && same >= pairs * 0.2;
+    const sigma = dev.length < 4 ? 0.01 : repeated ? (diff.length >= 4 ? 1.4826 * median(diff) / 1.4142 : 0) : 1.4826 * median(dev) / 1.2247;
     const g = Math.max(0.015, 3.5 * sigma);
     const bridge = Math.max(1, Math.round(0.06 / dt));
     let rise = start;
@@ -112,24 +123,42 @@
       if (q < 0) break;
       rise = q;
     }
-    if (rise === 0) open = true;
-    // One big step out of a picture that held still right before it: the flash is that step.
-    const still = dt >= 0.036 ? 1 : dt >= 0.027 ? 2 : 3;
+    // The climb must begin inside what was looked at, with a moment of picture before it.
+    if (rise <= 1 || F[rise].t - F[0].t < 0.25) open = true;
+    // Is the climb one event, or something brighter first and then the cut to white? A steady
+    // ramp is one event: it begins where it begins. A glow or a brighter shot that lasted a
+    // quarter of a second or more and then a much bigger step: the flash is that step. Anything
+    // shorter than that, then a cut: which of the two is the flash cannot be told.
     const big = Math.max(0.2, 4 * g);
-    for (let j = start; j > rise; j--) {
-      const step = F[j].mean - F[j - 1].mean;
-      if (step < big) continue;
-      let calm = j - still >= rise;
-      for (let k = j - 1; calm && k >= j - still && k > 0; k--) if (F[k].mean - F[k - 1].mean >= step / 4) calm = false;
-      if (calm) { rise = j; break; }
+    let unclear = false;
+    let jCut = -1;
+    for (let j = start; j > rise; j--) if (F[j].mean - F[j - 1].mean >= big) { jCut = j; break; }
+    if (jCut > rise) {
+      const cutStep = F[jCut].mean - F[jCut - 1].mean;
+      let biggest = 0;
+      let held = false;
+      let lastUp = F[rise].t;
+      const pause = repeated ? 0.06 : dt * 0.5;            // a repeated picture is not a pause
+      for (let k = rise; k < jCut; k++) {
+        const d = F[k].mean - (k > 0 ? F[k - 1].mean : F[k].mean);
+        if (d >= g / 2) { biggest = Math.max(biggest, d); lastUp = F[k].t; } else if (F[k].t - lastUp > pause) held = true;
+      }
+      const ramp = !held && cutStep < 2.5 * biggest;
+      if (!ramp) {
+        if (F[jCut].t - F[rise].t >= 0.25 - 1e-6) rise = jCut;
+        else unclear = true;
+      }
     }
+    // A white flash just before the climb (the flash flickering): which of the two is the snap?
+    let burst = false;
+    for (let k = rise - 1; k >= 0 && F[rise].t - F[k].t <= 0.6; k--) if (F[k].white >= 0.75 || F[k].mean >= 0.8) { burst = true; break; }
     const fuzzy = F[rise].mean - level(rise) < 1.5 * g || g >= 0.1;
     // A missing frame is a gap longer than one frame. (When many frames are missing, the usual gap
     // is no longer one frame long: the shortest gaps are.)
     const step = Math.min(dt, frameDt > 0 ? frameDt : dt);
     let holes = false;
     for (let i = Math.max(1, rise - 2); i <= start; i++) if (F[i].t - F[i - 1].t > step * 1.6) holes = true;
-    return { rise: rise, open: open, holes: holes, fuzzy: fuzzy };
+    return { rise: rise, open: open, holes: holes, fuzzy: fuzzy, unclear: unclear, burst: burst };
   }
 
   /**
@@ -149,8 +178,9 @@
    *   rise    the frame on which the brightness began to climb towards it: the snap frame
    *   kind    'white' (the screen whites out) or 'bright' (only a clear peak of brightness)
    *   rivals  how many other white-outs there are in the frames
-   *   open, holes, fuzzy  see climbStart: any of them makes the frame a suggestion, not a find
+   *   open, holes, fuzzy, unclear, burst  see climbStart: any of them makes it a suggestion, not a find
    *   runs    every white-out (or the peak), as { start, rise, end, kind, duration }
+   *   peaks   clear peaks of brightness that are not white and not part of a white-out, { start, end }
    */
   function findFlash(frames, opts) {
     opts = opts || {};
@@ -212,6 +242,24 @@
     if (!runs.length) return null;
     for (const r of runs) Object.assign(r, climbStart(F, r.start, dt, frameDt));
 
+    // Clear peaks of brightness that do not reach white and are not part of a white-out (its
+    // climb, the white, and its fading): if the snap does not white out, one of them may be it.
+    const peaks = [];
+    if (runs.some((r) => r.kind === 'white')) {
+      const base = median(F.map((f) => f.mean));
+      const floor = Math.max(0.6, base + 0.35);
+      const inRun = (t) => runs.some((r) => t >= F[r.rise].t - 0.1 && t <= F[r.end].t + 1.0);
+      let a = -1;
+      for (let i = 0; i <= n; i++) {
+        const on = i < n && F[i].mean >= floor && !(F[i].white >= 0.75) && !inRun(F[i].t);
+        if (on && a < 0) a = i;
+        if (!on && a >= 0) {
+          if (F[i - 1].t - F[a].t + dt >= 0.08 - EPS) peaks.push({ start: a, end: i - 1 });
+          a = -1;
+        }
+      }
+    }
+
     // Which one. With the line known: the first white-out that begins right after it. Otherwise
     // the longest; between (nearly) equals, the one nearest to where the snap is expected.
     let run = null;
@@ -232,8 +280,9 @@
     return {
       start: idx[run.start], rise: idx[run.rise], end: idx[run.end], kind: run.kind, duration: run.duration,
       rivals: runs.filter((r) => r !== run && r.kind === 'white').length,
-      open: run.open, holes: run.holes, fuzzy: run.fuzzy,
-      runs: runs.map((r) => ({ start: idx[r.start], rise: idx[r.rise], end: idx[r.end], kind: r.kind, duration: r.duration }))
+      open: run.open, holes: run.holes, fuzzy: run.fuzzy, unclear: run.unclear, burst: run.burst,
+      runs: runs.map((r) => ({ start: idx[r.start], rise: idx[r.rise], end: idx[r.end], kind: r.kind, duration: r.duration })),
+      peaks: peaks.map((p) => ({ start: idx[p.start], end: idx[p.end] }))
     };
   }
 
@@ -260,7 +309,8 @@
    *   'estimate'  set, not marked as found: no flash at all, and a checked line: 0.1 s after it
    *   'ask'       nothing set: what was seen does not settle it, and the film strip asks
    *   why         'flash+line', 'flash', 'far', 'line', or what stood in the way: 'disagree',
-   *               'crowd', 'rivals', 'holes', 'open', 'fuzzy', 'short', 'bright', 'nothing', 'armed'
+   *               'crowd', 'rivals', 'holes', 'open', 'fuzzy', 'unclear', 'burst', 'edge', 'hint',
+   *               'short', 'bright', 'nothing', 'armed'
    *   after       seconds from the end of the line to the flash (null without both)
    */
   function judgeSnap(frames, line, opts) {
@@ -271,20 +321,29 @@
     const at = flash ? frames[flash.rise].t : null;
     const after = checked && flash ? at - line.end : null;
     const res = (verdict, why, t) => ({ verdict: verdict, at: t != null ? t : at, flash: flash, why: why, after: after });
-    const flaw = !flash ? 'nothing' : flash.kind !== 'white' ? 'bright' : flash.holes ? 'holes' : flash.open ? 'open' : flash.fuzzy ? 'fuzzy' : '';
+    const flaw = !flash ? 'nothing' : flash.kind !== 'white' ? 'bright' : flash.holes ? 'holes' : flash.open ? 'open' :
+      flash.burst ? 'burst' : flash.unclear ? 'unclear' : flash.fuzzy ? 'fuzzy' : '';
+    const first = frames && frames.length ? frames[0].t : NaN;
+    const last = frames && frames.length ? frames[frames.length - 1].t : NaN;
     if (checked) {
+      // Only frames that cover the whole moment after the line can say what happened in it.
+      if (!(first <= line.end - 2 + EPS && last >= line.end + 2.5 - EPS)) return res('ask', 'edge');
       if (!flash) return opts.lent ? res('ask', 'armed') : res('estimate', 'line', Math.round((line.end + 0.1) * 1000) / 1000);
       const near = (t) => t - line.end > -0.75 - EPS && t - line.end < 2 + EPS;
       if (!near(at)) return res('ask', 'disagree');
-      const crowd = flash.runs.filter((r) => r.kind === 'white' && r.start !== flash.start && near(frames[r.rise].t)).length;
+      const crowd = flash.runs.filter((r) => r.kind === 'white' && r.start !== flash.start && near(frames[r.rise].t)).length +
+        flash.peaks.filter((p) => near(frames[p.start].t)).length;
       if (flaw) return res('ask', flaw);
       if (crowd) return res('ask', 'crowd');
       if (flash.duration < 0.2 - EPS) return res('ask', 'short');
       return res('found', 'flash+line');
     }
     if (flaw) return res('ask', flaw);
-    if (flash.rivals || opts.rivals > 0) return res('ask', 'rivals');
+    if (flash.rivals || flash.peaks.length || opts.rivals > 0) return res('ask', 'rivals');
     if (flash.duration < 0.3 - EPS) return res('ask', 'short');
+    // A subtitle file nobody has checked is no witness, but one that puts the line well away from
+    // this flash is a reason to doubt it.
+    if (line && isFinite(line.end) && Math.abs(at - (line.end + 0.1)) > 3) return res('ask', 'hint');
     const close = isFinite(opts.expect) && at >= opts.expect - 3.5 && at <= opts.expect + 7.5;
     if (!opts.wide && close) return res('found', 'flash');
     return opts.lent ? res('ask', 'armed') : res('likely', 'far');

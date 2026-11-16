@@ -2136,7 +2136,7 @@
         if (Math.abs(cfg.snapSec - next) > 0.0005) return null;
         Engine.logEvent((v.verdict === 'found' ? 'Snap found by the app at ' : 'Snap probably at ') + fmtFilm(next) + ' (it was ' + fmtFilm(old) + '): the flash' +
           (v.after != null ? ', ' + Math.abs(v.after).toFixed(2) + ' s ' + (v.after >= 0 ? 'after' : 'before') + ' the line ends at ' + fmtFilm(line.end)
-            : v.verdict === 'found' ? ', with no subtitles to check it against' : ', far from where it was expected and with no subtitles to check it against: to be checked'));
+            : (v.verdict === 'found' ? ', with ' : ', far from where it was expected and with ') + (line ? 'no subtitles known to be in step with the film' : 'no subtitles') + ' to check it against' + (v.verdict === 'found' ? '' : ': to be checked')));
         return { how: how, verdict: v.verdict, old: old, after: v.after };
       }
       if (v.verdict === 'estimate' && v.at < video.duration - 2) {
@@ -2155,7 +2155,11 @@
       const f = v && v.flash;
       switch (v && v.why) {
         case 'disagree': return 'the screen turns white at ' + fmtFilm(v.at) + ', which is not right after the line “…Iron Man.”' + (line ? ' (it ends at ' + fmtFilm(line.end) + ')' : '') + ': it may be another flash';
-        case 'crowd': case 'rivals': return 'there is more than one white-out, and nothing says which one is the snap';
+        case 'crowd': case 'rivals': return 'there is more than one flash in sight (white, or bright but not white), and nothing says which one is the snap';
+        case 'unclear': return 'a brighter moment comes just before the cut to white, and either could be the snap';
+        case 'burst': return 'the flash flickers: a white flash comes just before it, and either could be the snap';
+        case 'edge': return 'the frames looked at do not cover the whole moment after the line';
+        case 'hint': return 'a subtitle file that has not been checked against the film puts the line ' + (line ? Math.abs(v.at - line.end).toFixed(1) + ' s' : 'well') + ' away from this flash';
         case 'holes': return 'the PC skipped frames right where the flash begins, so its first frame is not known exactly';
         case 'open': return 'the flash begins before the first frame that was looked at';
         case 'fuzzy': return 'the flash begins so softly that its first frame is not clear-cut';
@@ -2206,6 +2210,7 @@
       });
       let line = null;
       let best = null;                   // { frames, verdict, wide }: the most telling look
+      let doubt = null;                  // the first look that saw a reason to doubt
       let applied = null;
       try {
         Modal.progress(0, 'Reading the subtitles around the snap…');
@@ -2219,10 +2224,15 @@
         // does not reach.)
         if (line && !line.checked && (lineAt < snap - 40 || lineAt > snap + 100)) centres.push(lineAt);
         const rank = (v) => ({ found: 4, likely: 3, estimate: 2 }[v.verdict] || (v.flash ? 1 : 0));
+        // A look that saw a reason to doubt (two flashes, a flash away from the line, ...) is not
+        // overruled by a later look that happened to see less.
+        const DOUBT = ['crowd', 'rivals', 'disagree', 'burst', 'unclear', 'hint'];
         const consider = (frames, wide, rivals) => {
-          if (frames.length < 6) return;
+          if (frames.length < 6) return null;
           const v = C.judgeSnap(frames, line, { expect: snap, wide: wide, lent: lent, rivals: rivals || 0 });
           if (!best || rank(v) > rank(best.verdict)) best = { frames: frames, verdict: v, wide: wide };
+          if (!doubt && DOUBT.includes(v.why)) doubt = { frames: frames, verdict: v, wide: wide };
+          return v;
         };
         const steps = centres.length * 3;
         let step = 0;
@@ -2236,10 +2246,13 @@
           step++;
           if (this.cancelled || !Media.ready) break;
           near = await this.fill(near);
-          consider(near, false);
-          if (settled()) break;
-          // 2. Not settled there: sweep a wide stretch quickly (brightness only), then take the
-          //    white-out it shows frame by frame.
+          const v = consider(near, false);
+          // A flash with no subtitles to back it up is only found if the wide search sees no
+          // other white-out that could be the snap.
+          const alone = !!v && v.verdict === 'found' && !(line && line.checked);
+          if (settled() && !alone) break;
+          // 2. Not settled there (or to make sure): sweep a wide stretch quickly (brightness only),
+          //    then take the white-out it shows frame by frame.
           const a = Math.max(0, c - 45);
           const b = Math.min(dur - 0.5, c + 105);
           if (swept.some((w) => a >= w[0] - 5 && b <= w[1] + 5)) { step += 2; continue; }
@@ -2248,6 +2261,12 @@
           step++;
           if (this.cancelled || !Media.ready) break;
           const seen = C.findFlash(sweep, { expect: line && line.checked ? lineAt : snap, after: line && line.checked ? line.end : undefined, minDur: 0.2 });
+          if (alone) {
+            const others = seen ? seen.runs.filter((r) => r.kind === 'white' && r.duration >= 0.3 && Math.abs(sweep[r.start].t - v.at) > 3.5).length : 0;
+            if (others && !doubt) doubt = { frames: near, verdict: Object.assign({}, v, { verdict: 'ask', why: 'rivals' }), wide: false };
+            step++;
+            break;
+          }
           if (seen && seen.kind === 'white') {
             const t = sweep[seen.start].t;
             let closer = await this.capture(t - 3.5, t + 3.5, 1, true, progress('Found a white-out at ' + C.fmtDuration(t, { forceHours: true }) + '. Taking it frame by frame…'));
@@ -2262,6 +2281,8 @@
       } catch (e) {
         if (!this.cancelled) Engine.logEvent('Looking for the snap failed: ' + (e && e.message));
       }
+      // A doubt stands: nothing is set by the app, and the strip shows the look that raised it.
+      if (doubt && best && (best.verdict.verdict === 'found' || best.verdict.verdict === 'likely' || best.verdict.verdict === 'estimate')) best = doubt;
       this.sink = null;
       this.busy = false;
       const mine = Media.ready && token === Media.loadToken;
@@ -2358,7 +2379,7 @@
         const moved = cfg.snapSec - v.applied.old;
         title = 'Is this the snap?';
         note = 'The snap was not where it was expected. The one white-out the app found is ' + Math.abs(moved).toFixed(1) + ' s ' + (moved > 0 ? 'later' : 'earlier') +
-          ', and with no subtitles to check it against it is set for now on the frame marked SET NOW' +
+          ', and with ' + (v.line ? 'no subtitles known to be in step with the film' : 'no subtitles') + ' to check it against it is set for now on the frame marked SET NOW' +
           (sess ? ' (the movie now starts at ' + C.fmtClock(new Date(sess.startEpoch), cfg.use24h) + ')' : '') +
           '. Check the frames: if his fingers snap on that frame, press the button; if not, pick the right frame.';
       } else if (v.applied) {
@@ -2699,9 +2720,11 @@
       // "reset" goes back to the file as it is: no shift, and its own speed. Lines moved by hand
       // are no longer known to be in step with the voices.
       const st = SubSync.state();
+      const was = [cfg.subDelay, cfg.subScale];
       if (delta === 0) { cfg.subDelay = 0; cfg.subScale = 1; SubSync.undo = null; }
       else cfg.subDelay = Math.round((cfg.subDelay + delta) * 100) / 100;
-      if (this.loaded && !this.own && (st === 'synced' || st === 'fine' || st === 'close')) { cfg.subSyncState = delta === 0 && st === 'synced' ? 'undone' : delta === 0 ? st : 'hand'; }
+      const moved = Math.abs(cfg.subDelay - was[0]) > 1e-9 || Math.abs(cfg.subScale - was[1]) > 1e-12;
+      if (this.loaded && !this.own && moved && (st === 'synced' || st === 'fine' || st === 'close')) cfg.subSyncState = delta === 0 ? 'undone' : 'hand';
       save();
       this.shown = null;
       this.renderPanel();

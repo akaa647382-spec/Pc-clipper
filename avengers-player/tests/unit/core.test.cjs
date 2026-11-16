@@ -321,8 +321,10 @@ test('findFlash and judgeSnap: what a real film can do to the flash, and when th
   assert.equal(j.flash.rise, at(two, SNAP));
 
   // A white-out that is not right after the line: the witnesses disagree, nothing is set.
-  const late = film({ from: 9030, to: 9040, whites: [{ at: 9035 }] });
+  const late = film({ from: 9027, to: 9040, whites: [{ at: 9035 }] });
   assert.equal(C.judgeSnap(late, line, { expect: 9030 }).why, 'disagree');
+  // Frames that do not cover the whole moment after the line cannot speak for it.
+  assert.equal(C.judgeSnap(film({ from: 9030.5, to: 9040, whites: [{ at: SNAP }] }), line, { expect: 9030 }).why, 'edge');
 
   // Frames the PC skipped right where the flash begins: the app asks.
   const holey = film({ from: 9027, to: 9037, whites: [{ at: SNAP, ramp: 2 }] });
@@ -349,8 +351,48 @@ test('findFlash and judgeSnap: what a real film can do to the flash, and when th
   assert.equal(j.at, 9031.54);
   assert.equal(C.judgeSnap(none, { end: 9031.44, checked: false }, { expect: 9030 }).verdict, 'ask');
   assert.equal(C.judgeSnap(none, line, { expect: 9030, lent: true }).verdict, 'ask');
-  // An unchecked line is no witness: the flash is judged as if there were no line.
-  assert.equal(C.judgeSnap(clean, { end: 9020, checked: false }, { expect: 9030 }).verdict, 'found');
+  // An unchecked line is no witness: close to the flash it changes nothing, far from it it is a
+  // reason to ask.
+  assert.equal(C.judgeSnap(clean, { end: 9031.0, checked: false }, { expect: 9030 }).verdict, 'found');
+  assert.equal(C.judgeSnap(clean, { end: 9020, checked: false }, { expect: 9030 }).why, 'hint');
+
+  // From the second review. A short brighter moment, then a cut to white: either could be the flash.
+  for (const bump of [0.06, 0.1, 0.14]) {
+    const fr = film({ from: 9027, to: 9037, whites: [{ at: SNAP }] });
+    const i = at(fr, SNAP);
+    fr[i - 1].mean = 0.2 + bump;                                 // one brighter frame right before the white
+    const v = C.judgeSnap(fr, line, { expect: 9030 });
+    assert.ok(v.verdict === 'ask' || (v.verdict === 'found' && v.flash.rise === i - 1), bump + ': ' + v.verdict + ' ' + v.why + ' ' + v.flash.rise + '/' + (i - 1));
+  }
+  // A steady ramp shown with a repeated picture (24 fps pictures in a 25 fps file): its start.
+  const rep25 = [];
+  for (let k = 0; k < 250; k++) rep25.push({ t: 9027 + k / 25, mean: 0.2, white: 0 });
+  const r0 = at(rep25, SNAP);
+  [[0.466, 0], [0.466, 0], [0.735, 0], [1, 1], [1, 1], [1, 1], [1, 1], [1, 1], [1, 1], [1, 1], [1, 1], [1, 1], [1, 1]].forEach(([m, w], k) => { rep25[r0 + k].mean = m; rep25[r0 + k].white = w; });
+  const v25 = C.judgeSnap(rep25, line, { expect: 9030 });
+  assert.ok(v25.verdict === 'ask' || v25.flash.rise === r0, v25.verdict + ' ' + v25.flash.rise + '/' + r0);
+  // A glow that built up for a while, then the cut to white: the cut is the flash.
+  const glow = film({ from: 9027, to: 9037, whites: [{ at: SNAP }] });
+  const g0 = at(glow, SNAP);
+  for (let k = 1; k <= 14; k++) glow[g0 - k].mean = 0.2 + 0.3 * (15 - k) / 15;
+  assert.equal(C.findFlash(glow).rise, g0);
+  // The flash flickers: a white burst of a frame or two, a dip, then the white-out. Ask.
+  const flick = film({ from: 9027, to: 9037, whites: [{ at: SNAP + 0.3 }] });
+  const b0 = at(flick, SNAP);
+  flick[b0].mean = 1; flick[b0].white = 1; flick[b0 + 1].mean = 1; flick[b0 + 1].white = 1;
+  for (let k = 2; k < 7; k++) flick[b0 + k].mean = 0.45;
+  assert.equal(C.judgeSnap(flick, line, { expect: 9030 }).why, 'burst');
+  assert.equal(C.judgeSnap(flick, null, { expect: 9030 }).why, 'burst');
+  // The snap might be a bright flash that is not white: with another white-out close by, ask.
+  const warm = film({ from: 9027, to: 9037, whites: [{ at: 9033.04, hold: 0.4 }] });
+  for (let k = 0; k < 15; k++) { const w = warm[at(warm, 9031.74) + k]; w.mean = 0.78; w.white = 0.1; }
+  assert.equal(C.judgeSnap(warm, line, { expect: 9030 }).why, 'crowd');
+  assert.equal(C.judgeSnap(warm, null, { expect: 9030 }).why, 'rivals');
+  // A climb that began before the first frame looked at: where it began was not seen.
+  const cutoff = film({ from: SNAP + 0.1, to: SNAP + 8, whites: [{ at: SNAP, ramp: 8 }] });
+  assert.equal(C.judgeSnap(cutoff, null, { expect: SNAP }).why, 'open');
+  // A subtitle file nobody checked puts the line 25 s away from the flash: a reason to ask.
+  assert.equal(C.judgeSnap(clean, { end: 9056.4, checked: false }, { expect: 9030 }).why, 'hint');
 
   // 24 fps pictures in a 60 fps file (each shown two or three times): the first frame of the flash.
   const src = film({ from: 9027, to: 9037, whites: [{ at: SNAP, ramp: 2 }] });
