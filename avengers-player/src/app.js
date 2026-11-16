@@ -1981,8 +1981,12 @@
 
     /** The line, read out of the movie's own text subtitles: English first, at most four tracks. */
     async lineInside(snap, span, notes) {
+      if (!SubsCore || !Media.info || !Media.info.path || !native.isNative) return null;
+      // What is inside the file is known once FFmpeg has looked: right after an import that may
+      // still be under way, and the subtitles inside are the best witness there is.
+      if (!Media.probe) await Media.reprobe();
       const tracks = ((Media.probe && Media.probe.subtitles) || []).filter((x) => x.isText);
-      if (!tracks.length || !SubsCore || !Media.info || !Media.info.path || !native.isNative) return null;
+      if (!tracks.length) { notes.push(Media.probe ? 'no text subtitles inside the movie' : 'the subtitles inside the movie cannot be read (no FFmpeg)'); return null; }
       const plain = (x) => !x.forced && !/forced|sign|song|commentary/i.test(x.title || '');
       const order = (x) => { const l = C.trackLang(x); return l === 'eng' && plain(x) ? 0 : !l && plain(x) ? 1 : l === 'eng' ? 2 : 3; };
       const list = tracks.slice().sort((a, b) => order(a) - order(b) || a.index - b.index).slice(0, 4);
