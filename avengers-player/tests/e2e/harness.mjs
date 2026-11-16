@@ -28,7 +28,7 @@ export function ensureDisplay(scriptUrl) {
 }
 
 export function ensureMedia() {
-  if (fs.existsSync(path.join(MEDIA, 'movie.mp4')) && fs.existsSync(path.join(MEDIA, 'dolby.mp4'))) return;
+  if (['movie.mp4', 'dolby.mp4', 'lang-dual.mkv', 'lang-dolby.mkv', 'lang-mixed.mkv', 'lang-hindi.mp4'].every((f) => fs.existsSync(path.join(MEDIA, f)))) return;
   const r = spawnSync('bash', [path.join(ROOT, 'scripts', 'make-test-media.sh')], { stdio: 'inherit' });
   if (r.status !== 0) throw new Error('Could not generate the test clips (is ffmpeg installed?).');
 }

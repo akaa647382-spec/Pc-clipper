@@ -13,6 +13,144 @@
   /** 2:30:30 into the film: start at 9:29:30 PM and the snap lands on midnight. */
   const DEFAULT_SNAP_SEC = 2 * 3600 + 30 * 60 + 30;
 
+  /** Length of the 2019 home release (3:01:11): the yardstick other copies are measured against. */
+  const REFERENCE_SEC = 10871;
+
+  /**
+   * The cuts of the film the player knows about.
+   *
+   *   snapSec   where the snap is in that cut
+   *   minutes   range of file lengths that identify the cut (null: never guessed from the length)
+   *   settled   true when the snap point is the long-established figure; false when it is derived
+   *             or approximate and must be confirmed in the file
+   *
+   * "Avengers Endgame: Encore" is the 2026 re-release. By all published accounts its added scenes
+   * sit at the very end (a longer last scene, then scenes during and after the credits), which
+   * leaves the snap where it always was. Copies differ in length, though (3:01:36 has been reported
+   * by a user, about 3:05 by the press), and cinemas played a short introduction BEFORE the film,
+   * so the snap point of an Encore copy has to be confirmed in the file itself.
+   */
+  const FILM_VERSIONS = [
+    {
+      id: 'original', family: 'original', name: 'Avengers: Endgame (2019)', short: 'Original',
+      snapSec: DEFAULT_SNAP_SEC, minutes: [180.0, 181.45], settled: true,
+      note: 'The 2019 film, 3:01:11 long. Start at 9:29:30 PM and the snap lands on midnight.'
+    },
+    {
+      id: 'encore', family: 'encore', name: 'Avengers Endgame: Encore (2026)', short: 'Encore',
+      snapSec: DEFAULT_SNAP_SEC, minutes: [181.45, 187.5], settled: false,
+      note: 'The 2026 re-release. Its new scenes are reported to come after the snap (a longer last scene and scenes in the credits), which would leave the snap where it was in the original. Copies differ in length and nobody has published a New Year timing for this cut yet, so confirm it once with the Snap test.'
+    },
+    {
+      id: 'encore-intro', family: 'encore', name: 'Encore with the cinema introduction', short: 'Encore + intro',
+      snapSec: DEFAULT_SNAP_SEC + 60, minutes: null, settled: false,
+      note: 'For a copy that opens with the roughly one-minute introduction shown in cinemas: everything is about a minute later. This is approximate. Find the exact frame below.'
+    },
+    {
+      id: 'custom', family: 'custom', name: 'Another cut (set the snap point yourself)', short: 'Custom',
+      snapSec: null, minutes: null, settled: false,
+      note: 'Your own snap point. Find the frame below, or type the time.'
+    }
+  ];
+
+  function filmVersion(id) {
+    for (const v of FILM_VERSIONS) if (v.id === id) return v;
+    return FILM_VERSIONS[0];
+  }
+
+  /** Which cut a file of this length most likely is, or null when the length says nothing. */
+  function guessFilmVersion(durationSec) {
+    if (!isFinite(durationSec) || durationSec <= 0) return null;
+    const minutes = durationSec / 60;
+    for (const v of FILM_VERSIONS) {
+      if (v.minutes && minutes >= v.minutes[0] && minutes < v.minutes[1]) return v;
+    }
+    return null;
+  }
+
+  /* Languages of sound tracks: files label them with ISO 639 codes, people read names. */
+  const LANG_NAMES = {
+    eng: 'English', hin: 'Hindi', tam: 'Tamil', tel: 'Telugu', mal: 'Malayalam', kan: 'Kannada', ben: 'Bengali',
+    mar: 'Marathi', urd: 'Urdu', pan: 'Punjabi', guj: 'Gujarati', spa: 'Spanish', fra: 'French', deu: 'German',
+    ita: 'Italian', por: 'Portuguese', rus: 'Russian', jpn: 'Japanese', kor: 'Korean', zho: 'Chinese', ara: 'Arabic',
+    tur: 'Turkish', pol: 'Polish', nld: 'Dutch', swe: 'Swedish', nor: 'Norwegian', dan: 'Danish', fin: 'Finnish',
+    ell: 'Greek', heb: 'Hebrew', tha: 'Thai', vie: 'Vietnamese', ind: 'Indonesian', msa: 'Malay', ukr: 'Ukrainian',
+    ces: 'Czech', hun: 'Hungarian', ron: 'Romanian', fas: 'Persian', fil: 'Filipino'
+  };
+  const LANG_ALIASES = {
+    en: 'eng', hi: 'hin', ta: 'tam', te: 'tel', ml: 'mal', kn: 'kan', bn: 'ben', mr: 'mar', ur: 'urd', pa: 'pan', gu: 'guj',
+    es: 'spa', fr: 'fra', fre: 'fra', de: 'deu', ger: 'deu', it: 'ita', pt: 'por', ru: 'rus', ja: 'jpn', ko: 'kor',
+    zh: 'zho', chi: 'zho', ar: 'ara', tr: 'tur', pl: 'pol', nl: 'nld', dut: 'nld', sv: 'swe', no: 'nor', nb: 'nor', da: 'dan',
+    fi: 'fin', el: 'ell', gre: 'ell', he: 'heb', iw: 'heb', th: 'tha', vi: 'vie', id: 'ind', ms: 'msa', may: 'msa', uk: 'ukr',
+    cs: 'ces', cze: 'ces', hu: 'hun', ro: 'ron', rum: 'ron', fa: 'fas', per: 'fas', tl: 'fil'
+  };
+
+  /** Sound formats the player's own decoder handles on every PC. Dolby, DTS and the rest need converting. */
+  function playableAudioCodec(codec) {
+    const c = String(codec || '').toLowerCase();
+    return ['aac', 'mp3', 'opus', 'vorbis', 'flac'].includes(c) || /^pcm_/.test(c);
+  }
+
+  const AUDIO_CODEC_NAMES = {
+    ac3: 'Dolby Digital (AC-3)', eac3: 'Dolby Digital Plus (E-AC-3)', dts: 'DTS', truehd: 'Dolby TrueHD', mlp: 'MLP',
+    wmav2: 'Windows Media Audio', wmapro: 'Windows Media Audio Pro', alac: 'Apple Lossless', mp2: 'MPEG Layer II', amr_nb: 'AMR',
+    aac: 'AAC', mp3: 'MP3', opus: 'Opus', vorbis: 'Vorbis', flac: 'FLAC'
+  };
+  const audioCodecName = (codec) => AUDIO_CODEC_NAMES[String(codec || '').toLowerCase()] || String(codec || 'unknown').toUpperCase();
+
+  /** "en", "EN-us", "eng", "English" -> "eng". Empty string when unknown or undefined ("und"). */
+  function normLang(code) {
+    const raw = String(code == null ? '' : code).trim().toLowerCase();
+    if (!raw || raw === 'und' || raw === 'unknown') return '';
+    const base = raw.split(/[-_]/)[0];
+    if (LANG_NAMES[base]) return base;
+    if (LANG_ALIASES[base]) return LANG_ALIASES[base];
+    for (const k of Object.keys(LANG_NAMES)) if (LANG_NAMES[k].toLowerCase() === raw) return k;
+    return /^[a-z]{2,3}$/.test(base) ? base : '';
+  }
+
+  function langName(code) {
+    const k = normLang(code);
+    return k ? (LANG_NAMES[k] || k.toUpperCase()) : '';
+  }
+
+  /** A language named in a track title such as "Hindi DDP 5.1" or "English (Commentary)". */
+  function langFromTitle(title) {
+    const t = String(title || '').toLowerCase();
+    if (!t) return '';
+    for (const k of Object.keys(LANG_NAMES)) {
+      if (new RegExp('(^|[^a-z])' + LANG_NAMES[k].toLowerCase() + '([^a-z]|$)').test(t)) return k;
+    }
+    return '';
+  }
+
+  /** The language of a sound track ({ lang | language, title | label }), "" when it cannot be told. */
+  function trackLang(track) {
+    if (!track) return '';
+    return normLang(track.lang != null ? track.lang : track.language) || langFromTitle(track.title != null ? track.title : track.label);
+  }
+
+  /**
+   * Which sound track to play: the one in the wanted language (English unless told otherwise),
+   * never a commentary if there is anything else, otherwise the file's own main track.
+   * Returns the position in `tracks`, or -1 when there are none.
+   */
+  function pickAudioTrack(tracks, preferLang) {
+    if (!tracks || !tracks.length) return -1;
+    const want = normLang(preferLang) || 'eng';
+    let best = -1;
+    let bestScore = -Infinity;
+    for (let i = 0; i < tracks.length; i++) {
+      const t = tracks[i] || {};
+      let score = -i * 0.01;                                   // earlier tracks win ties
+      if (trackLang(t) === want) score += 100;
+      if (/comment|descri|director|isolated|karaoke/i.test(String(t.title || t.label || ''))) score -= 50;
+      if (t.isDefault) score += 10;
+      if (score > bestScore) { best = i; bestScore = score; }
+    }
+    return best;
+  }
+
   const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
   const MONTHS_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
     'September', 'October', 'November', 'December'];
@@ -238,6 +376,9 @@
 
   return {
     DEFAULT_SNAP_SEC: DEFAULT_SNAP_SEC,
+    FILM_VERSIONS: FILM_VERSIONS, filmVersion: filmVersion, guessFilmVersion: guessFilmVersion, REFERENCE_SEC: REFERENCE_SEC,
+    normLang: normLang, langName: langName, langFromTitle: langFromTitle, trackLang: trackLang, pickAudioTrack: pickAudioTrack,
+    LANG_NAMES: LANG_NAMES, playableAudioCodec: playableAudioCodec, audioCodecName: audioCodecName,
     MONTHS: MONTHS, MONTHS_LONG: MONTHS_LONG, DAYS: DAYS, DAYS_LONG: DAYS_LONG,
     clamp: clamp, pad: pad, median: median,
     fmtDuration: fmtDuration, parseDuration: parseDuration,

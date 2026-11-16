@@ -72,6 +72,7 @@
     theme: 'arc',
     panelSide: 'left',
     snapSec: C.DEFAULT_SNAP_SEC,
+    filmVersion: 'original', snapConfirmedFor: '',
     targetMode: 'newyear', customTarget: '',
     use24h: false,
     showOverlay: true, showClock: true, showDate: true, showCount: true, showSyncBadge: false, finalTen: true,
@@ -83,6 +84,7 @@
     lockControls: false,
     useNetTime: true,
     volume: 1, muted: false,
+    audioLang: 'eng', audioPickKey: '', audioPickPos: -1, audioPickLang: '', keepOtherSound: true,
     showStats: false,
     subsOn: true, subPath: '', subName: '', subMovie: '', subEncoding: 'auto',
     subSize: 'm', subBg: 'shadow', subColor: 'white', subPos: 'low', subDelay: 0,
@@ -103,6 +105,8 @@
     }
     if (!(c.snapSec > 0 && c.snapSec < 86400)) c.snapSec = DEFAULTS.snapSec;
     if (!(c.volume >= 0 && c.volume <= 1)) c.volume = 1;
+    c.audioLang = C.LANG_NAMES[C.normLang(c.audioLang)] ? C.normLang(c.audioLang) : 'eng';
+    if (!Number.isInteger(c.audioPickPos)) c.audioPickPos = -1;
     if (!(c.autoRecoverSec >= 1 && c.autoRecoverSec <= 120)) c.autoRecoverSec = 10;
     if (!(Math.abs(c.subDelay) < 600)) c.subDelay = 0;
     c.learnedLatency = clamp(+c.learnedLatency || 0.07, 0, 0.3);
@@ -206,14 +210,16 @@
 
   /* =============================================================== media === */
 
+  /** true: sound is being decoded. false: there is none this player can decode. null: not known yet. */
   function detectAudio(afterPlayback) {
     try {
-      if (video.audioTracks && typeof video.audioTracks.length === 'number') return video.audioTracks.length > 0;
-      if (typeof video.mozHasAudio === 'boolean') return video.mozHasAudio;
       if (typeof video.webkitAudioDecodedByteCount === 'number') {
         if (video.webkitAudioDecodedByteCount > 0) return true;
-        return afterPlayback ? false : null;
+        if (afterPlayback) return false;
       }
+      // Chromium lists only the sound tracks it can decode: an empty list means there is nothing to hear.
+      if (AudioTracks.supported) return video.audioTracks.length > 0 ? null : false;
+      if (typeof video.mozHasAudio === 'boolean') return video.mozHasAudio;
     } catch (e) { /* unknown */ }
     return null;
   }
@@ -273,7 +279,11 @@
       this.fps = 0;
       this.playedMs = 0;
       this.lastFrameTime = NaN;
-      UI.audioWarning('');
+      this.audioReason = '';
+      this.byUser = !!opts.byUser;
+      AudioTracks.clear();
+      UI.renderSoundWarning();
+      UI.renderSoundTracks();
 
       const ok = await new Promise((res) => {
         let to = 0;
@@ -312,12 +322,15 @@
       this.retries = 0;
       this.retryAt = 0;
       UI.importError('');
-      this.hasAudio = detectAudio(false);
+      AudioTracks.onLoad();                              // the right language is chosen before anything plays
+      const heard = detectAudio(false);
+      this.hasAudio = heard === false ? null : heard;    // "no sound at all" is announced by inspect(), which knows why
       cfg.moviePath = info.path || '';
       cfg.movieName = info.name || '';
       save();
       video.playbackRate = 1;
       applyVolume();
+      if (cfg.armed) Versions.guess = C.guessFilmVersion(video.duration); else Versions.recognise();
       Engine.session = Engine.computeFree();
       UI.showPlayer();
       UI.refreshAll();
@@ -330,26 +343,80 @@
       return true;
     },
 
-    /** Uses FFmpeg (when present) to learn exactly what is inside the file. */
-    async inspect(token) {
-      if (!this.info || !this.info.path || !native.isNative) return;
+    /** Asks FFmpeg (when present) what exactly is inside the file. */
+    async reprobe() {
+      if (!this.info || !this.info.path || !native.isNative) return false;
+      const token = this.loadToken;
       let r = null;
       try {
         const hevcOk = !!video.canPlayType('video/mp4; codecs="hvc1.1.6.L120.90"');
-        r = await native.ffProbe(this.info.path, hevcOk);
+        r = await native.ffProbe(this.info.path, hevcOk, cfg.audioLang);
       } catch (e) { r = null; }
-      if (token !== this.loadToken) return;
-      if (!r || !r.probe) { UI.dirty.preflight = true; this.soundCheck(token); return; }
+      if (token !== this.loadToken || !this.ready || !r || !r.probe) return false;
       this.probe = r.probe;
       this.assess = r.assess || null;
-      if (r.assess) {
-        if (r.assess.needsAudioFix) this.setAudio(false, r.assess.reasons && r.assess.reasons[0]);
-        else if (r.assess.audioOk) this.setAudio(true);
-        else if (!r.probe.audio || !r.probe.audio.length) this.setAudio(false, 'This file has no sound track.');
-      }
+      AudioTracks.read();                                // the same tracks, now with their format and channels
       SubsUI.renderEmbedded();
-      UI.dirty.preflight = true;
+      this.soundChanged();
+      return true;
+    },
+
+    soundChanged() {
+      UI.renderSoundTracks();
+      UI.renderSoundWarning();
       UI.renderFileCard();
+      UI.dirty.preflight = true;
+    },
+
+    /** Decides whether the sound of this movie will work, and in which language. */
+    async inspect(token) {
+      if (!this.info || !this.info.path || !native.isNative) return;
+      await this.reprobe();
+      if (token !== this.loadToken || !this.ready) return;
+      const a = this.assess;
+      if (AudioTracks.supported) {
+        const cur = AudioTracks.current();
+        if (!cur) {
+          const none = !!this.probe && !(this.probe.audio || []).length;
+          this.setAudio(false, none ? 'This file has no sound track.' : (a && a.audioReason) || 'No sound could be decoded from this file (the sound is probably Dolby or DTS).');
+        } else if (cur.meta && C.playableAudioCodec(cur.meta.codec)) {
+          this.setAudio(true);
+        } else {
+          this.soundCheck(token);                        // not a format known to work: play a moment of it to find out
+        }
+      } else if (this.probe && a) {
+        if (a.needsAudioFix) this.setAudio(false, a.audioReason);
+        else if (a.audioOk) this.setAudio(true);
+        else if (!this.probe.audio || !this.probe.audio.length) this.setAudio(false, 'This file has no sound track.');
+      } else {
+        this.soundCheck(token);
+      }
+      this.soundChanged();
+      this.maybeOffer();
+    },
+
+    /** What is wrong with the sound of this movie, if anything: silence first, then the wrong language. */
+    soundProblem() {
+      if (!this.ready) return null;
+      if (this.hasAudio === false) {
+        const fixable = !!(this.info && this.info.path && native.isNative && (!this.probe || (this.probe.audio || []).length > 0));
+        return {
+          kind: 'silent', fixable: fixable, title: 'This movie would play without sound',
+          text: this.audioReason || 'No sound could be decoded from this file.',
+          short: 'No playable sound in this file', hint: fixable ? 'Use “Fix the sound” below.' : ''
+        };
+      }
+      return AudioTracks.problem();
+    },
+
+    /** Right after an import, offers the fix for a sound problem that has one. Never on a restart or a retry. */
+    maybeOffer() {
+      if (this.offeredFor === this.loadToken || Modal.isOpen || Engine.test || AudioFix.running) return;
+      const p = this.soundProblem();
+      if (!p || !p.fixable || p.kind === 'maybe') return;
+      if (Engine.mode !== 'free' && !(this.byUser && Engine.phase === 'standby')) return;
+      this.offeredFor = this.loadToken;
+      AudioFix.offer();
     },
 
     /**
@@ -381,15 +448,11 @@
     setAudio(has, reason) {
       const changed = this.hasAudio !== has;
       this.hasAudio = has;
-      this.audioReason = reason || '';
-      UI.dirty.preflight = true;
-      UI.renderFileCard();
-      if (has) { UI.audioWarning(''); return; }
-      if (!changed) return;
-      const fixable = !this.probe || (this.probe.audio && this.probe.audio.length > 0);
-      UI.audioWarning((reason || 'No sound could be decoded from this file.') + (fixable ? ' Use “Fix the sound” in the Mission tab.' : ''));
+      this.audioReason = has ? '' : (reason || '');
+      this.soundChanged();
+      if (has || !changed) return;
       Engine.logEvent('Sound problem: ' + (reason || 'no sound decoded'));
-      if (fixable && Engine.mode === 'free' && !Engine.test && !Modal.isOpen) AudioFix.offer();
+      this.maybeOffer();
     },
 
     async explainFailure(info, loaded, hadVideo) {
@@ -397,7 +460,7 @@
       let detail = '';
       if (info.path && native.isNative) {
         try {
-          const r = await native.ffProbe(info.path, !!video.canPlayType('video/mp4; codecs="hvc1.1.6.L120.90"'));
+          const r = await native.ffProbe(info.path, !!video.canPlayType('video/mp4; codecs="hvc1.1.6.L120.90"'), cfg.audioLang);
           if (r && r.assess && r.assess.reasons && r.assess.reasons.length) detail = ' ' + esc(r.assess.reasons.join(' '));
         } catch (e) { /* no extra detail */ }
       }
@@ -414,6 +477,351 @@
     video.volume = clamp(cfg.volume, 0, 1);
     video.muted = !!cfg.muted;
   }
+
+  /* ======================================================== sound tracks === */
+
+  const channelName = (n) => ({ 1: 'Mono', 2: 'Stereo', 6: '5.1', 7: '6.1', 8: '7.1' }[n] || (n ? n + ' channels' : ''));
+
+  /**
+   * The sound tracks of the loaded movie that the player can decode, and which of them plays.
+   *
+   * English plays automatically (or the preferred language from Setup), whatever the file flags as
+   * its main track; a track picked by hand is remembered for that file. Chromium only switches
+   * tracks cleanly when the switch comes with a seek (a bare switch repeated quickly can leave the
+   * film silent), so every switch re-cues the film, and a watchdog brings the sound back if it ever
+   * stops being decoded while the film plays.
+   */
+  const AudioTracks = {
+    supported: (() => { try { return !!video.audioTracks && typeof video.audioTracks.length === 'number'; } catch (e) { return false; } })(),
+    list: [],              // [{ pos, lang, title, enabled, meta }]
+    defaultPos: -1,        // the track the file itself would have played
+    verify: null,          // a switch that still has to prove it produces sound
+    alive: false, quietMs: 0, lastBytes: 0, lastWatch: 0, heals: [], gaveUp: false,
+
+    fileKey(info) {
+      const f = info || Media.info;
+      return f ? (f.path || f.name || '') + '|' + (f.size || 0) : '';
+    },
+
+    clear() {
+      this.list = [];
+      this.defaultPos = -1;
+      this.verify = null;
+      this.alive = false;
+      this.quietMs = 0;
+      this.heals = [];
+      this.gaveUp = false;
+    },
+
+    /** Reads the track list from the video element and attaches what FFmpeg knows about each track. */
+    read() {
+      const out = [];
+      const src = this.supported && Media.ready ? video.audioTracks : null;
+      const n = src ? src.length : 0;
+      const probed = (Media.probe && Media.probe.audio) || [];
+      const playable = probed.filter((a) => C.playableAudioCodec(a.codec));
+      // Chromium lists only what it can decode, in file order: line the two lists up when they agree.
+      const metaOf = n && n === probed.length ? probed : n && n === playable.length ? playable : [];
+      for (let i = 0; i < n; i++) {
+        const t = src[i];
+        const meta = metaOf[i] || null;
+        const label = String(t.label || '').trim();
+        const title = /handler$/i.test(label) ? '' : label;      // "SoundHandler" is what an MP4 says when it says nothing
+        const lang = C.normLang(t.language) || C.langFromTitle(title) || (meta ? C.trackLang(meta) : '');
+        out.push({ pos: i, lang: lang, title: title || (meta && meta.title) || '', enabled: !!t.enabled, meta: meta });
+      }
+      this.list = out;
+      return out;
+    },
+
+    current() { return this.list.find((t) => t.enabled) || null; },
+
+    /** True when `pos` is the one and only enabled track. */
+    only(pos) { return this.list.length > 0 && this.list.every((t) => t.enabled === (t.pos === pos)); },
+
+    name(t, plain) {
+      if (!t) return '';
+      const lang = C.langName(t.lang);
+      let name = lang || t.title || 'Sound track ' + (t.pos + 1);
+      if (lang && /comment|director|descri/i.test(t.title)) name = t.title;
+      const ch = !plain && t.meta ? channelName(t.meta.channels) : '';
+      return ch ? name + ' · ' + ch : name;
+    },
+
+    /** A movie was loaded: choose the track to play before anything is played. */
+    onLoad() {
+      this.clear();
+      this.read();
+      this.defaultPos = this.list.findIndex((t) => t.enabled);
+      const pos = this.choose();
+      if (pos >= 0 && !this.only(pos)) {
+        this.apply(pos);
+        Engine.logEvent('Sound track chosen: ' + this.name(this.list[pos]) +
+          (this.defaultPos >= 0 && this.defaultPos !== pos ? ' (the file itself would have played ' + this.name(this.list[this.defaultPos]) + ')' : ''));
+      }
+      UI.renderSoundTracks();
+    },
+
+    /** The pick remembered for this file if there is one, otherwise the preferred language. */
+    choose() {
+      if (!this.list.length) return -1;
+      if (cfg.audioPickKey && cfg.audioPickKey === this.fileKey()) {
+        const t = this.list[cfg.audioPickPos];
+        if (t && t.lang === cfg.audioPickLang) return t.pos;
+      }
+      return C.pickAudioTrack(this.list.map((t) => ({ lang: t.lang, title: t.title, isDefault: t.pos === this.defaultPos })), cfg.audioLang);
+    },
+
+    pickedByHand(t) {
+      return !!t && !!cfg.audioPickKey && cfg.audioPickKey === this.fileKey() && cfg.audioPickPos === t.pos;
+    },
+
+    /** Flips the switches. On its own this is only safe while nothing is playing. */
+    apply(pos) {
+      let src = null;
+      try { src = video.audioTracks; } catch (e) { src = null; }
+      if (!src || !src[pos]) return false;
+      for (let i = 0; i < src.length; i++) if (i !== pos && src[i].enabled) src[i].enabled = false;
+      if (!src[pos].enabled) src[pos].enabled = true;
+      this.list.forEach((t) => { t.enabled = t.pos === pos; });
+      return true;
+    },
+
+    /** Switches track and re-cues the film, which is what makes the switch clean. */
+    switchTo(pos, why) {
+      const prev = this.current();
+      if (!this.apply(pos)) return false;
+      this.verify = { prev: prev ? prev.pos : -1, playedMs: 0 };
+      this.alive = false;
+      this.quietMs = 0;
+      const ph = Engine.phase;
+      if (Engine.mode === 'armed' && (ph === 'synced' || ph === 'standby' || ph === 'cueing')) {
+        Engine.recalibrate('sound').catch(() => {});
+      } else {
+        try { video.currentTime = video.currentTime; } catch (e) { /* not seekable yet */ }
+      }
+      Engine.logEvent('Sound track: ' + this.name(this.list[pos]) + (why ? ' (' + why + ')' : ''));
+      Media.soundChanged();
+      return true;
+    },
+
+    /** The user picks a track: the list in the Mission tab, the button on the bar, the A key. */
+    select(pos) {
+      const t = this.list[pos];
+      if (!Media.ready || !t) return false;
+      if (Engine.locked()) return false;
+      cfg.audioPickKey = this.fileKey();
+      cfg.audioPickPos = pos;
+      cfg.audioPickLang = t.lang;
+      save();
+      if (this.only(pos)) { Media.soundChanged(); return true; }
+      if (!this.switchTo(pos, 'chosen by hand')) return false;
+      toast('Sound: ' + this.name(t), 'good');
+      return true;
+    },
+
+    cycle() {
+      if (!Media.ready) return;
+      if (this.list.length < 2) {
+        toast(this.list.length ? 'This file has one sound track: ' + this.name(this.list[0]) : 'This file has no sound the player can decode');
+        return;
+      }
+      const cur = this.current();
+      this.select(((cur ? cur.pos : -1) + 1) % this.list.length);
+    },
+
+    /** The preferred language was changed in Setup: forget the hand-made pick and choose again. */
+    preferenceChanged() {
+      cfg.audioPickKey = '';
+      cfg.audioPickPos = -1;
+      cfg.audioPickLang = '';
+      save();
+      if (!Media.ready) return;
+      const pos = this.choose();
+      if (pos >= 0 && !this.only(pos)) this.switchTo(pos, 'preferred language');
+      Media.offeredFor = -1;
+      Media.byUser = true;
+      Media.inspect(Media.loadToken);                    // the file is judged against the new language
+    },
+
+    /**
+     * Is the sound that plays the sound that is wanted? null when all is well, otherwise
+     * { kind, title, text, short, hint, fixable }:
+     *   fixable  the wanted track is in the file but has to be converted first
+     *   other    the file simply has no track in the wanted language
+     *   maybe    another language plays and, without FFmpeg, nothing can look inside the file
+     */
+    problem() {
+      if (!Media.ready || !this.supported) return null;
+      const cur = this.current();
+      if (!cur || this.pickedByHand(cur)) return null;   // silence is Media's business; a hand-made pick is respected
+      const want = C.normLang(cfg.audioLang) || 'eng';
+      const wantName = C.langName(want);
+      const curName = C.langName(cur.lang);
+      const canFix = !!(Media.info && Media.info.path && native.isNative);
+      const a = Media.assess;
+      if (Media.probe && a) {
+        const bestName = C.langName(a.audioLang);
+        const playingBest = !!(cur.meta && cur.meta.index === a.audioIndex);
+        if (a.needsAudioFix && !playingBest) {
+          return {
+            kind: 'fixable', fixable: canFix,
+            title: bestName ? 'The ' + bestName + ' sound needs converting' : 'The main sound track needs converting',
+            text: a.audioReason,
+            short: bestName && curName && bestName !== curName ? 'The sound is ' + curName + ', not ' + bestName : 'The main sound track cannot be played yet',
+            hint: 'Use “Fix the sound” below' + (bestName ? ': it converts the ' + bestName + ' track.' : '.')
+          };
+        }
+        if (cur.lang === want || !curName) return null;
+        if (a.hasPreferred) {
+          return {
+            kind: 'fixable', fixable: canFix,
+            title: 'This movie would play in ' + curName,
+            text: 'This movie would play in ' + curName + ', although the file has ' + wantName + ' sound. The fix makes a copy in which ' + wantName + ' comes first.',
+            short: 'The sound is ' + curName + ', not ' + wantName, hint: 'Use “Fix the sound” below.'
+          };
+        }
+        const converted = /\(Avengers Player\)\.mp4$/i.test(Media.info.name || '');
+        return {
+          kind: 'other', fixable: false,
+          title: 'This file has no ' + wantName + ' sound',
+          text: 'The sound of this file is ' + curName + '. It has no ' + wantName + ' sound track. ' +
+            (converted ? 'Import the original movie file instead and fix its sound: ' + wantName + ' is then chosen automatically.' : 'Use a copy of the film that has ' + wantName + ' sound.') +
+            ' (If ' + curName + ' is what you want, make it the preferred sound language in Setup.)',
+          short: 'The sound is ' + curName + ', not ' + wantName,
+          hint: 'This file has no ' + wantName + ' track.' + (converted ? ' Import the original movie file instead.' : '')
+        };
+      }
+      if (cur.lang === want || !curName) return null;
+      return {
+        kind: 'maybe', fixable: canFix,
+        title: 'The sound of this movie is ' + curName,
+        text: 'The sound that will play is ' + curName + ', not ' + wantName + '. If the file also has ' + wantName + ' sound in Dolby or DTS, it can be converted.',
+        short: 'The sound is ' + curName + ', not ' + wantName,
+        hint: canFix ? '“Fix the sound” below can look inside the file for ' + wantName + ' sound.' : ''
+      };
+    },
+
+    /** Runs 5 times a second: proves that a switch produced sound, and revives sound that stopped. */
+    watch(perf) {
+      const dt = clamp(perf - (this.lastWatch || perf), 0, 1000);
+      this.lastWatch = perf;
+      if (!this.supported || !Media.ready || !this.list.length) return;
+      const bytes = video.webkitAudioDecodedByteCount || 0;
+      const playing = !video.paused && !video.seeking && !video.ended && video.readyState >= 3;
+      if (!playing) { this.quietMs = 0; this.alive = false; this.lastBytes = bytes; return; }
+      if (bytes !== this.lastBytes) {
+        this.lastBytes = bytes;
+        this.quietMs = 0;
+        this.alive = true;
+        this.verify = null;
+        return;
+      }
+      this.quietMs += dt;
+      if (this.verify) {
+        this.verify.playedMs += dt;
+        if (this.verify.playedMs >= 5000) this.switchFailed();
+        return;
+      }
+      if (!this.alive || this.quietMs < 4000 || Media.hasAudio !== true) return;
+      if (video.duration - video.currentTime < 15) return;       // sound often ends a little before the picture
+      this.revive();
+    },
+
+    /** The track that was switched to gives no sound: go back to the one that did. */
+    switchFailed() {
+      const back = this.verify ? this.verify.prev : -1;
+      const bad = this.current();
+      this.verify = null;
+      Engine.logEvent('The sound track ' + this.name(bad) + ' produced no sound');
+      if (back >= 0 && this.list[back] && (!bad || bad.pos !== back)) {
+        cfg.audioPickKey = '';
+        cfg.audioPickPos = -1;
+        cfg.audioPickLang = '';
+        save();
+        toast('That sound track cannot be decoded: back to ' + this.name(this.list[back]), 'bad');
+        this.switchTo(back, 'the other track produced no sound');
+        this.verify = null;                              // the track it came from is known to work
+      } else {
+        toast('This sound track produces no sound', 'bad');
+      }
+    },
+
+    /** The sound was playing and stopped being decoded although the film runs: re-cue to bring it back. */
+    revive() {
+      const p = performance.now();
+      if (Engine.mode === 'armed' && Engine.session) {
+        const toSnap = Engine.session.targetEpoch - Clock.now();
+        if (toSnap > -2000 && toSnap < 6000) return;     // never re-cue across the snap itself
+      }
+      this.quietMs = 0;
+      this.alive = false;
+      this.heals = this.heals.filter((t) => p - t < 300000);
+      if (this.heals.length >= 2) {
+        if (!this.gaveUp) {
+          this.gaveUp = true;
+          Engine.logEvent('The sound stopped and re-cueing did not bring it back');
+          toast('The sound stopped. Press R to recalibrate, or check the file.', 'bad');
+        }
+        return;
+      }
+      this.heals.push(p);
+      Engine.logEvent('The sound stopped being decoded: re-cueing the film to bring it back');
+      if (Engine.mode === 'armed') { if (Engine.phase === 'synced') Engine.autoRecal('the sound stopped'); return; }
+      try { video.currentTime = video.currentTime; } catch (e) { /* not seekable */ }
+    }
+  };
+
+  /* ======================================================= film versions === */
+
+  /** Identifies "this snap point in this file", so a confirmation never carries over to another file or setting. */
+  const snapKey = () => (Media.info ? (Media.info.path || Media.info.name) + '|' + (Media.info.size || 0) + '|' + cfg.snapSec.toFixed(3) : '');
+  const snapConfirmed = () => !!Media.info && !!cfg.snapConfirmedFor && cfg.snapConfirmedFor === snapKey();
+
+  const Versions = {
+    guess: null,                   // what the length of the loaded file points to
+
+    current() { return C.filmVersion(cfg.filmVersion); },
+
+    /**
+     * A movie was imported: if its length says it is another cut than the one selected, switch.
+     * A snap point the user set by hand is never overridden.
+     */
+    recognise() {
+      this.guess = Media.ready ? C.guessFilmVersion(video.duration) : null;
+      const guess = this.guess;
+      const cur = this.current();
+      if (!guess || cur.id === 'custom' || cur.family === guess.family) return;
+      cfg.filmVersion = guess.id;
+      cfg.snapSec = guess.snapSec;
+      cfg.rehearsed = {};
+      save();
+      Engine.session = Engine.computeFree();
+      toast('This looks like ' + guess.name);
+      Engine.logEvent('Film version recognised by its length (' + C.fmtDuration(video.duration) + '): ' + guess.name);
+    },
+
+    choose(id) {
+      if (Engine.mode === 'armed') { toast('Stop the countdown to change the film version'); UI.renderSettings(); return; }
+      const v = C.filmVersion(id);
+      cfg.filmVersion = v.id;
+      if (v.snapSec != null) cfg.snapSec = v.snapSec;
+      cfg.rehearsed = {};
+      save();
+      Engine.session = Engine.computeFree();
+      UI.renderSettings();
+      UI.dirty.all = true;
+      UI.dirty.preflight = true;
+      toast(v.snapSec != null ? v.short + ': snap at ' + C.fmtDuration(v.snapSec, { forceHours: true }) : 'Now set the snap point below', 'good');
+    },
+
+    confirm() {
+      cfg.snapConfirmedFor = snapKey();
+      save();
+      UI.dirty.preflight = true;
+      Engine.logEvent('Snap point confirmed in this file: ' + C.fmtDuration(cfg.snapSec, { ms: true, forceHours: true }));
+    }
+  };
 
   /* ============================================================== engine === */
 
@@ -506,8 +914,22 @@
             html: esc(Media.audioReason || 'No sound could be decoded from this file.') + '<br><br>Start the countdown anyway?',
             actions: [
               { label: 'Cancel', onClick: () => Modal.close() },
-              { label: 'Start anyway', onClick: () => { Modal.close(); this.arm({ silentOk: true }); } }
+              { label: 'Start anyway', onClick: () => { Modal.close(); this.arm(Object.assign({}, opts, { silentOk: true, langOk: true })); } }
             ].concat(fixable ? [{ label: 'Fix the sound', primary: true, onClick: () => { Modal.close(); AudioFix.offer(); } }] : []),
+            onEscape: () => Modal.close()
+          });
+          return;
+        }
+        const lp = opts.langOk ? null : Media.soundProblem();
+        if (lp && lp.kind !== 'silent') {
+          // The film would play, but not in the language that is wanted: say so now, not at midnight.
+          Modal.open({
+            title: lp.title,
+            html: esc(lp.text) + '<br><br>Start the countdown anyway?',
+            actions: [
+              { label: 'Cancel', onClick: () => Modal.close() },
+              { label: 'Start anyway', onClick: () => { Modal.close(); this.arm(Object.assign({}, opts, { langOk: true })); } }
+            ].concat(lp.fixable ? [{ label: 'Fix the sound', primary: true, onClick: () => { Modal.close(); AudioFix.offer(); } }] : []),
             onEscape: () => Modal.close()
           });
           return;
@@ -544,6 +966,7 @@
       saveNow();
       tellArmed(true);
       this.logEvent((opts.restore ? 'Countdown resumed' : 'Countdown armed') + ': movie starts ' + C.fmtDateTime(s.startEpoch, cfg.use24h));
+      if (!opts.restore && !snapConfirmed()) toast('Armed. The snap point is not confirmed in this file yet: run the Snap test.');
       UI.onMode();
       // Not awaited: before the start time this only finishes when the film starts, and whoever
       // armed (startup, the button) has other things to do meanwhile.
@@ -930,6 +1353,7 @@
       const result = t.result || { ok: null, title: t.title, text: why || 'Ended before the result was in.' };
       if (result.ok) { cfg.rehearsed[t.kind] = true; save(); }
       UI.addTestResult(result);
+      if (t.kind === 'snap' && t.result && t.result.ok) setTimeout(() => UI.askSnapLanded(), 600);
       this.logEvent('Test run ended: ' + result.text);
       this.graph.length = 0;
       if (t.wasArmed) {
@@ -972,6 +1396,7 @@
       if (this.mode !== 'armed') {
         this.session = this.computeFree();
         this.trackAudio();
+        AudioTracks.watch(perf);
         if (!this.test) Media.retryWhileArmed(perf);
         return;
       }
@@ -1002,6 +1427,7 @@
           break;
       }
       this.trackAudio();
+      AudioTracks.watch(perf);
     },
 
     control(now) {
@@ -1393,33 +1819,71 @@
   const AudioFix = {
     running: false,
 
+    /**
+     * Explains the sound problem and offers the fix. With FFmpeg at hand the dialog lets the user
+     * choose which language to convert (the wanted one is preselected); without it, it offers to
+     * fetch FFmpeg first.
+     */
     async offer() {
       if (this.running || Modal.isOpen || !Media.info || !Media.info.path || !native.isNative) return;
       const exe = await native.ffLocate().catch(() => null);
-      const why = esc(Media.audioReason || 'The sound in this file is in a format this player cannot decode.');
-      if (exe) {
-        Modal.open({
-          title: 'This movie would play without sound',
-          html: why + '<br><br>Fix it now? Only the sound is converted; <b>the picture is copied untouched</b>, so there is no quality loss. It takes a minute or two and makes a new file next to the movie.',
-          actions: [
-            { label: 'Not now', onClick: () => Modal.close() },
-            { label: 'Fix the sound', primary: true, onClick: () => this.convert() }
-          ],
-          onEscape: () => Modal.close()
-        });
-      } else {
+      if (exe && !Media.probe) await Media.reprobe();
+      if (Modal.isOpen || !Media.info) return;
+      const p = Media.soundProblem();
+      const title = p ? p.title : 'Convert the sound';
+      const why = esc(p ? p.text : 'The sound of this movie can be converted so that another language plays.');
+
+      if (!exe) {
         const canDownload = native.platform === 'win32';
         Modal.open({
-          title: 'This movie would play without sound',
-          html: why + '<br><br>Avengers Player can fix this in a minute or two, with no picture quality loss, using the free tool <b>FFmpeg</b>.' +
+          title: title,
+          html: why + '<br><br>Avengers Player can fix this in a few minutes, with no picture quality loss, using the free tool <b>FFmpeg</b>.' +
             (canDownload ? ' It is a one-time download of about 100 MB.' : ''),
           actions: [
             { label: 'Not now', onClick: () => Modal.close() },
-            { label: 'I have FFmpeg…', onClick: async () => { const p = await native.ffPick(); if (p) this.convert(); else toast('That is not a working FFmpeg', 'bad'); } }
+            { label: 'I have FFmpeg…', onClick: async () => { const found = await native.ffPick(); if (found) this.afterFfmpeg(); else toast('That is not a working FFmpeg', 'bad'); } }
           ].concat(canDownload ? [{ label: 'Download and fix', primary: true, onClick: () => this.download() }] : []),
           onEscape: () => Modal.close()
         });
+        return;
       }
+
+      const tracks = (Media.probe && Media.probe.audio) || [];
+      if ((p && !p.fixable) || !tracks.length) {
+        // FFmpeg has looked inside: there is nothing in this file to convert into what is wanted.
+        Modal.open({
+          title: title,
+          html: why,
+          actions: [{ label: 'Close', primary: true, onClick: () => Modal.close() }],
+          onEscape: () => Modal.close()
+        });
+        return;
+      }
+      const pick = Media.assess && Number.isInteger(Media.assess.audioIndex) ? Media.assess.audioIndex : tracks[0].index;
+      const label = (t) => [C.langName(C.trackLang(t)) || t.title || 'Track ' + (t.index + 1), channelName(t.channels), C.audioCodecName(t.codec)].filter(Boolean).join(' · ');
+      const choice = tracks.length > 1
+        ? '<label class="fld mfld"><span>Language to play</span><select id="fixLang">' +
+            tracks.map((t) => '<option value="' + t.index + '"' + (t.index === pick ? ' selected' : '') + '>' + esc(label(t)) + '</option>').join('') + '</select></label>' +
+          '<label class="sw mfld"><input type="checkbox" id="fixKeep"' + (cfg.keepOtherSound ? ' checked' : '') + '><i></i><span>Keep the other languages too' +
+            '<small>You can then switch language in the player. Takes a little longer.</small></span></label>'
+        : '';
+      Modal.open({
+        title: title,
+        html: why + '<br><br>Fix it now? Only the sound is converted; <b>the picture is copied untouched</b>, so there is no quality loss. It takes a few minutes and makes a new file next to the movie.' + choice,
+        actions: [
+          { label: 'Not now', onClick: () => Modal.close() },
+          {
+            label: 'Fix the sound', primary: true, onClick: () => {
+              const sel = $('#fixLang', el.modalBody);
+              const keep = $('#fixKeep', el.modalBody);
+              const idx = sel ? parseInt(sel.value, 10) : pick;
+              if (keep) { cfg.keepOtherSound = keep.checked; save(); }
+              this.convert(Number.isInteger(idx) ? idx : pick, keep ? keep.checked : false);
+            }
+          }
+        ],
+        onEscape: () => Modal.close()
+      });
     },
 
     async download() {
@@ -1432,30 +1896,52 @@
       });
       const r = await native.ffDownload().catch((e) => ({ error: e && e.message }));
       this.running = false;
-      if (r && r.path) { this.convert(); return; }
       Modal.close();
+      if (r && r.path) { this.afterFfmpeg(); return; }
       if (!(r && r.aborted)) toast((r && r.error) || 'The download failed', 'bad');
     },
 
-    async convert() {
+    /** FFmpeg has just become available: look inside the file, then convert or ask which language. */
+    async afterFfmpeg() {
+      Modal.close();
+      await Media.reprobe();
+      const tracks = (Media.probe && Media.probe.audio) || [];
+      const p = Media.soundProblem();
+      if (p && p.kind === 'silent' && tracks.length === 1) { this.convert(tracks[0].index, false); return; }
+      this.offer();
+    },
+
+    async convert(idx, keepOthers) {
       if (!Media.info || !Media.info.path) return;
       this.running = true;
       const source = Media.info;
+      if (!Media.probe) await Media.reprobe();
+      const tracks = (Media.probe && Media.probe.audio) || [];
+      if (!Number.isInteger(idx)) idx = Media.assess && Number.isInteger(Media.assess.audioIndex) ? Media.assess.audioIndex : 0;
+      const chosen = tracks.find((t) => t.index === idx) || null;
+      const lang = chosen ? C.trackLang(chosen) : '';
+      const what = C.langName(lang);
+      const keep = !!keepOthers && tracks.length > 1;
       const wasArmed = Engine.mode === 'armed' && !Engine.test;
       Modal.open({
         title: 'Fixing the sound',
-        html: 'Converting the sound to AAC. The picture is copied bit for bit.' + (wasArmed ? ' The countdown stays armed.' : ''),
+        html: 'Converting the ' + (what ? esc(what) + ' ' : '') + 'sound to AAC' + (keep ? ' and keeping the other languages' : '') +
+          '. The picture is copied bit for bit.' + (wasArmed ? ' The countdown stays armed.' : ''),
         progress: true, note: 'Starting…',
         actions: [{ label: 'Cancel', onClick: () => native.ffCancel() }]
       });
-      const idx = Media.assess && Number.isInteger(Media.assess.audioIndex) ? Media.assess.audioIndex : 0;
-      const r = await native.ffConvert(source.path, idx).catch((e) => ({ error: e && e.message }));
+      const r = await native.ffConvert(source.path, idx, keep, cfg.audioLang).catch((e) => ({ error: e && e.message }));
       this.running = false;
       Modal.close();
       if (r && r.movie) {
-        Engine.logEvent('Sound fixed: ' + r.movie.name);
+        // The new file starts with the language that was asked for: remember it as this file's choice.
+        cfg.audioPickKey = AudioTracks.fileKey(r.movie);
+        cfg.audioPickPos = 0;
+        cfg.audioPickLang = lang;
+        save();
+        Engine.logEvent('Sound fixed: ' + r.movie.name + (what ? ' (' + what + (keep ? ', other languages kept' : '') + ')' : ''));
         const ok = await Media.load(r.movie);
-        if (ok) toast('Sound fixed. Now using ' + r.movie.name, 'good');
+        if (ok) toast('Sound fixed' + (what ? ' (' + what + ')' : '') + '. Now using ' + r.movie.name, 'good');
         return;
       }
       if (r && r.missing) { this.offer(); return; }
@@ -1623,10 +2109,40 @@
       el.resumeBtn.textContent = cfg.moviePath ? 'Resume with ' + (cfg.movieName || 'the movie') : 'Choose the movie';
     },
 
-    audioWarning(text) {
-      el.audioWarn.textContent = text || '';
-      setHidden(el.audioWarn, !text);
-      setHidden(el.fixAudioBtn, !(text && Media.info && Media.info.path && native.isNative && (!Media.probe || (Media.probe.audio || []).length > 0)));
+    /** The line over the picture about a sound problem, and the Fix button that goes with it. */
+    renderSoundWarning() {
+      const p = Media.soundProblem();
+      const text = p ? p.text + (p.fixable ? ' Use “Fix the sound” in the Mission tab.' : '') : '';
+      if (el.audioWarn.__shown !== text) {
+        // A warning the user clicked away stays away until it has something new to say.
+        el.audioWarn.__shown = text;
+        el.audioWarn.textContent = text;
+        setHidden(el.audioWarn, !text);
+      }
+      setHidden(el.fixAudioBtn, !(p && p.fixable));
+    },
+
+    /** The sound language list in the Mission tab and the language button on the bar. */
+    renderSoundTracks() {
+      const list = Media.ready ? AudioTracks.list : [];
+      const cur = AudioTracks.current();
+      setHidden(el.soundFld, !list.length);
+      const names = list.map((t) => AudioTracks.name(t));
+      const sig = names.join('|');
+      if (el.soundTrack.__sig !== sig) {
+        el.soundTrack.__sig = sig;
+        el.soundTrack.textContent = '';
+        list.forEach((t, i) => {
+          const o = document.createElement('option');
+          o.value = String(t.pos);
+          o.textContent = names[i] + (names.indexOf(names[i]) !== names.lastIndexOf(names[i]) ? ' (' + (i + 1) + ')' : '');
+          el.soundTrack.appendChild(o);
+        });
+      }
+      el.soundTrack.value = cur ? String(cur.pos) : '';
+      setHidden(el.btnAudio, list.length < 2);
+      setText(el.btnAudio, cur && cur.lang ? cur.lang.toUpperCase() : 'AUD');
+      el.btnAudio.title = 'Sound language' + (cur ? ': ' + AudioTracks.name(cur, true) : '') + ' (A)';
     },
 
     /* ---- reactions to engine changes ---- */
@@ -1679,6 +2195,37 @@
     hideSlip() {
       setHidden(el.slip, true);
       setHidden(el.slipPill, true);
+    },
+
+    /** After a passed Snap test: the film was on the clock, but only a person can see where the snap was. */
+    askSnapLanded() {
+      if (Modal.isOpen || !Media.ready || Engine.test) return;
+      Modal.open({
+        title: 'Did the snap land on 12:00:00?',
+        html: 'The film was locked to the clock. What only you can judge: <b>did the fingers snap just as the clock reached 12:00:00?</b>' +
+          '<br><br>If it was early or late, the snap point of this file needs adjusting. That takes half a minute.',
+        actions: [
+          { label: 'It was off', onClick: () => this.openSnapFinder() },
+          { label: 'Not sure', onClick: () => Modal.close() },
+          { label: 'Yes, spot on', primary: true, onClick: () => { Modal.close(); Versions.confirm(); toast('Snap point confirmed', 'good'); } }
+        ],
+        onEscape: () => Modal.close()
+      });
+    },
+
+    /** Puts the film just before the snap point, paused, with the frame tools in view. */
+    openSnapFinder() {
+      Modal.close();
+      if (Engine.mode === 'armed' || Engine.test) { toast('Stop the countdown to adjust the snap point'); return; }
+      this.showTab('setup');
+      if (Media.ready) {
+        if (!video.paused) video.pause();
+        try { video.currentTime = clamp(cfg.snapSec - 12, 0, Math.max(0, video.duration - 1)); } catch (e) { /* not seekable */ }
+        this.lastVideoT = video.currentTime;
+      }
+      el.snapTools.classList.add('attn');
+      setTimeout(() => el.snapTools.classList.remove('attn'), 4200);
+      el.snapTools.scrollIntoView({ block: 'center', behavior: 'smooth' });
     },
 
     lockedNudge() {
@@ -1754,11 +2301,15 @@
       setText(el.fileName, Media.info.name);
       el.fileName.title = Media.info.path || Media.info.name;
       const parts = [video.videoWidth + '×' + video.videoHeight, C.fmtDuration(video.duration)];
+      if (Versions.guess) parts.unshift(Versions.guess.short);
       if (Media.info.size) parts.push((Media.info.size / 1073741824).toFixed(2) + ' GB');
       const p = Media.probe;
       if (p && p.video && p.video.codec) parts.push(String(p.video.codec).toUpperCase());
-      if (p && p.audio && p.audio[0]) parts.push(String(p.audio[0].codec).toUpperCase());
+      const snd = AudioTracks.current();
+      if (snd && snd.meta) parts.push(C.audioCodecName(snd.meta.codec).replace(/ \(.*\)$/, ''));
+      else if (!snd && p && p.audio && p.audio[0]) parts.push(C.audioCodecName(p.audio[0].codec).replace(/ \(.*\)$/, ''));
       setText(el.fileMeta, parts.join(' · '));
+      this.renderSoundTracks();
     },
 
     renderSettings() {
@@ -1779,6 +2330,7 @@
       el.optLock.checked = cfg.lockControls;
       el.optAutoRestart.checked = cfg.autoRestart !== false;
       el.optNetTime.checked = cfg.useNetTime;
+      el.optAudioLang.value = cfg.audioLang;
       el.subSize.value = cfg.subSize;
       el.subBg.value = cfg.subBg;
       el.subColor.value = cfg.subColor;
@@ -1789,6 +2341,11 @@
       el.tgCustomInput.disabled = cfg.targetMode !== 'custom';
       el.tgCustomInput.value = cfg.customTarget || '';
       if (document.activeElement !== el.snapInput) el.snapInput.value = C.fmtDuration(cfg.snapSec, { ms: true, forceHours: true });
+      const ver = Versions.current();
+      el.filmVersion.value = ver.id;
+      const g = Versions.guess;
+      setText(el.filmVersionNote, ver.note + (g && g.family !== ver.family && ver.id !== 'custom' ? ' Note: by its length this file looks like ' + g.name + '.' : ''));
+      setText(el.snapReset, 'back to ' + C.fmtDuration((g && g.snapSec) || C.DEFAULT_SNAP_SEC, { forceHours: true }));
       $$('button', el.optCelebration).forEach((b) => b.classList.toggle('on', b.dataset.v === cfg.celebration));
       setText(el.celebHint, CELEB_HINT[cfg.celebration] || '');
       el.overlay.className = 'overlay pos-' + cfg.overlayPos + ' size-' + cfg.overlaySize;
@@ -1806,12 +2363,21 @@
       const v = video;
       if (Media.ready) {
         items.push([true, 'Movie loaded and decoding', v.videoWidth + '×' + v.videoHeight + ' · ' + C.fmtDuration(v.duration)]);
-        if (Media.hasAudio === true) items.push([true, 'Sound is playable', Media.probe && Media.probe.audio && Media.probe.audio[0] ? String(Media.probe.audio[0].codec).toUpperCase() : '']);
-        else if (Media.hasAudio === false) items.push([false, 'No playable sound in this file', 'Use “Fix the sound” below.']);
+        const sp = Media.soundProblem();
+        const snd = AudioTracks.current();
+        if (sp) items.push([false, sp.short, sp.hint]);
+        else if (Media.hasAudio === true) {
+          items.push([true, snd && C.langName(snd.lang) ? 'Sound: ' + AudioTracks.name(snd) : 'Sound is playable',
+            (snd && snd.meta ? C.audioCodecName(snd.meta.codec).replace(/ \(.*\)$/, '') : '') + (AudioTracks.list.length > 1 ? (snd && snd.meta ? ' · ' : '') + AudioTracks.list.length + ' languages in this file, press A to switch' : '')]);
+        }
         else if (Media.checking) items.push([null, 'Checking the sound…', 'Playing the first two seconds silently.']);
         else items.push([null, 'Sound not verified yet', 'It is checked the moment the movie plays. Run a test.']);
         if (cfg.muted || cfg.volume < 0.05) items.push([false, 'The player is muted', 'Press M or raise the volume. Starting the countdown switches the sound back on.']);
-        if (v.duration >= cfg.snapSec + 2) items.push([true, 'The file reaches the snap point', 'Snap at ' + C.fmtDuration(cfg.snapSec, { ms: cfg.snapSec % 1 !== 0 })]);
+        if (v.duration >= cfg.snapSec + 2) {
+          items.push([true, 'The file reaches the snap point', 'Snap at ' + C.fmtDuration(cfg.snapSec, { ms: cfg.snapSec % 1 !== 0 })]);
+          if (snapConfirmed()) items.push([true, 'Snap point confirmed in this file', '']);
+          else items.push([null, 'Snap point not confirmed in this file yet', (Versions.current().settled ? '' : 'The timing of this cut is not established. ') + 'Run the Snap test and say whether the snap landed on 12:00:00.']);
+        }
         else items.push([false, 'The file ends before the snap point', 'It is only ' + C.fmtDuration(v.duration) + ' long. Wrong file, or set the snap point in Setup.']);
       } else {
         items.push([null, 'No movie loaded', '']);
@@ -2008,7 +2574,7 @@
       setText(el.ktStart, C.fmtDateTime(s.startEpoch, cfg.use24h));
       setText(el.ktSnap, C.fmtDateTime(s.targetEpoch, cfg.use24h));
       setText(el.ktSnapLbl, newYear ? 'The snap lands on midnight' : 'The snap lands');
-      setText(el.ktPoint, C.fmtDuration(cfg.snapSec, { ms: cfg.snapSec % 1 !== 0, forceHours: true }));
+      setText(el.ktPoint, C.fmtDuration(cfg.snapSec, { ms: cfg.snapSec % 1 !== 0, forceHours: true }) + (Versions.current().id !== 'original' ? ' · ' + Versions.current().short : ''));
 
       let state = 'idle';
       let label;
@@ -2208,7 +2774,7 @@
 
   async function importMovie(info) {
     if (!info) return;
-    await Media.load(info);
+    await Media.load(info, { byUser: true });
   }
 
   async function pickMovie() {
@@ -2227,14 +2793,20 @@
     node.addEventListener('change', () => { setCfg(key, map ? map(node.value) : node.value); if (after) after(); });
   }
 
-  function applySnap(sec) {
+  function applySnap(sec, opts) {
+    opts = opts || {};
     if (Engine.mode === 'armed') { toast('Stop the countdown to change the snap point'); UI.renderSettings(); return; }
     if (!(sec > 0) || !isFinite(sec) || sec >= 86400) { el.snapInput.classList.add('bad'); return; }
     el.snapInput.classList.remove('bad');
     cfg.snapSec = Math.round(sec * 1000) / 1000;
+    // A point that is not the selected cut's own figure makes this a custom cut.
+    const cur = Versions.current();
+    if (cur.snapSec == null || Math.abs(cur.snapSec - cfg.snapSec) > 0.0005) cfg.filmVersion = 'custom';
     cfg.rehearsed = {};
+    if (opts.confirmed) cfg.snapConfirmedFor = snapKey();      // the user pointed at the frame: that is a confirmation
     save();
     Engine.session = Engine.computeFree();
+    UI.renderSettings();
     el.snapInput.value = C.fmtDuration(cfg.snapSec, { ms: true, forceHours: true });
     UI.dirty.all = true;
     UI.dirty.preflight = true;
@@ -2255,6 +2827,40 @@
       b.addEventListener('click', () => { cfg.theme = t.id; save(); UI.applyTheme(); UI.dirty.all = true; });
       el.themeGrid.appendChild(b);
     });
+
+    /* film versions */
+    C.FILM_VERSIONS.forEach((v) => {
+      const o = document.createElement('option');
+      o.value = v.id;
+      o.textContent = v.name;
+      el.filmVersion.appendChild(o);
+    });
+
+    /* sound languages */
+    Object.keys(C.LANG_NAMES)
+      .sort((a, b) => (a === 'eng' ? -1 : b === 'eng' ? 1 : C.LANG_NAMES[a].localeCompare(C.LANG_NAMES[b])))
+      .forEach((k) => {
+        const o = document.createElement('option');
+        o.value = k;
+        o.textContent = C.LANG_NAMES[k] + (k === 'eng' ? ' (default)' : '');
+        el.optAudioLang.appendChild(o);
+      });
+    el.optAudioLang.addEventListener('change', () => {
+      if (Engine.locked()) { UI.renderSettings(); return; }
+      cfg.audioLang = C.LANG_NAMES[el.optAudioLang.value] ? el.optAudioLang.value : 'eng';
+      save();
+      AudioTracks.preferenceChanged();
+      Media.soundChanged();
+      toast('Preferred sound language: ' + C.langName(cfg.audioLang));
+    });
+    el.soundTrack.addEventListener('change', () => {
+      AudioTracks.select(parseInt(el.soundTrack.value, 10));
+      UI.renderSoundTracks();                            // shows what really plays, also when the pick was refused
+    });
+    el.btnAudio.addEventListener('click', () => AudioTracks.cycle());
+    if (AudioTracks.supported) {
+      try { video.audioTracks.addEventListener('change', () => { if (Media.ready) { AudioTracks.read(); UI.renderSoundTracks(); } }); } catch (e) { /* no events: the list is re-read on every load anyway */ }
+    }
 
     /* subtitle encodings */
     const encs = SubsCore && SubsCore.ENCODINGS ? SubsCore.ENCODINGS : [{ id: 'auto', label: 'Auto-detect' }];
@@ -2383,7 +2989,8 @@
     el.snapApply.addEventListener('click', () => applySnap(C.parseDuration(el.snapInput.value)));
     el.snapInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { applySnap(C.parseDuration(el.snapInput.value)); el.snapInput.blur(); } });
     el.snapInput.addEventListener('input', () => el.snapInput.classList.toggle('bad', !(C.parseDuration(el.snapInput.value) > 0)));
-    el.snapReset.addEventListener('click', () => applySnap(C.DEFAULT_SNAP_SEC));
+    el.snapReset.addEventListener('click', () => Versions.choose(Versions.guess ? Versions.guess.id : 'original'));
+    el.filmVersion.addEventListener('change', () => Versions.choose(el.filmVersion.value));
     const free = () => Media.ready && Engine.mode === 'free';
     el.snapGoto.addEventListener('click', () => {
       if (!free()) return;
@@ -2399,7 +3006,7 @@
     el.snapSetHere.addEventListener('click', () => {
       if (!free()) return;
       const t = isFinite(Media.lastFrameTime) && Math.abs(Media.lastFrameTime - video.currentTime) < 0.1 && video.paused ? Media.lastFrameTime : video.currentTime;
-      applySnap(t);
+      applySnap(t, { confirmed: true });
     });
     const setTarget = () => {
       if (Engine.mode === 'armed') { toast('Stop the countdown to change the target'); UI.renderSettings(); return; }
@@ -2422,6 +3029,7 @@
       const keep = { moviePath: cfg.moviePath, movieName: cfg.movieName };
       Object.assign(cfg, DEFAULTS, keep);
       cfg.rehearsed = {};
+      Versions.recognise();
       saveNow();
       Engine.session = Engine.computeFree();
       NetTime.apply(true);
@@ -2545,6 +3153,7 @@
         case 'o': setCfg('showOverlay', !cfg.showOverlay); toast(cfg.showOverlay ? 'Clock overlay on' : 'Clock overlay hidden'); break;
         case 't': setCfg('finalTen', !cfg.finalTen); if (cfg.finalTen && !cfg.showOverlay) setCfg('showOverlay', true); toast(cfg.finalTen ? '10 · 9 · 8 animation on' : '10 · 9 · 8 animation off'); break;
         case 'n': setCfg('showCount', !cfg.showCount); if (cfg.showCount && !cfg.showOverlay) setCfg('showOverlay', true); toast(cfg.showCount ? 'Countdown mode on' : 'Countdown mode off'); break;
+        case 'a': AudioTracks.cycle(); break;
         case 'c': SubsUI.toggle(); break;
         case 'z': SubsUI.nudge(-0.1); break;
         case 'x': SubsUI.nudge(0.1); break;
@@ -2626,7 +3235,7 @@
   }
 
   // For the automated tests and for debugging from the developer tools.
-  window.__AP = { Engine: Engine, Clock: Clock, cfg: cfg, Media: Media, NetTime: NetTime, SubsUI: SubsUI, UI: UI, Celebration: Celebration, C: C, saveNow: saveNow };
+  window.__AP = { Engine: Engine, Clock: Clock, cfg: cfg, Media: Media, AudioTracks: AudioTracks, AudioFix: AudioFix, NetTime: NetTime, SubsUI: SubsUI, UI: UI, Celebration: Celebration, Versions: Versions, C: C, saveNow: saveNow };
 
   boot();
 })();

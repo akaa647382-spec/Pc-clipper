@@ -141,3 +141,83 @@ test('drift controller needs fresh samples', () => {
   c.reset();
   assert.equal(c.rate, 1);
 });
+
+test('film versions: table is sane', () => {
+  const ids = C.FILM_VERSIONS.map((v) => v.id);
+  assert.deepEqual(ids, ['original', 'encore', 'encore-intro', 'custom']);
+  assert.equal(new Set(ids).size, ids.length);
+  assert.equal(C.filmVersion('original').snapSec, 9030);
+  assert.equal(C.filmVersion('encore').snapSec, 9030, 'the Encore scenes are all after the snap');
+  assert.equal(C.filmVersion('encore-intro').snapSec, 9090);
+  assert.equal(C.filmVersion('custom').snapSec, null);
+  assert.equal(C.filmVersion('nonsense').id, 'original');
+  assert.equal(C.filmVersion('original').settled, true);
+  assert.equal(C.filmVersion('encore').settled, false, 'no published New Year timing for Encore yet');
+  for (const v of C.FILM_VERSIONS) {
+    assert.ok(v.name && v.short && v.note && v.family, v.id);
+    if (v.minutes) assert.ok(v.minutes[0] < v.minutes[1], v.id);
+  }
+  // The ranges used to recognise a file must not overlap.
+  const ranges = C.FILM_VERSIONS.filter((v) => v.minutes).map((v) => v.minutes).sort((a, b) => a[0] - b[0]);
+  for (let i = 1; i < ranges.length; i++) assert.ok(ranges[i][0] >= ranges[i - 1][1]);
+});
+
+test('film versions: recognised by the length of the file', () => {
+  const guess = (h, m, s) => { const v = C.guessFilmVersion(h * 3600 + m * 60 + s); return v ? v.id : null; };
+  assert.equal(guess(3, 1, 11), 'original', 'the home release');
+  assert.equal(guess(3, 0, 57), 'original', 'the 2019 cinema print');
+  assert.equal(guess(3, 1, 20), 'original', 'a few seconds of logo in front');
+  assert.equal(guess(3, 1, 36), 'encore', 'the Encore length a user reported');
+  assert.equal(guess(3, 5, 10), 'encore', 'the Encore length the press reported');
+  assert.equal(guess(3, 3, 3), 'encore', 'Encore, standard cinema');
+  assert.equal(guess(3, 6, 0), 'encore', 'Encore, Infinity Vision');
+  assert.equal(guess(2, 29, 0), null, 'Infinity War is not Endgame');
+  assert.equal(guess(0, 3, 20), null, 'a test clip');
+  assert.equal(guess(3, 10, 0), null);
+  assert.equal(C.guessFilmVersion(NaN), null);
+  assert.equal(C.guessFilmVersion(0), null);
+  assert.equal(C.guessFilmVersion(-5), null);
+});
+
+test('languages: codes, names and titles', () => {
+  for (const [input, want] of [['eng', 'eng'], ['en', 'eng'], ['EN-us', 'eng'], ['English', 'eng'], ['hin', 'hin'], ['hi', 'hin'],
+    ['fre', 'fra'], ['ger', 'deu'], ['chi', 'zho'], ['und', ''], ['', ''], [null, ''], ['xx', 'xx'], ['not a code', '']]) {
+    assert.equal(C.normLang(input), want, String(input));
+  }
+  assert.equal(C.langName('eng'), 'English');
+  assert.equal(C.langName('hi'), 'Hindi');
+  assert.equal(C.langName('und'), '');
+  assert.equal(C.langName('xx'), 'XX');
+  assert.equal(C.langFromTitle('Org Hindi DDP 5.1 - 640Kbps'), 'hin');
+  assert.equal(C.langFromTitle('English DD 5.1'), 'eng');
+  assert.equal(C.langFromTitle('Surround 5.1'), '');
+  assert.equal(C.langFromTitle('Finnish'), 'fin');
+  assert.equal(C.langFromTitle('unfinished'), '', 'a language name inside another word does not count');
+  assert.equal(C.trackLang({ lang: 'und', title: 'English DD 5.1' }), 'eng');
+  assert.equal(C.trackLang({ language: 'hin', label: 'SoundHandler' }), 'hin');
+  assert.equal(C.trackLang(null), '');
+});
+
+test('sound track choice: English by default, whatever the file calls its main track', () => {
+  const pick = (tracks, lang) => C.pickAudioTrack(tracks, lang);
+  // The real case that went wrong: Hindi first and flagged as the main track, English second.
+  const pahe = [{ lang: 'hin', title: 'Org Hindi DDP 5.1', isDefault: true }, { lang: 'eng', title: 'English DD 5.1', isDefault: false }];
+  assert.equal(pick(pahe), 1, 'English wins over the default flag');
+  assert.equal(pick(pahe, 'eng'), 1);
+  assert.equal(pick(pahe, 'hin'), 0, 'another preferred language is honoured');
+  assert.equal(pick(pahe, 'hi'), 0);
+  assert.equal(pick(pahe, 'fra'), 0, 'no French track: the file\'s own main track');
+  // Languages only in the titles.
+  assert.equal(pick([{ lang: '', title: 'Hindi 5.1' }, { lang: 'und', title: 'English 5.1' }]), 1);
+  // Nothing known: the default flag, else the first.
+  assert.equal(pick([{ lang: '' }, { lang: '', isDefault: true }]), 1);
+  assert.equal(pick([{ lang: '' }, { lang: '' }]), 0);
+  // A commentary is never chosen over the film's own sound, even when it comes first.
+  assert.equal(pick([{ lang: 'eng', title: 'Director Commentary', isDefault: true }, { lang: 'eng', title: 'English 5.1' }]), 1);
+  assert.equal(pick([{ lang: 'eng', title: 'English 5.1' }, { lang: 'eng', title: 'Commentary' }]), 0);
+  assert.equal(pick([{ lang: 'eng', title: 'Commentary' }]), 0, 'the only track is still a track');
+  // Two English tracks: the first.
+  assert.equal(pick([{ lang: 'hin' }, { lang: 'eng', title: 'English 7.1' }, { lang: 'eng', title: 'English 2.0' }]), 1);
+  assert.equal(pick([]), -1);
+  assert.equal(pick(null), -1);
+});

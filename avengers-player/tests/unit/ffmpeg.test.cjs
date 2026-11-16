@@ -41,6 +41,15 @@ test.before(async () => {
     mkv: make('mixed.mkv', [...V, ...A(440), ...A(880), '-i', srt, '-t', '6', '-map', '0:v', '-map', '1:a', '-map', '2:a', '-map', '3:s',
       ...X264, '-c:a:0', 'eac3', '-c:a:1', 'aac', '-c:s', 'srt', '-metadata:s:a:0', 'language=eng', '-metadata:s:a:1', 'language=fra',
       '-metadata:s:s:0', 'language=eng', '-metadata:s:s:0', 'title=English subs', '-disposition:a:0', 'default', '-disposition:a:1', '0']),
+    // The shape of the file that went wrong for a real user: Dolby Hindi first and flagged as the
+    // main track, Dolby English second, English subtitles.
+    pahe: make('Film [Org Hindi DDP 5.1 + English DD 5.1] ESubs.mkv', [...V, ...A(440), ...A(880), '-i', srt, '-t', '6', '-map', '0:v', '-map', '1:a', '-map', '2:a', '-map', '3:s',
+      ...X264, '-c:a:0', 'eac3', '-ac:a:0', '6', '-b:a:0', '640k', '-c:a:1', 'ac3', '-ac:a:1', '2', '-b:a:1', '192k', '-c:s', 'srt',
+      '-metadata:s:a:0', 'language=hin', '-metadata:s:a:0', 'title=Org Hindi DDP 5.1', '-metadata:s:a:1', 'language=eng', '-metadata:s:a:1', 'title=English DD 2.0',
+      '-metadata:s:s:0', 'language=eng', '-disposition:a:0', 'default', '-disposition:a:1', '0']),
+    // Languages named only in the track titles, as many files have them.
+    titled: make('titles only.mkv', [...V, ...A(440), ...A(880), '-t', '4', '-map', '0:v', '-map', '1:a', '-map', '2:a',
+      ...X264, '-c:a:0', 'ac3', '-c:a:1', 'ac3', '-metadata:s:a:0', 'title=Hindi 2.0', '-metadata:s:a:1', 'title=English 2.0']),
     videoOnly: make('silent.mp4', [...V, '-t', '3', ...X264, '-an']),
     audioOnly: make('sound.m4a', [...A(330), '-t', '3', '-c:a', 'aac']),
     odd: make("It's a 'test' & more — fïlm (1).mp4", [...V, ...A(330), '-t', '3', ...X264, '-c:a', 'ac3', '-b:a', '192k'])
@@ -149,13 +158,19 @@ test('assess: what Chromium can and cannot play, in plain words', () => {
   assert.match(r.reasons[0], /silent/);
 
   r = ff.assess({ video: v(), audio: [a('aac', { index: 0 }), a('dts', { index: 1, isDefault: true })] });
-  assert.deepEqual([r.audioOk, r.needsAudioFix, r.audioIndex], [false, true, 1], 'the default track is the one that counts');
-  assert.match(r.reasons[0], /DTS/);
-  assert.match(r.reasons[0], /fall back/);
+  assert.deepEqual([r.audioOk, r.needsAudioFix, r.audioIndex, r.silentWithoutFix], [false, true, 1, false], 'with no languages to go by, the file\'s main track is the one that counts');
+  assert.match(r.reasons[0], /The main sound track is DTS/);
+  assert.match(r.reasons[0], /another sound track instead/);
+  assert.equal(r.audioReason, r.reasons[0]);
 
   r = ff.assess({ video: v(), audio: [] });
-  assert.deepEqual([r.audioOk, r.needsAudioFix], [false, false]);
+  assert.deepEqual([r.audioOk, r.needsAudioFix, r.silentWithoutFix], [false, false, true]);
   assert.match(r.reasons[0], /no sound/);
+
+  // A sound problem is reported separately from a picture problem.
+  r = ff.assess({ video: v({ codec: 'mpeg4' }), audio: [a('ac3')] });
+  assert.match(r.reasons[0], /MPEG-4/);
+  assert.match(r.audioReason, /Dolby Digital/);
 
   assert.equal(ff.assess({ video: v({ codec: 'hevc' }), audio: [a('aac')] }, { hevcOk: true }).videoOk, true);
   r = ff.assess({ video: v({ codec: 'hevc' }), audio: [a('aac')] }, { hevcOk: false });
@@ -168,6 +183,79 @@ test('assess: what Chromium can and cannot play, in plain words', () => {
   assert.equal(ff.assess({ video: null, audio: [a('aac')] }).videoOk, false);
   for (const ok of ['aac', 'mp3', 'opus', 'vorbis', 'flac', 'pcm_s16le']) assert.equal(ff.assess({ video: v(), audio: [a(ok)] }).audioOk, true, ok);
   for (const bad of ['ac3', 'eac3', 'dts', 'truehd', 'wmav2']) assert.equal(ff.assess({ video: v(), audio: [a(bad)] }).needsAudioFix, true, bad);
+});
+
+test('assess: English is the track that counts, whatever the file calls its main track', () => {
+  const v = { index: 0, codec: 'hevc', pixFmt: 'yuv420p10le', bitDepth: 10 };
+  // The file that went wrong for a real user: Hindi first and flagged as the main track, English second.
+  const pahe = {
+    video: v,
+    audio: [
+      { index: 0, codec: 'eac3', channels: 6, lang: 'hin', title: 'Org Hindi DDP 5.1', isDefault: true },
+      { index: 1, codec: 'ac3', channels: 6, lang: 'eng', title: 'English DD 5.1', isDefault: false }
+    ]
+  };
+  let r = ff.assess(pahe, { hevcOk: true });
+  assert.deepEqual([r.audioIndex, r.audioLang, r.preferLang, r.hasPreferred, r.needsAudioFix, r.silentWithoutFix], [1, 'eng', 'eng', true, true, true]);
+  assert.match(r.audioReason, /^The English sound track is Dolby Digital \(AC-3\)/);
+  assert.match(r.audioReason, /silent/);
+
+  r = ff.assess(pahe, { hevcOk: true, preferLang: 'hi' });
+  assert.deepEqual([r.audioIndex, r.audioLang, r.preferLang, r.hasPreferred], [0, 'hin', 'hin', true]);
+  assert.match(r.audioReason, /^The Hindi sound track is Dolby Digital Plus/);
+
+  r = ff.assess(pahe, { hevcOk: true, preferLang: 'French' });
+  assert.deepEqual([r.audioIndex, r.audioLang, r.preferLang, r.hasPreferred], [0, 'hin', 'fra', false], 'no French: the file\'s own main track');
+
+  // A dub that plays, the original that does not: the fix is still needed, and the reason says what would happen.
+  const mixed = { video: v, audio: [{ index: 0, codec: 'aac', channels: 2, lang: 'hin', isDefault: true }, { index: 1, codec: 'ac3', channels: 6, lang: 'eng', isDefault: false }] };
+  r = ff.assess(mixed, { hevcOk: true });
+  assert.deepEqual([r.audioIndex, r.audioOk, r.needsAudioFix, r.silentWithoutFix], [1, false, true, false]);
+  assert.match(r.audioReason, /would play in Hindi instead/);
+
+  // Both playable: nothing to fix, and English is still the one named.
+  const fine = { video: v, audio: [{ index: 0, codec: 'aac', channels: 2, lang: 'hin', isDefault: true }, { index: 1, codec: 'aac', channels: 6, lang: 'eng', isDefault: false }] };
+  r = ff.assess(fine, { hevcOk: true });
+  assert.deepEqual([r.audioIndex, r.audioOk, r.needsAudioFix, r.audioReason], [1, true, false, '']);
+
+  // A Hindi-only file: it plays, and the result says the wanted language is not there.
+  r = ff.assess({ video: v, audio: [{ index: 0, codec: 'aac', channels: 6, lang: 'hin', isDefault: true }] }, { hevcOk: true });
+  assert.deepEqual([r.audioOk, r.audioLang, r.hasPreferred], [true, 'hin', false]);
+});
+
+test('convertArgs: the chosen language goes first and is the one flagged to play', () => {
+  const info = {
+    video: { index: 0, codec: 'hevc' },
+    audio: [
+      { index: 0, codec: 'eac3', channels: 6, lang: 'hin', title: 'Org Hindi DDP 5.1', isDefault: true },
+      { index: 1, codec: 'ac3', channels: 6, lang: 'eng', title: 'English DD 5.1', isDefault: false },
+      { index: 2, codec: 'aac', profile: 'LC', channels: 2, lang: '', title: 'English Commentary', isDefault: false },
+      { index: 3, codec: 'truehd', channels: 8, lang: 'tam', title: '', isDefault: false }
+    ]
+  };
+  const arg = (list) => ff.convertArgs(info, 'in.mkv', 'out.mp4.part', list.map((i) => info.audio[i]), []).join(' ');
+  let s = arg([1]);
+  assert.match(s, /-map 0:v:0 -map 0:a:1 -c:v copy -c:a:0 aac -b:a:0 384k -disposition:a:0 default/);
+  assert.match(s, /-metadata:s:a:0 handler_name=English/);
+  assert.match(s, / -sn /, 'no subtitles asked for');
+  assert.match(s, /-tag:v hvc1/, 'HEVC needs the tag Chromium looks for');
+  assert.doesNotMatch(s, /language=/, 'a language the file already states is left alone');
+
+  s = arg([1, 0, 2, 3]);
+  assert.match(s, /-map 0:a:1 -map 0:a:0 -map 0:a:2 -map 0:a:3 /, 'English first, the rest in file order');
+  assert.match(s, /-c:a:0 aac -b:a:0 384k -disposition:a:0 default/);
+  assert.match(s, /-c:a:1 aac -b:a:1 384k -disposition:a:1 0 /);
+  assert.match(s, /-c:a:2 copy -disposition:a:2 0 -metadata:s:a:2 language=eng -metadata:s:a:2 handler_name=English/, 'plain AAC is copied; a language known only from the title is written down');
+  assert.match(s, /-c:a:3 aac -b:a:3 384k -ac:a:3 6 -disposition:a:3 0 .*handler_name=Tamil/, '7.1 is folded down to 5.1');
+
+  // The track that will play is re-encoded even when it already is AAC: the result must be certain to decode.
+  s = arg([2]);
+  assert.match(s, /-map 0:a:2 -c:v copy -c:a:0 aac -b:a:0 192k -disposition:a:0 default/);
+
+  const withSubs = ff.convertArgs(info, 'in.mkv', 'o.part', [info.audio[1]], [{ index: 0 }, { index: 2 }]).join(' ');
+  assert.match(withSubs, /-map 0:a:1 -map 0:s:0 -map 0:s:2 /);
+  assert.match(withSubs, /-c:s mov_text/);
+  assert.doesNotMatch(withSubs, / -sn /);
 });
 
 test('convertAudio: sound becomes AAC, the picture is bit-identical', { skip }, async () => {
@@ -192,6 +280,63 @@ test('convertAudio: sound becomes AAC, the picture is bit-identical', { skip }, 
   }
   // 5.1 stays 5.1.
   assert.equal((await ff.probe(exe, ff.suggestOutputPath(clips.ac3))).audio[0].channels, 6);
+});
+
+test('convertAudio: English is converted first, whatever the file flags as its main track', { skip }, async () => {
+  const input = clips.pahe;
+  const before = await ff.probe(exe, input);
+  assert.deepEqual(before.audio.map((a) => [a.codec, a.lang, a.isDefault]), [['eac3', 'hin', true], ['ac3', 'eng', false]]);
+  assert.equal(ff.assess(before).audioIndex, 1);
+
+  // No track named: English it is, and only English.
+  let out = path.join(tmp, 'pahe-default.mp4');
+  let r = await ff.convertAudio(exe, input, out, {});
+  assert.deepEqual(r.audio, [{ index: 1, lang: 'eng' }]);
+  let p = await ff.probe(exe, out);
+  assert.deepEqual(p.audio.map((a) => [a.codec, a.lang, a.isDefault, a.channels, a.title]), [['aac', 'eng', true, 2, 'English']]);
+  assert.equal(videoHash(out), videoHash(input), 'the picture is copied untouched');
+
+  // Keeping the others: English first and flagged to play, Hindi after it.
+  out = path.join(tmp, 'pahe-both.mp4');
+  r = await ff.convertAudio(exe, input, out, { keepOthers: true });
+  assert.deepEqual(r.audio, [{ index: 1, lang: 'eng' }, { index: 0, lang: 'hin' }]);
+  p = await ff.probe(exe, out);
+  assert.deepEqual(p.audio.map((a) => [a.codec, a.lang, a.isDefault, a.channels, a.title]), [['aac', 'eng', true, 2, 'English'], ['aac', 'hin', false, 6, 'Hindi']]);
+  assert.equal(videoHash(out), videoHash(input));
+  const judged = ff.assess(p);
+  assert.deepEqual([judged.audioOk, judged.audioIndex, judged.needsAudioFix], [true, 0, false], 'the result needs no further fixing');
+
+  // The subtitles come along and can still be pulled out as text.
+  assert.equal(r.subtitles, 1);
+  assert.deepEqual(p.subtitles.map((x) => [x.codec, x.lang, x.isText]), [['mov_text', 'eng', true]]);
+  const srtOut = path.join(tmp, 'pahe-both.srt');
+  await ff.extractSubtitle(exe, out, 0, srtOut);
+  assert.match(fs.readFileSync(srtOut, 'utf8'), /First line[\s\S]*Second/);
+
+  // Another language can be asked for, by track or by preference.
+  out = path.join(tmp, 'pahe-hindi.mp4');
+  r = await ff.convertAudio(exe, input, out, { audioIndex: 0, keepOthers: true });
+  p = await ff.probe(exe, out);
+  assert.deepEqual(p.audio.map((a) => [a.lang, a.isDefault]), [['hin', true], ['eng', false]]);
+  out = path.join(tmp, 'pahe-pref.mp4');
+  r = await ff.convertAudio(exe, input, out, { preferLang: 'hin' });
+  assert.deepEqual((await ff.probe(exe, out)).audio.map((a) => a.lang), ['hin']);
+
+  // Subtitles can be left out.
+  out = path.join(tmp, 'pahe-nosubs.mp4');
+  r = await ff.convertAudio(exe, input, out, { keepSubtitles: false });
+  assert.equal(r.subtitles, 0);
+  assert.equal((await ff.probe(exe, out)).subtitles.length, 0);
+});
+
+test('convertAudio: a language known only from a track title is found and written into the new file', { skip }, async () => {
+  const before = await ff.probe(exe, clips.titled);
+  assert.deepEqual(before.audio.map((a) => [a.lang, a.title]), [['', 'Hindi 2.0'], ['', 'English 2.0']]);
+  assert.deepEqual([ff.assess(before).audioIndex, ff.assess(before).audioLang], [1, 'eng']);
+  const out = path.join(tmp, 'titled-out.mp4');
+  await ff.convertAudio(exe, clips.titled, out, { keepOthers: true });
+  const p = await ff.probe(exe, out);
+  assert.deepEqual(p.audio.map((a) => [a.lang, a.isDefault, a.title]), [['eng', true, 'English'], ['hin', false, 'Hindi']]);
 });
 
 test('convertAudio: refusals and failures leave nothing behind', { skip }, async () => {

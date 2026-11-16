@@ -192,7 +192,9 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: true,
       backgroundThrottling: false,
-      spellcheck: false
+      spellcheck: false,
+      // Lets the page see the movie's sound tracks and choose which language plays.
+      enableBlinkFeatures: 'AudioVideoTracks'
     }
   }));
   Menu.setApplicationMenu(null);
@@ -428,19 +430,19 @@ function registerIpc() {
     return ffPath();
   });
 
-  ipcMain.handle('ff:probe', async (e, file, hevcOk) => {
+  ipcMain.handle('ff:probe', async (e, file, hevcOk, preferLang) => {
     if (!own(e) || !ffmpeg || typeof file !== 'string') return { error: 'FFmpeg helper unavailable.' };
     try {
       const exe = await ffPath();
       if (!exe) return { error: 'FFmpeg not found.', missing: true };
       const probe = await ffmpeg.probe(exe, file);
-      return { probe: probe, assess: ffmpeg.assess(probe, { hevcOk: !!hevcOk }) };
+      return { probe: probe, assess: ffmpeg.assess(probe, { hevcOk: !!hevcOk, preferLang: typeof preferLang === 'string' ? preferLang : '' }) };
     } catch (err) {
       return ffError(err);
     }
   });
 
-  ipcMain.handle('ff:convert', async (e, file, audioIndex) => {
+  ipcMain.handle('ff:convert', async (e, file, audioIndex, keepOthers, preferLang) => {
     if (!own(e) || !ffmpeg || typeof file !== 'string') return { error: 'FFmpeg helper unavailable.' };
     if (ffAbort) return { error: 'A conversion is already running.' };
     try {
@@ -465,13 +467,15 @@ function registerIpc() {
         }
       } catch (err) { /* cannot tell: let FFmpeg try */ }
       ffAbort = new AbortController();
-      log('main', 'converting audio: ' + file + ' -> ' + output);
+      log('main', 'converting audio: ' + file + ' -> ' + output + ' (track ' + (Number.isInteger(audioIndex) ? audioIndex : 'auto') + (keepOthers ? ', keeping the others' : '') + ')');
       const r = await ffmpeg.convertAudio(exe, file, output, {
-        audioIndex: Number.isInteger(audioIndex) ? audioIndex : 0,
+        audioIndex: Number.isInteger(audioIndex) ? audioIndex : undefined,
+        keepOthers: !!keepOthers,
+        preferLang: typeof preferLang === 'string' ? preferLang : '',
         signal: ffAbort.signal,
         onProgress: (p) => send('ff:progress', Object.assign({ phase: 'convert' }, p))
       });
-      return { movie: fileInfo(r.output), seconds: r.seconds };
+      return { movie: fileInfo(r.output), seconds: r.seconds, audio: r.audio, subtitles: r.subtitles };
     } catch (err) {
       log('main', 'conversion failed: ' + (err && err.message));
       return ffError(err);

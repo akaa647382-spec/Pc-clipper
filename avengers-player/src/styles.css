@@ -377,6 +377,7 @@ kbd {
 .ib svg { width: 24px; height: 24px; display: block; }
 .ib.sm svg { width: 20px; height: 20px; }
 .ib.on { color: var(--acc); }
+.ib.txt { width: auto; min-width: 34px; padding: 0 7px; font: 700 10.5px/1 var(--mono); letter-spacing: .08em; }
 .ib.off { color: rgba(255, 255, 255, .42); }
 .vol { width: 84px; height: 4px; appearance: none; -webkit-appearance: none; background: rgba(255, 255, 255, .25); border-radius: 2px; outline: none; margin: 0 8px 0 2px; }
 .vol::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: #fff; }
@@ -443,6 +444,9 @@ kbd {
 .filecard { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; background: var(--card); }
 .fc-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; user-select: text; }
 .fc-meta { color: var(--muted); font-size: 12px; margin: 3px 0 10px; }
+.filecard .fld { margin: 0 0 10px; }
+.filecard .fld kbd { margin-left: 4px; }
+.modal-body .mfld { margin-top: 14px; text-align: left; }
 
 /* sync tab */
 .meter { border: 1px solid var(--line2); border-radius: 14px; padding: 14px 16px; background: linear-gradient(180deg, var(--card2), var(--card)); text-align: center; }
@@ -528,6 +532,8 @@ select.inline { padding: 2px 4px; font-size: 12px; }
 .snaprow .inp { flex: 1; font-size: 16px; padding: 9px 11px; }
 .snaptools { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; align-items: stretch; }
 .snaptools.disabled { opacity: .4; pointer-events: none; }
+.snaptools.attn { border-radius: var(--radius); box-shadow: 0 0 0 2px var(--hot), 0 0 26px -6px var(--hot); padding: 10px; animation: attn 1.2s ease-in-out 3; }
+@keyframes attn { 50% { box-shadow: 0 0 0 2px var(--hot), 0 0 40px 0 var(--hot); } }
 .nudge { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .nudge .btn { padding-left: 4px; padding-right: 4px; }
 .snapnow { font-size: 12px; color: var(--muted); }

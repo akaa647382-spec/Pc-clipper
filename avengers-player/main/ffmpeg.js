@@ -19,6 +19,7 @@ const http = require('http');
 const os = require('os');
 const path = require('path');
 const zlib = require('zlib');
+const Core = require('../src/core.js');
 
 /* ------------------------------------------------------------------ locate */
 
@@ -194,6 +195,9 @@ function parseProbe(stderr) {
     if (current) {
       const t = /^\s+title\s*:\s*(.*)$/i.exec(line);
       if (t) current.title = t[1].trim();
+      // MP4 files keep a track's name as its "handler name"; the stock ones ("SoundHandler") say nothing.
+      const h = /^\s+handler_name\s*:\s*(.*)$/i.exec(line);
+      if (h && !current.title && !/handler\s*$/i.test(h[1].trim())) current.title = h[1].trim();
     }
   }
   return result;
@@ -214,17 +218,20 @@ async function probe(ffmpegPath, file) {
 
 /* ------------------------------------------------------------------ assess */
 
-const AUDIO_NAMES = {
-  ac3: 'Dolby Digital (AC-3)', eac3: 'Dolby Digital Plus (E-AC-3)', dts: 'DTS', truehd: 'Dolby TrueHD', mlp: 'MLP',
-  wmav2: 'Windows Media Audio', wmapro: 'Windows Media Audio Pro', alac: 'Apple Lossless', mp2: 'MPEG Layer II', amr_nb: 'AMR'
-};
 const VIDEO_NAMES = {
   hevc: 'HEVC (H.265)', mpeg4: 'MPEG-4 Part 2 (DivX/Xvid)', mpeg2video: 'MPEG-2', vc1: 'VC-1', wmv3: 'Windows Media Video',
   msmpeg4v3: 'MS-MPEG4', prores: 'ProRes', theora: 'Theora'
 };
-const playableAudio = (codec) => ['aac', 'mp3', 'opus', 'vorbis', 'flac'].includes(codec) || /^pcm_/.test(codec);
+const playableAudio = Core.playableAudioCodec;
+const audioCodecName = Core.audioCodecName;
 
-/** What will happen when Chromium plays this file, in words a non-technical person can act on. */
+/**
+ * What will happen when Chromium plays this file, in words a non-technical person can act on.
+ *
+ * The sound track that matters is the one in the wanted language (English unless told otherwise),
+ * not the one the file happens to flag as its main track: a film with a dubbed track first must not
+ * end up playing the dub.
+ */
 function assess(info, opts) {
   opts = opts || {};
   const reasons = [];
@@ -246,25 +253,41 @@ function assess(info, opts) {
   }
 
   const audio = (info && info.audio) || [];
+  const preferLang = Core.normLang(opts.preferLang) || 'eng';
   let audioOk = false;
   let needsAudioFix = false;
+  let silentWithoutFix = false;
   let audioIndex = 0;
+  let audioLang = '';
+  let hasPreferred = false;
+  let audioReason = '';
   if (!audio.length) {
-    reasons.push('This file has no sound track.');
+    audioReason = 'This file has no sound track.';
+    reasons.push(audioReason);
+    silentWithoutFix = true;
   } else {
-    // The player plays the default track, like any player would; that is the one that must work.
-    const main = audio.find((a) => a.isDefault) || audio[0];
+    const main = audio[Core.pickAudioTrack(audio, preferLang)];
     audioIndex = main.index;
+    audioLang = Core.trackLang(main);
+    hasPreferred = audioLang === preferLang;
     if (playableAudio(main.codec)) {
       audioOk = true;
     } else {
       needsAudioFix = true;
       const other = audio.find((a) => playableAudio(a.codec));
-      reasons.push('The ' + (audio.length > 1 ? 'main sound track' : 'sound') + ' is ' + (AUDIO_NAMES[main.codec] || main.codec.toUpperCase()) +
-        ', which this player cannot decode.' + (other ? ' Without the fix it would fall back to another track' + (other.lang ? ' (' + other.lang + ')' : '') + '.' : ' Without the fix the movie would be silent.'));
+      silentWithoutFix = !other;
+      const name = Core.langName(audioLang);
+      const subject = audio.length > 1 ? 'The ' + (name || 'main') + ' sound track' : 'The sound';
+      const otherName = other ? Core.langName(Core.trackLang(other)) : '';
+      audioReason = subject + ' is ' + audioCodecName(main.codec) + ', which this player cannot decode.' +
+        (other ? ' Without the fix the movie would play ' + (otherName ? 'in ' + otherName : 'another sound track') + ' instead.' : ' Without the fix the movie would be silent.');
+      reasons.push(audioReason);
     }
   }
-  return { videoOk: videoOk, audioOk: audioOk, audioIndex: audioIndex, needsAudioFix: needsAudioFix, reasons: reasons };
+  return {
+    videoOk: videoOk, audioOk: audioOk, audioIndex: audioIndex, audioLang: audioLang, preferLang: preferLang, hasPreferred: hasPreferred,
+    needsAudioFix: needsAudioFix, silentWithoutFix: silentWithoutFix, audioReason: audioReason, reasons: reasons
+  };
 }
 
 /* ----------------------------------------------------------------- convert */
@@ -291,8 +314,49 @@ function lastLines(text, n) {
   return String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean).slice(-n).join(' | ');
 }
 
+/** AAC that every Chromium decodes: plain (LC) or HE, up to 5.1. Anything else is re-encoded. */
+const plainAac = (t) => t.codec === 'aac' && !/xhe|usac|ld|eld/i.test(t.profile || '') && (t.channels || 2) <= 6;
+
 /**
- * Copies the picture untouched and converts one sound track to AAC.
+ * The FFmpeg arguments of a sound fix. Exposed so the mapping can be tested without running FFmpeg.
+ *
+ *   order      the sound tracks to write, the one to play first
+ *   subtitles  text subtitle tracks to carry over (so they can still be picked in the Subs tab)
+ */
+function convertArgs(info, input, part, order, subtitles) {
+  const args = ['-y', '-hide_banner', '-nostdin', '-loglevel', 'error', '-nostats', '-progress', 'pipe:1',
+    '-i', input, '-map', '0:v:' + info.video.index];
+  for (const t of order) args.push('-map', '0:a:' + t.index);
+  for (const sub of subtitles) args.push('-map', '0:s:' + sub.index);
+  args.push('-c:v', 'copy');
+  order.forEach((t, j) => {
+    // The track that will play is always re-encoded: whatever it was, the result is certain to decode.
+    if (j > 0 && plainAac(t)) {
+      args.push('-c:a:' + j, 'copy');
+    } else {
+      const channels = t.channels || 2;
+      args.push('-c:a:' + j, 'aac', '-b:a:' + j, channels <= 2 ? '192k' : '384k');
+      if (channels > 6) args.push('-ac:a:' + j, '6');
+    }
+    // Chromium plays the track flagged as the main one; in an MP4 that is this flag.
+    args.push('-disposition:a:' + j, j === 0 ? 'default' : '0');
+    const lang = Core.trackLang(t);
+    if (lang && Core.normLang(t.lang) !== lang) args.push('-metadata:s:a:' + j, 'language=' + lang);
+    args.push('-metadata:s:a:' + j, 'handler_name=' + (Core.langName(lang) || String(t.title || '').replace(/[\r\n]+/g, ' ').slice(0, 60) || 'Sound'));
+  });
+  if (subtitles.length) args.push('-c:s', 'mov_text'); else args.push('-sn');
+  // Without this tag most MP4 readers, Chromium included, refuse HEVC.
+  if (info.video.codec === 'hevc') args.push('-tag:v', 'hvc1');
+  args.push('-dn', '-map_metadata', '0', '-f', 'mp4', part);
+  return args;
+}
+
+/**
+ * Copies the picture untouched and converts the sound to AAC.
+ *
+ *   audioIndex   the sound track to play (default: the one in preferLang, English unless given)
+ *   keepOthers   also keep the other sound tracks, after that one, so the language can be switched
+ *
  * Writes to "<output>.part" and renames only on success, so a half-written file is never mistaken
  * for the movie.
  */
@@ -303,24 +367,20 @@ async function convertAudio(ffmpegPath, input, output, opts) {
   if (opts.signal && opts.signal.aborted) throw abortError();
   const info = await probe(ffmpegPath, input);
   if (!info.video) throw new Error('This file has no picture to copy.');
-  const audioIndex = Number.isInteger(opts.audioIndex) ? opts.audioIndex : 0;
+  if (!info.audio.length) throw new Error('This file has no sound track to convert.');
+  const picked = info.audio[Core.pickAudioTrack(info.audio, opts.preferLang)];
+  const audioIndex = Number.isInteger(opts.audioIndex) ? opts.audioIndex : picked.index;
   const track = info.audio.find((a) => a.index === audioIndex);
   if (!track) throw new Error('This file has no sound track number ' + (audioIndex + 1) + '.');
+  const order = [track].concat(opts.keepOthers ? info.audio.filter((a) => a !== track) : []);
+  const textSubs = opts.keepSubtitles === false ? [] : info.subtitles.filter((sub) => sub.isText);
 
   const part = output + '.part';
-  const args = ['-y', '-hide_banner', '-nostdin', '-loglevel', 'error', '-nostats', '-progress', 'pipe:1',
-    '-i', input, '-map', '0:v:' + info.video.index, '-map', '0:a:' + audioIndex, '-c:v', 'copy', '-c:a', 'aac'];
-  const channels = track.channels || 2;
-  args.push('-b:a', channels <= 2 ? '192k' : '384k');
-  if (channels > 6) args.push('-ac', '6');
-  // Without this tag most MP4 readers, Chromium included, refuse HEVC.
-  if (info.video.codec === 'hevc') args.push('-tag:v', 'hvc1');
-  args.push('-sn', '-dn', '-map_metadata', '0', '-f', 'mp4', part);
-
   const started = Date.now();
   const cleanup = () => { try { fs.unlinkSync(part); } catch (e) { /* nothing there */ } };
 
-  await new Promise((resolve, reject) => {
+  const attempt = (subtitles) => new Promise((resolve, reject) => {
+    const args = convertArgs(info, input, part, order, subtitles);
     let child;
     try {
       child = spawn(ffmpegPath, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -377,6 +437,16 @@ async function convertAudio(ffmpegPath, input, output, opts) {
     });
   });
 
+  let subtitlesKept = textSubs.length;
+  try {
+    await attempt(textSubs);
+  } catch (e) {
+    // Subtitles are a bonus. If the file's subtitle track is what broke the conversion, do it without.
+    if (!textSubs.length || e.name === 'AbortError') throw e;
+    subtitlesKept = 0;
+    await attempt([]);
+  }
+
   try {
     if (!(fs.statSync(part).size > 0)) throw new Error('empty output');
     try { fs.unlinkSync(output); } catch (e) { /* no earlier copy */ }
@@ -388,7 +458,10 @@ async function convertAudio(ffmpegPath, input, output, opts) {
   if (typeof opts.onProgress === 'function') {
     try { opts.onProgress({ fraction: 1, speed: 0, etaSec: 0 }); } catch (e) { /* caller's problem */ }
   }
-  return { output: output, seconds: (Date.now() - started) / 1000 };
+  return {
+    output: output, seconds: (Date.now() - started) / 1000,
+    audio: order.map((t) => ({ index: t.index, lang: Core.trackLang(t) })), subtitles: subtitlesKept
+  };
 }
 
 /** Writes a text subtitle track of the movie to a .srt file. */
@@ -659,6 +732,7 @@ module.exports = {
   parseProbe: parseProbe,
   assess: assess,
   convertAudio: convertAudio,
+  convertArgs: convertArgs,
   suggestOutputPath: suggestOutputPath,
   extractSubtitle: extractSubtitle,
   download: download,

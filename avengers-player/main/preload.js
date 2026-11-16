@@ -46,8 +46,8 @@ contextBridge.exposeInMainWorld('apNative', {
   // FFmpeg helper
   ffLocate: () => ipcRenderer.invoke('ff:locate'),
   ffPick: () => ipcRenderer.invoke('ff:pick'),
-  ffProbe: (file, hevcOk) => ipcRenderer.invoke('ff:probe', file, hevcOk),
-  ffConvert: (file, audioIndex) => ipcRenderer.invoke('ff:convert', file, audioIndex),
+  ffProbe: (file, hevcOk, preferLang) => ipcRenderer.invoke('ff:probe', file, hevcOk, preferLang),
+  ffConvert: (file, audioIndex, keepOthers, preferLang) => ipcRenderer.invoke('ff:convert', file, audioIndex, keepOthers, preferLang),
   ffDownload: () => ipcRenderer.invoke('ff:download'),
   ffCancel: () => ipcRenderer.invoke('ff:cancel'),
   ffExtractSub: (file, subIndex) => ipcRenderer.invoke('ff:extract-sub', file, subIndex),

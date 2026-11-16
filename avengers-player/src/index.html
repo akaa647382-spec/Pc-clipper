@@ -141,6 +141,7 @@
         <span id="timeLabel" class="time">0:00 / 0:00</span>
         <span class="grow"></span>
         <span id="syncChip" class="chip" data-state="free"><i></i><span id="syncChipTxt">FREE PLAY</span></span>
+        <button id="btnAudio" class="ib sm txt" type="button" title="Sound language (A)" hidden>ENG</button>
         <button id="btnSubs" class="ib sm" type="button" title="Subtitles (C)" data-icon="cc"></button>
         <button id="btnOverlay" class="ib sm" type="button" title="Clock overlay (O)" data-icon="clock"></button>
         <button id="btnLock" class="ib sm" type="button" title="Lock controls (L)" data-icon="unlock"></button>
@@ -196,6 +197,7 @@
         <div class="filecard">
           <div class="fc-name" id="fileName">—</div>
           <div class="fc-meta" id="fileMeta">&nbsp;</div>
+          <label class="fld" id="soundFld" hidden><span>Sound language <kbd>A</kbd></span><select id="soundTrack" aria-label="Sound language"></select></label>
           <div class="row">
             <button id="changeMovie" class="btn btn-ghost btn-sm" type="button">Change movie</button>
             <button id="fixAudioBtn" class="btn btn-warn btn-sm" type="button" hidden>Fix the sound</button>
@@ -244,7 +246,7 @@
         </div>
         <div class="tcard">
           <h4><span>2</span>Snap test</h4>
-          <p>Jumps to just before midnight. Watch the snap land on 12:00:00, the date roll over to January 1 and the celebration.</p>
+          <p>Jumps to just before midnight. Watch the snap land on 12:00:00, the date roll over to January 1 and the celebration. Afterwards the app asks whether the snap was on time.</p>
           <div class="row">
             <select id="tsLeadSnap" aria-label="Seconds before the snap"><option value="20">20 s before</option><option value="40" selected>40 s before</option><option value="75">75 s before</option><option value="150">2½ min before</option></select>
             <button class="btn btn-primary btn-sm" data-test="snap" type="button">Run</button>
@@ -342,8 +344,12 @@
 
       <!-- ------------------------------------------------------ setup -->
       <section class="pane" id="pane-setup">
-        <h3 class="sec first">Snap point</h3>
-        <p class="hint">The exact moment in <i>your</i> file where the fingers snap. The usual copy is 2:30:30; another cut can differ by a second or two, so check it once.</p>
+        <h3 class="sec first">Film version</h3>
+        <label class="fld"><span>Which cut is this file?</span><select id="filmVersion"></select></label>
+        <p class="hint" id="filmVersionNote">&nbsp;</p>
+
+        <h3 class="sec">Snap point</h3>
+        <p class="hint">The exact moment in <i>your</i> file where the fingers snap. To find it: play from 10 s before, pause on the snap, step to the exact frame, then press the button.</p>
         <div class="snaprow">
           <input id="snapInput" class="inp mono" type="text" inputmode="numeric" spellcheck="false" aria-label="Snap point" value="2:30:30.000">
           <button id="snapApply" class="btn btn-ghost btn-sm" type="button">Set</button>
@@ -361,6 +367,10 @@
           <button id="snapReset" class="link" type="button">back to 2:30:30</button>
         </div>
         <p class="hint" id="snapArmedNote" hidden>Stop the countdown to calibrate the snap point.</p>
+
+        <h3 class="sec">Sound language</h3>
+        <label class="fld"><span>Preferred language</span><select id="optAudioLang"></select></label>
+        <p class="hint">When a movie has several sound tracks (a dub and the original), this one plays, and this one is converted by “Fix the sound”. To switch for one movie only, use <b>Sound language</b> in the Mission tab or press <kbd>A</kbd>.</p>
 
         <h3 class="sec">Target moment</h3>
         <label class="rad"><input type="radio" name="tg" id="tgNewYear" value="newyear"><span>New Year's midnight (this computer's time zone)</span></label>
@@ -380,6 +390,7 @@
           <dt><kbd>O</kbd></dt><dd>Clock overlay</dd>
           <dt><kbd>N</kbd></dt><dd>Countdown mode</dd>
           <dt><kbd>T</kbd></dt><dd>10 · 9 · 8 animation</dd>
+          <dt><kbd>A</kbd></dt><dd>Sound language</dd>
           <dt><kbd>C</kbd></dt><dd>Subtitles</dd>
           <dt><kbd>Z</kbd> <kbd>X</kbd></dt><dd>Subtitle timing</dd>
           <dt><kbd>H</kbd></dt><dd>New Year animation</dd>
