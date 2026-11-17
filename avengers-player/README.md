@@ -5,7 +5,7 @@ for the whole two and a half hours, and lands the snap on **12:00:00 AM**: the v
 found in your own file and put on midnight to the millisecond. It works with any copy of *Avengers: Endgame* or
 *Avengers Endgame: Encore*: Remux, Blu-ray or WEB rip, 4K or 1080p, whatever its exact length.
 
-**[Download the installer](../download/Avengers-Player-Setup-1.7.0.exe)** (Windows 10 / 11, 64-bit, about 93 MB).
+**[Download the installer](../download/Avengers-Player-Setup-1.8.0.exe)** (Windows 10 / 11, 64-bit, about 93 MB).
 You bring your own copy of the movie. Nothing is uploaded anywhere.
 
 Older version, kept as it was: **[1.3.0 (legacy)](../download/Avengers-Player-Setup-1.3.0-legacy.exe)**. Only one
@@ -15,8 +15,8 @@ version is installed at a time: installing one over the other asks first, then r
 
 ## Install
 
-1. Run `Avengers-Player-Setup-1.7.0.exe`. It installs for your user only, so there is no administrator prompt.
-   If Avengers Player is already installed, Setup says so first and asks: *update it to version 1.7.0?*, *install
+1. Run `Avengers-Player-Setup-1.8.0.exe`. It installs for your user only, so there is no administrator prompt.
+   If Avengers Player is already installed, Setup says so first and asks: *update it to version 1.8.0?*, *install
    it again?* (the same version), or, when the installed one is newer, *replace it with this version?* **Yes** puts
    the new version into the folder of the old one (your settings, snap points and an armed countdown stay as they
    are); **No** leaves everything as it is and closes Setup. On a PC without it, Setup simply installs it.
@@ -64,9 +64,9 @@ from there. The standby screen counts down, the movie starts by itself, the cloc
 the snap lands on midnight, the date rolls over and the celebration plays. No test bar, no pass or fail; your PC's
 clock and a real countdown are not touched. Press F for fullscreen and watch it as you will on the night.
 
-**The movie starts on the second.** The countdown reaches zero and the screen switches to the film at exactly
-9:29:28.000 PM (whatever whole second the start falls in). If the snap in your file needs a start a fraction of a
-second later, the film's first frame (black) holds for that fraction, so the snap still lands exactly on midnight.
+**The movie launches at the exact millisecond.** The start time is shown to the millisecond (for example
+*9:29:28.348 PM*), the countdown to it runs to the millisecond (00:00:03.348 … 00:00:00.000), and the movie launches
+at that very instant, so the snap lands exactly on midnight. The countdown to midnight ticks with the clock.
 
 The other tests also move the app's own clock, not your PC clock.
 

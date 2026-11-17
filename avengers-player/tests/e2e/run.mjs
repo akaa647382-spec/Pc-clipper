@@ -1261,7 +1261,7 @@ const scenarios = {
       let f = await stripView(s.page);
       v = await info(s.page);
       check('the snap point is already set: 2:30:31.668, where the flash begins, 1.668 s after the round figure', Math.abs(v.snap - 9031.668) < 1e-6 && v.version === 'original', v.snap + ' ' + v.version);
-      check('the countdown is calibrated to it: the movie starts at 9:29:28 PM', await shows(s.page, 'ktStart', /Dec 31 · 9:29:28 PM/) && /Jan 1 · 12:00:00 AM/.test(v.target), v.start);
+      check('the countdown is calibrated to it: the movie starts at 9:29:28.332 PM', await shows(s.page, 'ktStart', /Dec 31 · 9:29:28\.332 PM/) && /Jan 1 · 12:00:00 AM/.test(v.target), v.start);
       check('the pre-flight list says the app found it, and how', await shows(s.page, 'preflight', /Snap point confirmed in this file2:30:31\.668 · found by the app: the flash of the snap/) && !(await info(s.page)).findBtn, v.preflight.slice(0, 260));
       check('the strip shows the frame it chose', /^Snap found: 2:30:31\.668$/.test(f.title) && /The app has put the snap on the frame marked SET NOW/.test(f.note) && /The movie now starts at 9:29:28 PM/.test(f.note) &&
         Math.abs(f.selT - 9031.6667) < 0.01 && Math.abs(f.nowT - 9031.6667) < 0.01 && f.ok === 'Yes, the snap is on this frame' && f.tags.includes('now:SET NOW') && f.tags.includes('pick:SNAP?'), f.title + ' | ' + f.note.slice(0, 200) + ' | ' + f.tags.join(','));
@@ -1301,7 +1301,7 @@ const scenarios = {
       v = await info(s.page);
       check('ENCORE: the white-out it found is set: 2:30:56.668, 25 s after the ENDGAME point', Math.abs(v.snap - 9056.668) < 1e-6 && Math.abs(f.selT - 9056.6667) < 0.01 && Math.abs(f.nowT - 9056.6667) < 0.01, v.snap + ' | ' + f.title);
       check('the strip asks for a look: found far from where it was expected, with no subtitles to vouch for it', /^Is this the snap\?$/.test(f.title) && /The snap was not where it was expected/.test(f.note) && /25\.0 s later/.test(f.note) && f.tags.includes('now:SET NOW'), f.title + ' | ' + f.note);
-      check('ENCORE: the countdown is calibrated to it, and the pre-flight list asks for that look', await shows(s.page, 'ktStart', /Dec 31 · 9:29:03 PM/) && await shows(s.page, 'preflight', /Snap point not confirmed in this file yet2:30:56\.668 is where the app found a white-out/), (await info(s.page)).preflight.slice(0, 300));
+      check('ENCORE: the countdown is calibrated to it, and the pre-flight list asks for that look', await shows(s.page, 'ktStart', /Dec 31 · 9:29:03\.332 PM/) && await shows(s.page, 'preflight', /Snap point not confirmed in this file yet2:30:56\.668 is where the app found a white-out/), (await info(s.page)).preflight.slice(0, 300));
       await s.page.click('.tab[data-tab="setup"]');
       await sleep(300);
       check('Setup says the file is 25 s longer than the 2019 film', /3:01:36 long, 25 s longer than the 2019 film/.test((await info(s.page)).lengthNote));
@@ -1314,11 +1314,11 @@ const scenarios = {
       await loadMovie(s.page, ENDGAME);
       check('back to ENDGAME: nothing is searched again', await quiet(s.page, 4000));
       v = await info(s.page);
-      check('its own snap point is back, confirmed', v.version === 'original' && Math.abs(v.snap - 9031.668) < 1e-6 && /Snap point confirmed in this file/.test(v.preflight) && /9:29:28 PM/.test(v.start), v.version + ' ' + v.snap);
+      check('its own snap point is back, confirmed', v.version === 'original' && Math.abs(v.snap - 9031.668) < 1e-6 && /Snap point confirmed in this file/.test(v.preflight) && /9:29:28\.332 PM/.test(v.start), v.version + ' ' + v.snap);
       await loadMovie(s.page, ENCORE);
       check('back to ENCORE: nothing is searched again', await quiet(s.page, 4000));
       v = await info(s.page);
-      check('its own snap point is back, confirmed', v.version === 'encore' && Math.abs(v.snap - 9056.668) < 1e-6 && /Snap point confirmed in this file/.test(v.preflight) && /9:29:03 PM/.test(v.start), v.version + ' ' + v.snap);
+      check('its own snap point is back, confirmed', v.version === 'encore' && Math.abs(v.snap - 9056.668) < 1e-6 && /Snap point confirmed in this file/.test(v.preflight) && /9:29:03\.332 PM/.test(v.start), v.version + ' ' + v.snap);
 
       // 5. The same film in another folder is the same film. Another copy of a cut is searched itself.
       const moved = path.join(newProfile(), path.basename(ENDGAME));
@@ -1373,7 +1373,7 @@ const scenarios = {
       f = await stripView(s.page);
       check('the countdown has the film back: armed, waiting at the start', v.mode === 'armed' && v.phase === 'standby' && v.armed === true && (await state(s.page)).t < 0.1, v.mode + ' ' + v.phase);
       check('the snap is confirmed in the new copy, and the strip is for looking only', await shows(s.page, 'preflight', /Snap point confirmed in this file/) && Math.abs(v.snap - 9031.668) < 1e-6 && f.readOnly && f.preview, v.snap + ' ' + f.readOnly);
-      check('the start time is the calibrated one', await shows(s.page, 'ktStart', /Dec 31 · 9:29:28 PM/), v.start);
+      check('the start time is the calibrated one', await shows(s.page, 'ktStart', /Dec 31 · 9:29:28\.332 PM/), v.start);
       await s.page.keyboard.press('Escape');
       await stripClosed(s.page);
       const copy3 = alias(ENDGAME, 'Endgame copy three.mp4');
@@ -1408,7 +1408,7 @@ const scenarios = {
       const found = v.snap;
       check('found by itself: 2:30:56.7, on the first frame of the flash, right after the line', found > 9056.66 && found < 9056.72 && Math.abs(found - (f.selT + 0.001)) < 0.0015 && /^Snap found: 2:30:56\.7\d\d$/.test(f.title) && /0\.92 s after the line “…Iron Man\.” goes off screen/.test(f.note), v.snap + ' | ' + f.selT + ' | ' + f.title + ' | ' + f.note.slice(0, 160));
       check('marked as found, by the flash and the line together', await shows(s.page, 'preflight', /Snap point confirmed in this file2:30:56\.7\d\d · found by the app: the flash, right after the line/), v.preflight.slice(0, 300));
-      check('the countdown is calibrated to it: the movie starts at 9:29:03 PM', await shows(s.page, 'ktStart', /Dec 31 · 9:29:03 PM/), v.start);
+      check('the countdown is calibrated to it: the movie starts at 9:29:03.2xx PM', await shows(s.page, 'ktStart', /Dec 31 · 9:29:03\.2\d\d PM/), v.start);
       const log = await s.page.evaluate(() => window.__AP.Engine.events.map((e) => e.text).filter((t) => /The line before the snap/.test(t)).join(' | '));
       check('the line came from the full English track inside the movie, not the forced one', /subtitle track 2 \(eng\) inside the movie: \d+ lines read, the line ends at 2:30:55\.7\d\d/.test(log) && !/subtitle track 1/.test(log), log);
       await shot(s.page, 'encore-subs-found');
@@ -2292,11 +2292,9 @@ const scenarios = {
       check('the start falls between two seconds', start % 1000 !== 0, String(start % 1000));
       let rows = await sample(3500);
       const waiting = (r) => r.phase === 'standby' && r.start - r.now > 1000;
-      let t = together(rows, 'sb', waiting);
-      check('the standby countdown ticks on the same frame as the clock', ok(t, 3), JSON.stringify(t));
-      t = together(rows, 'card', waiting);
-      check('the countdown on the status card too', ok(t, 3), JSON.stringify(t));
-      t = together(rows, 'ov', waiting);
+      const exact = rows.filter(waiting).every((r) => /^\d\d:\d\d:\d\d\.\d{3}$/.test(r.sb) && Math.abs(parseFloat(r.sb.slice(6)) * 1000 + (+r.sb.slice(3, 5)) * 60000 - (r.start - r.now)) < 30);
+      check('the standby countdown counts to the exact start, to the millisecond', exact, rows.filter(waiting).slice(0, 2).map((r) => r.sb + ' at ' + (r.start - r.now)).join(' | '));
+      let t = together(rows, 'ov', waiting);
       check('and the countdown in the clock panel', ok(t, 3), JSON.stringify(t));
 
       // 2. The film starts by itself and runs locked to the clock: its time ticks with the clock.
@@ -2387,12 +2385,12 @@ const scenarios = {
       await s.page.evaluate(() => window.__AP.Versions.confirm());
       await sleep(300);
       let v = await g(s.page);
-      check('automatic: the movie starts at 9:29:28 PM and the snap lands on midnight', v.mode === 'auto' && /Dec 31 · 9:29:28 PM/.test(v.start) && /Jan 1 · 12:00:00 AM/.test(v.lands) &&
+      check('automatic: the movie starts at 9:29:28 PM and the snap lands on midnight', v.mode === 'auto' && /Dec 31 · 9:29:28\.332 PM/.test(v.start) && /Jan 1 · 12:00:00 AM/.test(v.lands) &&
         v.landsLbl === 'The snap lands on midnight' && v.link === 'Start time: automatic · change' && v.lead === 9031668, JSON.stringify(v));
       await s.page.click('#startTimeLink');
       check('“Start time · change” opens Setup', await waitFor(s.page, () => document.getElementById('pane-setup').classList.contains('on'), null, 2000));
       v = await g(s.page);
-      check('Setup shows the start times and where the snap lands with each', v.autoAt === '9:29:28 PM' && /2:30:31\.668: the snap lands on midnight/.test(v.autoNote) &&
+      check('Setup shows the start times and where the snap lands with each', v.autoAt === '9:29:28.332 PM' && /2:30:31\.668: the snap lands on midnight/.test(v.autoNote) &&
         v.classicAt === '9:29:30 PM' && /the snap lands 1\.668 s after midnight/.test(v.classicNote), JSON.stringify(v));
 
       // 9:29:30 PM.
@@ -2414,7 +2412,7 @@ const scenarios = {
       let f = await stripView(s.page);
       const clockAt = await s.page.evaluate(() => { const v = window.__AP.SnapCam.view; const i = Array.from(document.getElementById('stripRow').children).findIndex((b) => b.classList.contains('has-clock')); return i >= 0 ? v.frames[i].t : null; });
       check('it shows the frame on screen at 12:00:00 (2:30:30) and the snap point, 1.67 s later', /^The snap came 1\.6\d\d s after 12:00:00$/.test(f.title) && clockAt != null && Math.abs(clockAt - 9030) < 0.17 &&
-        f.tags.includes('now:SNAP POINT') && /This test started the movie at 9:29:30 PM\. At 12:00:00 the film was at 2:30:30\.000/.test(f.note) && /The automatic start, 9:29:28 PM, puts it on 12:00:00/.test(f.note),
+        f.tags.includes('now:SNAP POINT') && /This test started the movie at 9:29:30 PM\. At 12:00:00 the film was at 2:30:30\.000/.test(f.note) && /The automatic start, 9:29:28\.332 PM, puts it on 12:00:00/.test(f.note),
         f.title + ' | clock frame ' + clockAt + ' | ' + f.tags.join(',') + ' | ' + f.note.slice(0, 300));
       await shot(s.page, 'starttime-classic-strip');
       await s.page.keyboard.press('Escape');
@@ -2426,11 +2424,11 @@ const scenarios = {
       await s.page.fill('#smOwnInput', '9:29:29.5');
       await s.page.press('#smOwnInput', 'Enter');
       v = await g(s.page);
-      check('own time 9:29:29.5: the snap lands 1.168 s after midnight', v.mode === 'own' && v.own === 9030.5 && /Starts at 9:29:29 PM: the snap lands 1\.168 s after midnight/.test(v.ownNote), JSON.stringify(v));
+      check('own time 9:29:29.5: the snap lands 1.168 s after midnight', v.mode === 'own' && v.own === 9030.5 && /Starts at 9:29:29\.500 PM: the snap lands 1\.168 s after midnight/.test(v.ownNote), JSON.stringify(v));
       await s.page.click('#smOwnMinus1');
       await s.page.click('#smOwnPlus01');
       v = await g(s.page);
-      check('−1 s, then +0.1 s: 9:29:28.600 PM, the snap lands 0.268 s after midnight', v.own === 9031.4 && /Starts at 9:29:28 PM: the snap lands 0\.268 s after midnight/.test(v.ownNote), JSON.stringify(v));
+      check('−1 s, then +0.1 s: 9:29:28.600 PM, the snap lands 0.268 s after midnight', v.own === 9031.4 && /Starts at 9:29:28\.600 PM: the snap lands 0\.268 s after midnight/.test(v.ownNote), JSON.stringify(v));
       await s.page.fill('#smOwnInput', '11:59:50 PM');
       await s.page.press('#smOwnInput', 'Enter');
       check('a start ten seconds before midnight is refused', (await g(s.page)).own === 9031.4 && await s.page.evaluate(() => document.getElementById('smOwnInput').classList.contains('bad')));
@@ -2457,17 +2455,17 @@ const scenarios = {
       // Back to automatic.
       await s.page.click('.tab[data-tab="setup"]');
       await s.page.check('#smAuto');
-      const back = await shows(s.page, 'ktSnap', /Jan 1 · 12:00:00 AM/) && await shows(s.page, 'ktStart', /Dec 31 · 9:29:28 PM/);
+      const back = await shows(s.page, 'ktSnap', /Jan 1 · 12:00:00 AM/) && await shows(s.page, 'ktStart', /Dec 31 · 9:29:28\.332 PM/);
       v = await g(s.page);
       check('back to automatic: 9:29:28 PM, the snap on midnight', back && v.mode === 'auto' && v.landsLbl === 'The snap lands on midnight' && v.lead === 9031668, JSON.stringify(v));
-      check('one\'s own time is kept for next time', /Your time, 9:29:28 PM, is kept/.test(v.ownNote), v.ownNote);
+      check('one\'s own time is kept for next time', /Your time, 9:29:28\.600 PM, is kept/.test(v.ownNote), v.ownNote);
       await s.page.check('#smOwn');
       check('choosing it again brings it back', (await g(s.page)).mode === 'own' && (await g(s.page)).own === 9031.4);
       // A time typed but not set yet is what a nudge starts from.
       await s.page.fill('#smOwnInput', '9:29:29 PM');
       await s.page.click('#smOwnPlus01');
       v = await g(s.page);
-      check('typed 9:29:29 PM, then +0.1 s: 9:29:29.100 PM', v.own === 9030.9 && /Starts at 9:29:29 PM/.test(v.ownNote), JSON.stringify(v));
+      check('typed 9:29:29 PM, then +0.1 s: 9:29:29.100 PM', v.own === 9030.9 && /Starts at 9:29:29\.100 PM/.test(v.ownNote), JSON.stringify(v));
       await s.page.check('#smAuto');
       check('no page errors', s.errors.length === 0, s.errors.join(' | '));
     } finally { await s.close(); }
@@ -2493,7 +2491,7 @@ const scenarios = {
         return { mon: d.getMonth(), day: d.getDate(), h: d.getHours(), m: d.getMinutes(), hud: !document.getElementById('testHud').hidden, mode: document.getElementById('app').dataset.mode,
           end: !document.getElementById('nightEnd').hidden, label: document.getElementById('stLabel').textContent, results: document.getElementById('testResults').textContent };
       });
-      check('the first choice reads “9:29:00 PM: watch it start by itself at 9:29:28 PM”', /^9:29:00 PM: watch it start by itself at 9:29:28 PM$/.test(await s.page.$eval('#tsNightAt option[value="start"]', (o) => o.textContent)));
+      check('the first choice reads “9:29:00 PM: watch it start by itself at 9:29:28.332 PM”', /^9:29:00 PM: watch it start by itself at 9:29:28\.332 PM$/.test(await s.page.$eval('#tsNightAt option[value="start"]', (o) => o.textContent)));
       await s.page.selectOption('#tsNightAt', 'start');
       await s.page.click('[data-test="night"]');
       let v = await look();
@@ -2511,9 +2509,10 @@ const scenarios = {
         return out;
       });
       const i = rows.findIndex((r) => !r.standby);
-      const whole = rows.length ? Math.floor(rows[0].start / 1000) * 1000 : 0;
-      check('the screen switches from the countdown to the film on the very second, 9:29:28.000', i > 0 && rows[i - 1].now < whole && rows[i].now >= whole && rows[i].now - whole < 50 && rows[i - 1].count === '00:00:01',
-        i > 0 ? 'last countdown frame ' + (rows[i - 1].now - whole) + ' ms, film from ' + (rows[i].now - whole) + ' ms after 9:29:28.000, last count ' + rows[i - 1].count : 'never');
+      const at = rows.length ? rows[0].start : 0;
+      check('the countdown runs to the millisecond and the movie launches at the exact start, 9:29:28.332', i > 0 && rows[i - 1].now < at && rows[i].now >= at && rows[i].now - at < 50 && /^00:00:00\.\d{3}$/.test(rows[i - 1].count) &&
+        rows.slice(0, i).every((r) => Math.abs(parseFloat(r.count.slice(6)) * 1000 + (+r.count.slice(3, 5)) * 60000 - (at - r.now)) < 30),
+        i > 0 ? 'last countdown frame ' + (rows[i - 1].now - at) + ' ms (' + rows[i - 1].count + '), film from ' + (rows[i].now - at) + ' ms after the start' : 'never');
       check('and the film runs locked to the clock', await waitSynced(s.page, 8000));
       v = await look();
       check('no test result, no pass or fail', /No test run yet/.test(v.results) && /^SIMULATION · /.test(v.label), v.label);
@@ -2571,7 +2570,7 @@ const scenarios = {
       v = await info(s.page);
       check('the white-out four minutes on is set: 2:34:31.668', Math.abs(v.snap - 9271.668) < 1e-6 && Math.abs(f.selT - 9271.6667) < 0.01, v.snap + ' | ' + f.title);
       check('far from where it was expected and with no subtitles: the strip asks for one look', /^Is this the snap\?$/.test(f.title) && /The snap was not where it was expected/.test(f.note), f.title + ' | ' + f.note.slice(0, 200));
-      check('the countdown is calibrated to it: the movie starts at 9:25:28 PM', await shows(s.page, 'ktStart', /Dec 31 · 9:25:28 PM/), await s.page.textContent('#ktStart'));
+      check('the countdown is calibrated to it: the movie starts at 9:25:28.332 PM', await shows(s.page, 'ktStart', /Dec 31 · 9:25:28\.332 PM/), await s.page.textContent('#ktStart'));
       await s.page.keyboard.press('Escape');
       await stripClosed(s.page);
       check('no page errors', s.errors.length === 0, s.errors.join(' | '));

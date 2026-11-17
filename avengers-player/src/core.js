@@ -1056,6 +1056,21 @@
     return best;
   }
 
+  /** "00:00:03.348" (days in front when there are any): a countdown to the millisecond. */
+  function fmtCountdownMs(ms) {
+    const total = Math.max(0, Math.ceil(ms - 1e-6));
+    const sec = Math.floor(total / 1000);
+    const d = Math.floor(sec / 86400);
+    const hms = pad(Math.floor((sec % 86400) / 3600)) + ':' + pad(Math.floor((sec % 3600) / 60)) + ':' + pad(sec % 60) + '.' + String(total % 1000).padStart(3, '0');
+    return d > 0 ? d + 'd ' + hms : hms;
+  }
+
+  /** "Thu, Dec 31 · 9:29:28.348 PM" (no milliseconds when there are none). */
+  function fmtDateTimeMs(epochMs, use24) {
+    if (!isFinite(epochMs)) return '—';
+    return fmtDateTime(epochMs, use24).replace(/ · .*$/, ' · ' + fmtClockMs(epochMs, use24));
+  }
+
   /** "Thu, Dec 31 · 9:29:30 PM" */
   function fmtDateTime(epochMs, use24) {
     if (!isFinite(epochMs)) return '—';
@@ -1191,7 +1206,7 @@
     percentile: percentile, speechScore: speechScore, cueTimeline: cueTimeline, speechPlan: speechPlan, alignCues: alignCues, SUB_SCALES: SUB_SCALES, betterFit: betterFit, ALIGN: ALIGN,
     MONTHS: MONTHS, MONTHS_LONG: MONTHS_LONG, DAYS: DAYS, DAYS_LONG: DAYS_LONG,
     clamp: clamp, pad: pad, median: median, untilClockSecond: untilClockSecond, filmSecondOnClock: filmSecondOnClock, FILM_SPAN: FILM_SPAN,
-    fmtClockMs: fmtClockMs, parseClockTime: parseClockTime, leadForStartTime: leadForStartTime,
+    fmtClockMs: fmtClockMs, parseClockTime: parseClockTime, leadForStartTime: leadForStartTime, fmtCountdownMs: fmtCountdownMs, fmtDateTimeMs: fmtDateTimeMs,
     fmtDuration: fmtDuration, parseDuration: parseDuration,
     countdownParts: countdownParts, fmtCountdown: fmtCountdown,
     clockParts: clockParts, fmtClock: fmtClock, fmtDateTime: fmtDateTime, dateKey: dateKey,

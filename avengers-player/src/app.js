@@ -242,8 +242,9 @@
   /** "the snap lands 1.668 s after midnight", with a word when the snap point itself is unchecked. */
   const landsText = (s) => 'the snap lands ' + (onTarget(s) ? 'on ' : lateText(snapLate(s)) + ' ') + targetWord(s) +
     (snapConfirmed() || (!Media.info && !!cfg.snapConfirmedFor && cfg.snapConfirmedFor.endsWith('|' + cfg.snapSec.toFixed(3))) ? '' : ' (if the snap point is right: it has not been checked yet)');
-  /** A start time as shown: the whole second the screen switches from the countdown to the film. */
-  const clockOf = (epoch) => C.fmtClock(new Date(epoch), cfg.use24h);
+  /** A start time as shown: to the millisecond ("9:29:28.348 PM"), the instant the movie launches. */
+  const clockOf = (epoch) => C.fmtClockMs(epoch, cfg.use24h);
+  const dateTimeOf = (epoch) => C.fmtDateTimeMs(epoch, cfg.use24h);
   /** "midnight", or the clock time of another target. */
   const targetWord = (s) => (!s ? 'the target' : isNewYearMoment(s.targetEpoch) ? 'midnight' : C.fmtClock(new Date(s.targetEpoch), cfg.use24h));
   /** A start time choice in words: "automatic", "9:29:30 PM", "your own time (9:29:29.500 PM)". */
@@ -1200,7 +1201,7 @@
       tellArmed(true);
       const joining = !opts.restore && Clock.now() >= s.startEpoch;      // the film should already be running
       const late = snapLate(s);
-      this.logEvent((opts.restore ? 'Countdown resumed' : joining ? 'Joined late' : 'Countdown armed') + ': movie starts ' + C.fmtDateTime(s.startEpoch, cfg.use24h) +
+      this.logEvent((opts.restore ? 'Countdown resumed' : joining ? 'Joined late' : 'Countdown armed') + ': movie starts ' + dateTimeOf(s.startEpoch) +
         (cfg.startMode !== 'auto' ? ' (start time chosen by hand: ' + startName(cfg.startMode, s) + '; the snap lands ' + lateText(late) + ' ' + targetWord(s) + ')' : ''));
       if (!opts.restore && !joining && cfg.startMode !== 'auto') toast('Armed: the movie starts at ' + clockOf(s.startEpoch) + ', the time you chose: ' + landsText(s) + '.');
       else if (!opts.restore && !joining && !snapConfirmed()) toast('Armed with a snap point that has not been checked. The Snap test shows whether it lands.');
@@ -1952,12 +1953,12 @@
       setHidden(el.latePill, !((pos != null && dismissed && !quiet) || soon));
       // (Every time on screen is counted on the clock's seconds, so it ticks with the clock.)
       const onClock = s ? Math.max(0, C.filmSecondOnClock(s, now)) : 0;
-      if (soon) setText(el.latePill, 'NOT ARMED · the movie has to start in ' + C.fmtCountdown(C.untilClockSecond(s.startEpoch, now)) + ' · click to start the countdown');
+      if (soon) setText(el.latePill, 'NOT ARMED · the movie has to start in ' + C.fmtCountdownMs(s.startEpoch - now) + ' · click to start the countdown');
       else if (pos != null && dismissed) setText(el.latePill, 'LATE · the movie should be at ' + C.fmtDuration(onClock, { forceHours: true }) + ' · click to join');
       if (!box) return;
       const toSnap = s.targetEpoch - now;
       setText(el.lateTitle, toSnap > 0 ? 'You are late to the countdown' : 'The movie is already running');
-      setText(el.lateBody, 'The movie had to start at ' + C.fmtClock(new Date(s.startEpoch), cfg.use24h) + '. Right now it should be at ' + C.fmtDuration(onClock, { forceHours: true }) + '.');
+      setText(el.lateBody, 'The movie had to start at ' + clockOf(s.startEpoch) + '. Right now it should be at ' + C.fmtDuration(onClock, { forceHours: true }) + '.');
       setText(el.lateSub, (toSnap > 0 ? (newYear ? 'New Year in ' : onTarget(s) ? 'The snap in ' : 'The target in ') + C.fmtCountdown(C.untilClockSecond(s.targetEpoch, now)) : (newYear ? 'Midnight was ' : onTarget(s) ? 'The snap was ' : 'The target was ') + C.fmtDuration(-toSnap / 1000) + ' ago') + ' · press Enter or Space');
     }
   };
@@ -2002,7 +2003,7 @@
   const fmtFilm = (sec) => C.fmtDuration(sec, { ms: true, forceHours: true });
   /** What the start time is now, in words, after the snap point moved. */
   const startNow = (s) => (cfg.startMode === 'auto'
-    ? 'The movie now starts at ' + C.fmtClock(new Date(s.startEpoch), cfg.use24h)
+    ? 'The movie now starts at ' + clockOf(s.startEpoch)
     : 'The movie still starts at ' + clockOf(s.startEpoch) + ', the time you chose: the snap lands ' + lateText(snapLate(s)) + ' ' + targetWord(s));
 
   /**
@@ -2695,7 +2696,7 @@
       Modal.open({
         title: 'Snap point set to ' + fmtFilm(next),
         html: 'That is <b>' + Math.abs(next - old).toFixed(3) + ' s ' + (next > old ? 'later' : 'earlier') + '</b> than before.' +
-          (s ? (cfg.startMode === 'auto' ? ' The movie now has to start at <b>' + esc(C.fmtDateTime(s.startEpoch, cfg.use24h)) + '</b>.'
+          (s ? (cfg.startMode === 'auto' ? ' The movie now has to start at <b>' + esc(dateTimeOf(s.startEpoch)) + '</b>.'
             : ' The start time stays at <b>' + esc(clockOf(s.startEpoch)) + '</b>, the one you chose: the snap now lands <b>' + esc(lateText(snapLate(s))) + '</b> ' + esc(targetWord(s)) + '.') : '') +
           '<br><br>' + (!s || Math.abs(snapLate(s)) < 0.0005 ? 'Run the Snap test now to watch that frame land on ' + esc(clockText || 'the target moment') + '.' : 'Run the Snap test now to see where that frame lands with your start time.'),
         actions: [
@@ -3649,7 +3650,7 @@
       setHidden(el.resumeCard, !show);
       if (!show) return;
       const s = Engine.sessionFor(cfg.armedTarget);
-      el.resumeText.textContent = 'The movie is set to start ' + C.fmtDateTime(s.startEpoch, cfg.use24h) +
+      el.resumeText.textContent = 'The movie is set to start ' + dateTimeOf(s.startEpoch) +
         '. Open ' + (cfg.movieName ? '“' + cfg.movieName + '”' : 'the movie') + ' again and playback jumps straight to where the clock says it should be.';
       el.resumeBtn.textContent = cfg.moviePath ? 'Resume with ' + (cfg.movieName || 'the movie') : 'Choose the movie';
     },
@@ -3774,7 +3775,7 @@
         'Length: ' + (Media.ready ? fmtFilm(video.duration) + ' (' + video.duration.toFixed(3) + ' s), ' + video.videoWidth + 'x' + video.videoHeight + (Media.fps ? ', ' + Media.fps.toFixed(3) + ' frames a second' : '') : 'unknown'),
         'Film version: ' + Versions.current().name,
         'Snap point: ' + fmtFilm(cfg.snapSec) + ' (' + cfg.snapSec.toFixed(3) + ' s), ' + (snapConfirmed() ? 'confirmed in this file' : 'NOT confirmed in this file'),
-        'Movie starts: ' + (s ? C.fmtDateTime(s.startEpoch, cfg.use24h) : 'unknown') + ', target: ' + (s ? C.fmtDateTime(s.targetEpoch, cfg.use24h) : 'unknown'),
+        'Movie starts: ' + (s ? dateTimeOf(s.startEpoch) : 'unknown') + ', target: ' + (s ? C.fmtDateTime(s.targetEpoch, cfg.use24h) : 'unknown'),
         'Start time: ' + startName(cfg.startMode, s) + (s ? ', the snap lands ' + lateText(snapLate(s)) + ' the target' : '')
       ];
       const last = Engine.events.filter((e) => /Snap point moved|Snap found|Snap probably|Snap point estimated|left the snap point|The line before the snap|Film strip opened|Test run ended: The snap/.test(e.text)).slice(-6).map((e) => e.text);
@@ -4076,12 +4077,12 @@
         setText(el.imClock, cp.ampm ? cp.hms + ' ' + cp.ampm : cp.hms);
         setText(el.imDate, dateLine);
         if (s) {
-          setText(el.imToStart, toStart > 0 ? C.fmtCountdown(C.untilClockSecond(s.startEpoch, now)) : 'RUNNING');
-          setText(el.imStartAt, C.fmtDateTime(s.startEpoch, cfg.use24h));
+          setText(el.imToStart, toStart > 0 ? C.fmtCountdownMs(toStart) : 'RUNNING');
+          setText(el.imStartAt, dateTimeOf(s.startEpoch));
           setText(el.imToSnap, toSnap > 0 ? C.fmtCountdown(C.untilClockSecond(s.targetEpoch, now)) : 'NOW');
           setText(el.imSnapAt, C.fmtDateTime(s.targetEpoch, cfg.use24h));
           setText(el.imSnapLbl, newYear ? 'NEW YEAR IN' : onTarget(s) ? 'THE SNAP IN' : 'THE TARGET IN');
-          setText(el.imStart, C.fmtClock(new Date(s.startEpoch), cfg.use24h));
+          setText(el.imStart, clockOf(s.startEpoch));
           const sd = new Date(s.startEpoch);
           setText(el.imDay, 'on ' + C.MONTHS_LONG[sd.getMonth()] + ' ' + sd.getDate());
           setText(el.imLands, onTarget(s) ? (newYear ? 'the snap lands on the first second of the new year' : 'the snap lands on the target') : landsText(s));
@@ -4090,7 +4091,7 @@
         const running = !!s && toStart <= 0 && (s.endEpoch != null ? now < s.endEpoch - 5000 : toSnap > -45 * 60000) && !cfg.armed && !(newYear && toSnap <= 0);
         setHidden(el.imLate, !running);
         if (running) {
-          setText(el.imLateText, 'It had to start at ' + C.fmtClock(new Date(s.startEpoch), cfg.use24h) + ' and should be at ' + C.fmtDuration(Math.max(0, C.filmSecondOnClock(s, now)), { forceHours: true }) +
+          setText(el.imLateText, 'It had to start at ' + clockOf(s.startEpoch) + ' and should be at ' + C.fmtDuration(Math.max(0, C.filmSecondOnClock(s, now)), { forceHours: true }) +
             ' now. Import the movie and press JOIN NOW: it jumps straight to where it should be.');
         }
         this.prevNow = now;
@@ -4156,13 +4157,16 @@
       }
 
       /* standby */
-      // The standby screen gives way to the film on the very second the countdown reaches 00:00:00
-      // (9:29:28.000). The film's first frame then holds for the fraction of a second the snap needs.
-      const standby = Engine.mode === 'armed' && Engine.phase === 'standby' && cfg.standbyScreen && !!s && now < Math.floor(s.startEpoch / 1000) * 1000;
+      // The standby screen gives way to the film at the very millisecond the movie launches
+      // (9:29:28.348), as its countdown reaches 00:00:00.000. (Play is pressed a few tens of
+      // milliseconds earlier, so that the first frame is on screen at that instant: the screen
+      // stays up until then.)
+      const standby = Engine.mode === 'armed' && cfg.standbyScreen && !!s && now < s.startEpoch &&
+        (Engine.phase === 'standby' || ((Engine.phase === 'synced' || Engine.phase === 'cueing') && s.startEpoch - now < 2000 && !el.standby.hidden));
       setHidden(el.standby, !standby);
       if (standby) {
-        setText(el.sbCount, C.fmtCountdown(C.untilClockSecond(s.startEpoch, now)));
-        setText(el.sbLine, 'Starts by itself at ' + C.fmtClock(new Date(s.startEpoch), cfg.use24h) + ' · ' +
+        setText(el.sbCount, C.fmtCountdownMs(s.startEpoch - now));      // to the very millisecond the movie launches
+        setText(el.sbLine, 'Starts by itself at ' + clockOf(s.startEpoch) + ' · ' +
           C.DAYS_LONG[new Date(s.startEpoch).getDay()] + ', ' + C.MONTHS_LONG[new Date(s.startEpoch).getMonth()] + ' ' + new Date(s.startEpoch).getDate());
         setText(el.sbClock, 'Now ' + (cp.ampm ? cp.hms + ' ' + cp.ampm : cp.hms));
       }
@@ -4254,7 +4258,7 @@
       // With a start time chosen by hand the snap is not on the target: say where it lands.
       const late = snapLate(s);
       const landsOn = Math.abs(late) < 0.0005;
-      setText(el.ktStart, C.fmtDateTime(s.startEpoch, cfg.use24h));
+      setText(el.ktStart, dateTimeOf(s.startEpoch));
       setText(el.ktSnap, landsOn ? C.fmtDateTime(s.targetEpoch, cfg.use24h) : lateText(late) + ' ' + targetWord(s));
       setText(el.ktSnapLbl, landsOn ? (newYear ? 'The snap lands on midnight' : 'The snap lands') : 'The snap lands');
       el.ktSnap.classList.toggle('off', !landsOn);
@@ -4266,20 +4270,20 @@
       let big;
       let sub;
       const exp = e.expected(now);
-      const cdStart = C.untilClockSecond(s.startEpoch, now);
+      const cdStart = s.startEpoch - now;      // to the very millisecond the movie launches
       const cdSnap = C.untilClockSecond(s.targetEpoch, now);
       if (e.mode !== 'armed') {
-        if (toStart > 0) { label = 'READY · NOT ARMED'; big = C.fmtCountdown(cdStart); sub = 'until the movie has to start'; }
+        if (toStart > 0) { label = 'READY · NOT ARMED'; big = C.fmtCountdownMs(cdStart); sub = 'until the movie has to start'; }
         else if (newYear && toSnap <= 0) { label = 'MISSED · NOT ARMED'; big = 'HAPPY NEW YEAR'; sub = 'The countdown did not run this time. Better luck next year.'; }
         else if (Late.position(now) != null) { state = 'slipped'; label = 'LATE · NOT ARMED'; big = C.fmtDuration(Math.max(0, C.filmSecondOnClock(s, now)), { forceHours: true }); sub = 'is where the movie should be now. Press JOIN NOW to jump in.'; }
-        else { label = 'READY · NOT ARMED'; big = C.fmtCountdown(Math.max(0, cdStart)); sub = 'until the movie has to start'; }
+        else { label = 'READY · NOT ARMED'; big = C.fmtCountdownMs(Math.max(0, cdStart)); sub = 'until the movie has to start'; }
       } else if (e.phase === 'slipped' || e.phase === 'blocked') {
         state = 'slipped'; label = 'OUT OF SYNC';
-        big = exp < 0 ? C.fmtCountdown(cdStart) : fmtOff(video.currentTime - exp);
+        big = exp < 0 ? C.fmtCountdownMs(cdStart) : fmtOff(video.currentTime - exp);
         sub = exp < 0 ? 'until the start. Press Recalibrate.' : (video.currentTime < exp ? 'behind the clock. Press Recalibrate.' : 'ahead of the clock. Press Recalibrate.');
       } else if (toStart > 0) {
         state = e.test ? 'test' : 'standby'; label = e.test ? 'TEST RUN · WAITING FOR THE START' : 'ARMED · THE MOVIE STARTS IN';
-        big = C.fmtCountdown(cdStart); sub = 'It starts by itself. Nothing to press.';
+        big = C.fmtCountdownMs(cdStart); sub = 'It starts by itself. Nothing to press.';
       } else if (toSnap > 0) {
         state = e.test ? 'test' : 'synced'; label = (e.test ? 'TEST RUN · ' : 'PLAYING IN SYNC · ') + (newYear ? 'NEW YEAR IN' : onTarget(s) ? 'THE SNAP IN' : 'THE TARGET IN');
         big = C.fmtCountdown(cdSnap); sub = this.syncState().short;
@@ -4766,7 +4770,7 @@
       UI.dirty.all = true;
       UI.dirty.preflight = true;
       const sess = Engine.session;
-      Engine.logEvent('Start time: ' + startName(mode, sess) + ' (' + C.fmtDateTime(sess.startEpoch, cfg.use24h) + '), the snap lands ' + lateText(snapLate(sess)) + ' ' + targetWord(sess));
+      Engine.logEvent('Start time: ' + startName(mode, sess) + ' (' + dateTimeOf(sess.startEpoch) + '), the snap lands ' + lateText(snapLate(sess)) + ' ' + targetWord(sess));
       toast('The movie starts at ' + clockOf(sess.startEpoch) + ': ' + landsText(sess), 'good');
     };
     [el.smAuto, el.smClassic, el.smOwn].forEach((r) => r.addEventListener('change', () => {
