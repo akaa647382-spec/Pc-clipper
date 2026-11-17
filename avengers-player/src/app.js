@@ -2652,7 +2652,12 @@
         if (nodes[k].classList.contains('sel') !== on) nodes[k].classList.toggle('sel', on);
         nodes[k].setAttribute('aria-selected', on ? 'true' : 'false');
       }
-      if (nodes[i]) nodes[i].scrollIntoView({ inline: 'center', block: 'nearest', behavior: first ? 'auto' : 'smooth' });
+      if (nodes[i]) {
+        // Only the strip itself scrolls, sideways, to put that frame in the middle.
+        const row = el.stripRow;
+        const left = Math.max(0, nodes[i].offsetLeft - (row.clientWidth - nodes[i].offsetWidth) / 2);
+        if (first || typeof row.scrollTo !== 'function') row.scrollLeft = left; else row.scrollTo({ left: left, behavior: 'smooth' });
+      }
       setText(el.stripTime, fmtFilm(f.t));
       const same = i === v.ref;
       let rel;
@@ -3604,7 +3609,8 @@
     { id: 'infinity', name: 'Infinity', c: ['#140d26', '#6b3df0', '#c19cff'] },
     { id: 'gamma', name: 'Gamma', c: ['#0a1b11', '#12b85a', '#d8ff5a'] },
     { id: 'stealth', name: 'Stealth', c: ['#131316', '#a0a0ac', '#f2f2f4'] },
-    { id: 'midnight', name: 'Midnight Gold', c: ['#14110a', '#c8901e', '#f6c453'] }
+    { id: 'midnight', name: 'Midnight Gold', c: ['#14110a', '#c8901e', '#f6c453'] },
+    { id: 'doom', name: 'Doom', c: ['#0d1610', '#1f7a47', '#c4ccd2'] }
   ];
   const CELEB_HINT = {
     stark: 'Golden dust sweeps in and assembles into HAPPY NEW YEAR, then blows away. The snap, in reverse.',
@@ -3614,6 +3620,48 @@
   };
 
   const setText = (node, text) => { if (node.__t !== text) { node.__t = text; node.textContent = text; } };
+
+  /**
+   * A countdown or a time with milliseconds: the milliseconds in smaller type, and the whole text
+   * fitted to its box (measured only when the text changes shape, e.g. days or milliseconds appear).
+   */
+  // A box whose size changed (a scrollbar came, the window was resized, it became visible) is fitted again.
+  const fitWatch = typeof ResizeObserver === 'function' ? new ResizeObserver((entries) => { entries.forEach((e) => { e.target.__shape = null; }); }) : null;
+  const setCount = (node, text) => {
+    if (fitWatch && !node.__watched) { node.__watched = true; fitWatch.observe(node); }
+    if (node.__t === text && node.__shape) return;
+    node.__t = text;
+    const m = /^(.*\d)(\.\d{3})$/.exec(text);
+    if (m) {
+      node.textContent = m[1];
+      const ms = document.createElement('span');
+      ms.className = 'ms';
+      ms.textContent = m[2];
+      node.appendChild(ms);
+    } else {
+      node.textContent = text;
+    }
+    const shape = text.replace(/\d/g, '0');
+    if (node.__shape === shape) return;
+    node.style.fontSize = '';
+    const room = node.clientWidth;
+    if (!room) return;                       // not on screen yet: fitted the next time
+    node.__shape = shape;
+    const full = node.scrollWidth;
+    if (full > room) node.style.fontSize = Math.floor(parseFloat(getComputedStyle(node).fontSize) * room / full * 0.97) + 'px';
+  };
+
+  /**
+   * Scrolls the panel, and nothing else, so that `node` is in view. (scrollIntoView would also
+   * scroll the window and the app's own frame, which cannot be scrolled back: the app slid up and
+   * left a black bar.)
+   */
+  const scrollPanelTo = (node, where) => {
+    const box = el.panel ? el.panel.querySelector('.panes') : null;
+    if (!box || !node) return;
+    const top = node.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
+    box.scrollTop = Math.max(0, where === 'center' ? top - (box.clientHeight - node.offsetHeight) / 2 : top - 8);
+  };
   const setHidden = (node, hidden) => { if (node.hidden !== hidden) node.hidden = hidden; };
   const setAttr = (node, name, value) => { if (node.getAttribute(name) !== value) node.setAttribute(name, value); };
 
@@ -3820,7 +3868,7 @@
       }
       el.snapTools.classList.add('attn');
       setTimeout(() => el.snapTools.classList.remove('attn'), 4200);
-      el.snapTools.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      scrollPanelTo(el.snapTools, 'center');
     },
 
     lockedNudge() {
@@ -4089,7 +4137,7 @@
         setText(el.imClock, cp.ampm ? cp.hms + ' ' + cp.ampm : cp.hms);
         setText(el.imDate, dateLine);
         if (s) {
-          setText(el.imToStart, toStart > 0 ? startCountdown(s, now) : 'RUNNING');
+          setCount(el.imToStart, toStart > 0 ? startCountdown(s, now) : 'RUNNING');
           setText(el.imStartAt, dateTimeOf(s.startEpoch));
           setText(el.imToSnap, toSnap > 0 ? C.fmtCountdown(C.untilClockSecond(s.targetEpoch, now)) : 'NOW');
           setText(el.imSnapAt, C.fmtDateTime(s.targetEpoch, cfg.use24h));
@@ -4177,7 +4225,7 @@
         (Engine.phase === 'standby' || ((Engine.phase === 'synced' || Engine.phase === 'cueing') && s.startEpoch - now < 2000 && !el.standby.hidden));
       setHidden(el.standby, !standby);
       if (standby) {
-        setText(el.sbCount, startCountdown(s, now));      // seconds with the clock, reaching zero as the movie launches
+        setCount(el.sbCount, startCountdown(s, now));      // seconds with the clock, reaching zero as the movie launches
         setText(el.sbLine, 'Starts by itself at ' + clockOf(s.startEpoch) + ' · ' +
           C.DAYS_LONG[new Date(s.startEpoch).getDay()] + ', ' + C.MONTHS_LONG[new Date(s.startEpoch).getMonth()] + ' ' + new Date(s.startEpoch).getDate());
         setText(el.sbClock, 'Now ' + (cp.ampm ? cp.hms + ' ' + cp.ampm : cp.hms));
@@ -4308,7 +4356,7 @@
       if (e.sim) label = 'SIMULATION · ' + label;
       setAttr(card, 'data-state', state);
       setText(el.stLabel, label);
-      setText(el.stBig, big);
+      setCount(el.stBig, big);
       setText(el.stSub, sub);
     },
 
@@ -4533,6 +4581,17 @@
   }
 
   function wire() {
+    /* the fonts change the width of a countdown: fit them again once they are in */
+    try { if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { [el.stBig, el.sbCount, el.imToStart].forEach((n) => { if (n) n.__shape = null; }); }); } catch (e) { /* fitted as it is */ }
+
+    /* the window and the app's own frame never scroll (only the panel, the film strip and lists do):
+       if the browser scrolls one of them to bring something into view, it goes straight back */
+    const fixed = [document.documentElement, document.body, el.app, el.playerView, el.panel, el.stage].filter(Boolean);
+    document.addEventListener('scroll', (e) => {
+      const t = e.target === document ? document.scrollingElement : e.target;
+      if (fixed.includes(t) && (t.scrollTop || t.scrollLeft)) { t.scrollTop = 0; t.scrollLeft = 0; }
+    }, true);
+
     /* icons */
     $$('[data-icon]').forEach((b) => { b.innerHTML = ICON[b.dataset.icon] || ''; });
 
@@ -4835,7 +4894,7 @@
       UI.showTab('test');
       Engine.startTest('night', 0, undefined, { at: 'snap' });      // New Year's Eve from 11:59:00 PM, with this start time
     });
-    el.startTimeLink.addEventListener('click', () => { UI.showTab('setup'); el.startSec.scrollIntoView({ block: 'start' }); });
+    el.startTimeLink.addEventListener('click', () => { UI.showTab('setup'); scrollPanelTo(el.startSec, 'start'); });
     el.tgNewYear.addEventListener('change', setTarget);
     el.tgCustom.addEventListener('change', setTarget);
     el.tgCustomInput.addEventListener('change', setTarget);

@@ -2391,8 +2391,20 @@ const scenarios = {
       let v = await g(s.page);
       check('automatic: the movie starts at 9:29:28 PM and the snap lands on midnight', v.mode === 'auto' && /Dec 31 · 9:29:28\.332 PM/.test(v.start) && /Jan 1 · 12:00:00 AM/.test(v.lands) &&
         v.landsLbl === 'The snap lands on midnight' && v.link === 'Start time: automatic · change' && v.lead === 9031668, JSON.stringify(v));
+      // The countdown to a start 44 days away with milliseconds fits its card.
+      const fit = await s.page.evaluate(() => { const b = document.getElementById('stBig'); return { text: b.textContent, fits: b.scrollWidth <= b.clientWidth + 1, ms: !!b.querySelector('.ms') }; });
+      check('the status card countdown, days and milliseconds, fits its card', fit.fits && fit.ms && /^\d+d \d\d:\d\d:\d\d\.\d{3}$/.test(fit.text), JSON.stringify(fit));
       await s.page.click('#startTimeLink');
       check('“Start time · change” opens Setup', await waitFor(s.page, () => document.getElementById('pane-setup').classList.contains('on'), null, 2000));
+      await sleep(300);
+      const lay = await s.page.evaluate(() => {
+        const r = (id) => document.getElementById(id).getBoundingClientRect();
+        const panes = document.querySelector('#panel .panes').getBoundingClientRect();
+        return { doc: document.scrollingElement.scrollTop, app: document.getElementById('app').scrollTop, panel: document.getElementById('panel').scrollTop, player: document.getElementById('playerView').scrollTop,
+          tabsTop: document.querySelector('#panel .tabs').getBoundingClientRect().top, secTop: r('startSec').top, panesTop: panes.top, panesBottom: panes.bottom, winH: window.innerHeight, appBottom: r('app').bottom };
+      });
+      check('it scrolls the panel only: the app stays in place, no black bar, the section in view', lay.doc === 0 && lay.app === 0 && lay.panel === 0 && lay.player === 0 && lay.tabsTop >= 0 &&
+        lay.secTop >= lay.panesTop - 1 && lay.secTop < lay.panesBottom && Math.abs(lay.appBottom - lay.winH) < 2, JSON.stringify(lay));
       v = await g(s.page);
       check('Setup shows the start times and where the snap lands with each', v.autoAt === '9:29:28.332 PM' && /2:30:31\.668: the snap lands on midnight/.test(v.autoNote) &&
         v.classicAt === '9:29:30 PM' && /the snap lands 1\.668 s after midnight/.test(v.classicNote), JSON.stringify(v));
@@ -2471,6 +2483,11 @@ const scenarios = {
       v = await g(s.page);
       check('typed 9:29:29 PM, then +0.1 s: 9:29:29.100 PM', v.own === 9030.9 && /Starts at 9:29:29\.100 PM/.test(v.ownNote), JSON.stringify(v));
       await s.page.check('#smAuto');
+      // The Doom theme.
+      await s.page.click('.tab[data-tab="display"]');
+      await s.page.click('#themeGrid .theme[data-id="doom"]');
+      check('the Doom theme', await s.page.evaluate(() => document.documentElement.dataset.theme === 'doom' && getComputedStyle(document.documentElement).getPropertyValue('--acc2').trim() === '#1f7a47'));
+      await shot(s.page, 'theme-doom');
       check('no page errors', s.errors.length === 0, s.errors.join(' | '));
     } finally { await s.close(); }
   },
