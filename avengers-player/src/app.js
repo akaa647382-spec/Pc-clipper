@@ -2023,7 +2023,10 @@
       const L = this.live;
       this.live = null;
       const usable = () => Media.ready && !Modal.isOpen && !Engine.test && !this.view && !this.busy;
-      if (!L || L.frames.length < 6 || Math.abs(L.snapSec - cfg.snapSec) > 0.0005 || !usable()) { if (usable()) UI.askSnapLanded(); return; }
+      // "Did the snap land on 12:00:00?" is a question only when the start time put it there.
+      const byHand = test.atTarget != null && Math.abs(test.atTarget - cfg.snapSec) >= 0.0005;
+      const ask = () => { if (byHand) toast('The frames around the snap could not be collected. Run the test again.'); else UI.askSnapLanded(); };
+      if (!L || L.frames.length < 6 || Math.abs(L.snapSec - cfg.snapSec) > 0.0005 || !usable()) { if (usable()) ask(); return; }
       let frames = L.frames;
       const token = Media.loadToken;
       if (Engine.mode === 'free') {
@@ -3821,7 +3824,11 @@
     renderStartTime() {
       // Armed also while the countdown is reloading the film or has lent it out (cfg.armed).
       const armed = Engine.mode === 'armed' || cfg.armed;
-      const s = armed && !Engine.test ? Engine.session : Engine.computeFree();
+      // (At startup, and while an armed countdown reloads the film, there may be no armed session yet.)
+      const s = Engine.test ? Engine.computeFree()
+        : Engine.mode === 'armed' && Engine.session ? Engine.session
+        : cfg.armed && Number.isFinite(cfg.armedTarget) ? Engine.sessionFor(cfg.armedTarget)
+        : Engine.computeFree();
       const target = s.targetEpoch;
       const at = (mode) => target - Math.round(startLead(mode) * 1000);
       const word = targetWord(s);
@@ -4162,11 +4169,11 @@
       if (!s) return;
       // With a start time chosen by hand the snap is not on the target: say where it lands.
       const late = snapLate(s);
-      const onTarget = Math.abs(late) < 0.0005;
+      const landsOn = Math.abs(late) < 0.0005;
       setText(el.ktStart, C.fmtDateTime(s.startEpoch, cfg.use24h));
-      setText(el.ktSnap, onTarget ? C.fmtDateTime(s.targetEpoch, cfg.use24h) : lateText(late) + ' ' + targetWord(s));
-      setText(el.ktSnapLbl, onTarget ? (newYear ? 'The snap lands on midnight' : 'The snap lands') : 'The snap lands');
-      el.ktSnap.classList.toggle('off', !onTarget);
+      setText(el.ktSnap, landsOn ? C.fmtDateTime(s.targetEpoch, cfg.use24h) : lateText(late) + ' ' + targetWord(s));
+      setText(el.ktSnapLbl, landsOn ? (newYear ? 'The snap lands on midnight' : 'The snap lands') : 'The snap lands');
+      el.ktSnap.classList.toggle('off', !landsOn);
       setText(el.startTimeLink, 'Start time: ' + (Engine.test ? 'test run' : startName(cfg.startMode, s)) + ' · change');
       setText(el.ktPoint, C.fmtDuration(cfg.snapSec, { ms: cfg.snapSec % 1 !== 0, forceHours: true }) + (Versions.current().id !== 'original' ? ' · ' + Versions.current().short : ''));
 
@@ -4729,7 +4736,7 @@
     bindToggle(el.optLock, 'lockControls');
     bindToggle(el.optAutoRestart, 'autoRestart', () => tellArmed(cfg.armed));
     el.resetAll.addEventListener('click', () => {
-      if (Engine.mode === 'armed' || Engine.test) { toast('Stop the countdown first'); return; }
+      if (Engine.mode === 'armed' || Engine.test || cfg.armed) { toast('Stop the countdown first'); return; }
       const keep = { moviePath: cfg.moviePath, movieName: cfg.movieName };
       Object.assign(cfg, DEFAULTS, keep);
       cfg.rehearsed = {};
@@ -4899,18 +4906,20 @@
     const wantFs = cfg.armed && cfg.wasFullscreen;
     wire();
     UI.applyTheme();
+    Engine.session = Engine.computeFree();
     UI.renderSettings();
     SubsUI.renderPanel();
     Celebration.init();
-    Engine.session = Engine.computeFree();
     UI.onMode();
 
     Engine.logEvent('Player started' + (cfg.armed ? ' with the countdown armed' : ''));
-    setInterval(() => { try { Engine.tick(); } catch (e) { Engine.logEvent('tick error: ' + (e && e.message)); } }, 200);
+    setInterval(() => { try { Engine.tick(); } catch (e) { Engine.logEvent('tick error: ' + (e && e.message)); if (!Engine.tickErr) { Engine.tickErr = true; try { console.error('tick error: ' + (e && e.stack || e)); } catch (err) { /* nothing */ } } } }, 200);
     setInterval(() => NetTime.maybeMeasure(), 60000);
     const loop = () => {
       requestAnimationFrame(loop);
-      try { UI.frame(); } catch (e) { if (!UI.frameErr) { UI.frameErr = true; Engine.logEvent('render error: ' + (e && e.stack || e)); } }
+      // A drawing error must not stop the film; it is logged, and reported to the console so the
+      // automated tests count it as an error.
+      try { UI.frame(); } catch (e) { if (!UI.frameErr) { UI.frameErr = true; Engine.logEvent('render error: ' + (e && e.stack || e)); try { console.error('render error: ' + (e && e.stack || e)); } catch (err) { /* nothing */ } } }
     };
     requestAnimationFrame(loop);
 
