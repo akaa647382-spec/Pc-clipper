@@ -218,13 +218,9 @@ kbd {
 }
 .standby.leaving { animation: fadeout .28s ease both; }
 .sb-label { font: 600 calc(var(--u) * 1.9) var(--display); letter-spacing: .5em; color: var(--acc); padding-left: .5em; }
-/* The numbers glow like neon: a glow that hugs the strokes, in em so it scales with the digits.
-   Nothing clips it (cut off at the edges of the box, a wide glow drew rectangles behind the
-   numbers) and it is too tight to form blobs around them. */
-.sb-count {
-  max-width: 100%; white-space: nowrap; font: 500 calc(var(--u) * 15) var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.02em; line-height: 1; color: #fff;
-  text-shadow: 0 0 .04em rgba(255, 255, 255, .55), 0 0 .1em var(--glow), 0 0 .18em var(--glow);
-}
+/* The numbers' glow, as it always was. Nothing may clip it (no overflow: hidden): cut off at the
+   edges of the box it drew a lighter rectangle behind the numbers. */
+.sb-count { max-width: 100%; white-space: nowrap; font: 500 calc(var(--u) * 15) var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.02em; line-height: 1; color: #fff; text-shadow: 0 0 calc(var(--u) * 4) var(--glow); }
 .sb-line { font: 500 calc(var(--u) * 2.3) var(--sans); color: rgba(255, 255, 255, .72); }
 .sb-clock { font: 500 calc(var(--u) * 2) var(--mono); color: rgba(255, 255, 255, .45); font-variant-numeric: tabular-nums; }
 @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
