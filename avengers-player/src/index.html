@@ -273,9 +273,18 @@
 
       <!-- ------------------------------------------------------- test -->
       <section class="pane" id="pane-test">
-        <p class="hint">A test run moves the app's clock, not your PC clock. The real countdown stays armed and comes back when the test ends.</p>
+        <p class="hint">The real-time test runs on your PC's real clock. The other tests move the app's own clock (not your PC's) so you can watch moments like midnight today. The real countdown stays armed and comes back when a test ends.</p>
         <div class="tcard">
-          <h4><span>1</span>Auto-start test</h4>
+          <h4><span>1</span>Real-time test</h4>
+          <p>Nothing simulated: the film plays from where it has to be, with sound, on your PC's real clock, and the snap lands on a whole minute in about a minute (for example 3:42:00 PM). Check it against your phone. Afterwards the app says how smoothly this PC played the film.</p>
+          <div class="row">
+            <select id="tsRealStart" aria-label="Start time for this test"><option value="set" selected>Start time as set</option><option value="auto">Automatic start</option><option value="classic">Start at 9:29:30 PM</option></select>
+            <select id="tsRealLead" aria-label="When the snap comes"><option value="45" selected>in about 1 minute</option><option value="105">in about 2 minutes</option><option value="285">in about 5 minutes</option></select>
+            <button class="btn btn-primary btn-sm" data-test="real" type="button">Run</button>
+          </div>
+        </div>
+        <div class="tcard">
+          <h4><span>2</span>Auto-start test</h4>
           <p>Jumps to just before the start time and checks that the movie starts by itself, on the dot.</p>
           <div class="row">
             <select id="tsLeadStart" aria-label="Seconds before the start"><option value="10">10 s before</option><option value="20">20 s before</option><option value="45">45 s before</option></select>
@@ -283,8 +292,8 @@
           </div>
         </div>
         <div class="tcard">
-          <h4><span>2</span>Snap test</h4>
-          <p>Jumps to just before midnight. Watch the snap land on 12:00:00, the date roll over to January 1 and the celebration. Afterwards the app shows the frames that were on screen around 12:00:00: if his fingers snap on another frame, one click moves the snap point there. Pick a start time to try it: the test says exactly where the snap lands with it.</p>
+          <h4><span>3</span>Midnight simulation (Snap test)</h4>
+          <p>Moves the app's clock to just before midnight. Watch the snap land on 12:00:00, the date roll over to January 1 and the celebration. Afterwards the app shows the frames that were on screen around 12:00:00: if his fingers snap on another frame, one click moves the snap point there. Pick a start time to try it: the test says exactly where the snap lands with it.</p>
           <div class="row">
             <select id="tsStartMode" aria-label="Start time for this test"><option value="set" selected>Start time as set</option><option value="auto">Automatic start</option><option value="classic">Start at 9:29:30 PM</option></select>
             <select id="tsLeadSnap" aria-label="Seconds before the snap"><option value="20">20 s before</option><option value="40" selected>40 s before</option><option value="75">75 s before</option><option value="150">2½ min before</option></select>
@@ -292,12 +301,12 @@
           </div>
         </div>
         <div class="tcard">
-          <h4><span>3</span>Slip and recovery drill</h4>
+          <h4><span>4</span>Slip and recovery drill</h4>
           <p>Plays mid-movie, then knocks the film out of sync on purpose so you can practise pressing Recalibrate.</p>
           <div class="row"><button class="btn btn-primary btn-sm" data-test="slip" type="button">Run</button></div>
         </div>
         <div class="tcard">
-          <h4><span>4</span>Crash recovery</h4>
+          <h4><span>5</span>Crash recovery</h4>
           <p>Start the countdown, then press the button. The app crashes for real, comes back by itself within a few seconds, imports the movie again and jumps to where the clock says the film should be.</p>
           <div class="row"><button id="crashBtn" class="btn btn-warn btn-sm" type="button">Crash the app now</button></div>
         </div>
@@ -439,7 +448,7 @@
           <button id="smOwnPlus01" class="btn btn-ghost btn-sm" type="button" title="Start a tenth of a second later">+0.1 s</button>
           <button id="smOwnPlus1" class="btn btn-ghost btn-sm" type="button" title="Start one second later">+1 s</button>
         </div>
-        <button id="smTest" class="btn btn-ghost btn-wide" type="button">Test this start time (Snap test)</button>
+        <button id="smTest" class="btn btn-ghost btn-wide" type="button">Test this start time on the real clock</button>
         <p class="hint" id="smArmedNote" hidden>Stop the countdown to change the start time.</p>
 
         <h3 class="sec">Sound language</h3>

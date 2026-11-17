@@ -2473,6 +2473,37 @@ const scenarios = {
     } finally { await s.close(); }
   },
 
+  async realtime() {
+    // The real-time test: no simulated clock. The film joins where it has to be and the snap lands
+    // on a whole minute of the real clock; afterwards the app says how smoothly the PC played it.
+    const ENDGAME = path.join(MEDIA, 'original-length.mp4');
+    if (!fs.existsSync(ENDGAME)) { console.log('  note  long test clips missing: run scripts/make-test-media.sh'); return; }
+    const s = await launch(newProfile());
+    try {
+      await loadMovie(s.page, ENDGAME);
+      if (await waitFor(s.page, () => !document.getElementById('modal').hidden && /Finding the snap/.test(document.getElementById('modalTitle').textContent), null, 15000)) {
+        await s.page.click('#modalActions button');
+        await waitFor(s.page, () => !window.__AP.SnapCam.busy && document.getElementById('modal').hidden, null, 8000);
+      }
+      await setSnap(s.page, '2:30:31.668');
+      await s.page.evaluate(() => window.__AP.Versions.confirm());
+      await s.page.click('.tab[data-tab="test"]');
+      await s.page.click('[data-test="real"]');
+      const t = await s.page.evaluate(() => ({ off: window.__AP.Clock.testOffsetMs, title: window.__AP.Engine.test && window.__AP.Engine.test.title, snapAt: window.__AP.Engine.test && window.__AP.Engine.test.snapAt }));
+      check('the real-time test runs on the real clock, with the snap on a whole minute', t.off === 0 && t.snapAt % 60000 === 0 && /^Real-time test · the snap at \d+:\d\d:00 [AP]M$/.test(t.title), JSON.stringify(t));
+      check('it joins the film where it has to be and locks on', await waitSynced(s.page, 20000));
+      const pos = await state(s.page);
+      check('the film is where the real clock says it has to be: 45 to 105 s before the snap', pos.t > 8920 && pos.t < 9032, C_fmt(pos.t));
+      const first = () => s.page.evaluate(() => { const r = document.getElementById('testResults').firstChild; return r ? r.textContent : ''; });
+      check('the result: the snap frame hit that minute, and how smoothly it played', await waitFor(s.page, () => { const r = document.getElementById('testResults').firstChild; return !!r && /Real-time test/.test(r.textContent) && /The snap frame hit \d+:\d\d:00 [AP]M/.test(r.textContent) && /Playback (was smooth|lagged)/.test(r.textContent); }, null, 140000), await first());
+      check('the strip shows the frame put on that minute', await stripOpen(s.page, 30000) && /^(The snap landed on|Was that the snap\?)/.test((await stripView(s.page)).title), (await stripView(s.page) || {}).title);
+      await s.page.keyboard.press('Escape');
+      await stripClosed(s.page);
+      console.log('  info  ' + (await first()));
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally { await s.close(); }
+  },
+
   async anycopy() {
     // Copies of the film come in any length. A 3:20:00 copy whose snap is four minutes later than in
     // the 2019 film is searched by itself, as far as its extra length reaches; a copy named as the

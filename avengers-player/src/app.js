@@ -191,6 +191,33 @@
     return C.fmtDuration(a);
   };
 
+  /* ==================================================== playback quality === */
+
+  /** Frames shown and dropped so far by the video element (cumulative). */
+  const playbackQuality = () => {
+    try {
+      const v = document.getElementById('video');
+      const q = v && v.getVideoPlaybackQuality ? v.getVideoPlaybackQuality() : null;
+      return q ? { total: q.totalVideoFrames, dropped: q.droppedVideoFrames } : null;
+    } catch (e) { return null; }
+  };
+  /** How smoothly the film played since `q0`: { lagged, text }. */
+  const smoothness = (q0, resyncs) => {
+    const q = playbackQuality();
+    const total = q && q0 ? q.total - q0.total : 0;
+    const dropped = q && q0 ? q.dropped - q0.dropped : 0;
+    const share = total > 0 ? dropped / total : 0;
+    const lagged = share > 0.05 || resyncs > 0;
+    const v = document.getElementById('video');
+    const heavy = v && v.videoHeight >= 1600 ? ' This is a ' + v.videoWidth + '×' + v.videoHeight + ' file: a 1080p copy of the film plays far more easily.' : ' A lighter copy of the film (1080p) would play more easily.';
+    if (!lagged) return { lagged: false, text: 'Playback was smooth' + (total > 0 ? ' (' + dropped + ' of ' + total + ' frames dropped)' : '') + '.' };
+    return {
+      lagged: true,
+      text: 'Playback lagged on this PC: ' + (total > 0 ? Math.round(share * 100) + '% of the frames were dropped' : 'the film fell behind') +
+        (resyncs ? ' and the film had to be re-synced ' + resyncs + ' time' + (resyncs > 1 ? 's' : '') : '') + '. On the night that shows as stutters and jumps.' + heavy
+    };
+  };
+
   /* ========================================================== start time === */
 
   /**
@@ -1488,7 +1515,15 @@
 
       const dur = video.duration;
       const startMode = ['auto', 'classic', 'own'].includes(mode) ? mode : cfg.startMode;
-      const s = this.sessionFor(real.targetEpoch, startMode);
+      // The real-time test needs no simulated clock: its target is a whole minute of the real clock,
+      // at least `leadSec` away (a snap far off the target goes on the minute itself).
+      let target = real.targetEpoch;
+      if (kind === 'real') {
+        const minute = (t) => Math.ceil(t / 60000) * 60000;
+        const gapMs = Math.round(cfg.snapSec * 1000) - Math.round(startLead(startMode) * 1000);
+        target = Math.abs(gapMs) <= 20000 ? minute(realNow + leadSec * 1000 + Math.max(0, -gapMs)) : minute(realNow + leadSec * 1000) - gapMs;
+      }
+      const s = this.sessionFor(target, startMode);
       const atTarget = (s.targetEpoch - s.startEpoch) / 1000;     // where the film is when the clock reaches the target
       let simNow;
       let eventEpoch;
@@ -1499,7 +1534,7 @@
         eventEpoch = s.startEpoch;
         endEpoch = s.startEpoch + 9000;
         title = 'Auto-start test';
-      } else if (kind === 'snap') {
+      } else if (kind === 'snap' || kind === 'real') {
         if (dur < cfg.snapSec + 2) { toast('This file ends before the snap point. Check the snap point in Setup.', 'bad'); return; }
         if (dur < atTarget + 2) { toast('This file is only ' + C.fmtDuration(dur) + ' long: with that start time it would be over before ' + targetWord(s) + '.', 'bad'); return; }
         // With a start time chosen by hand the snap comes before or after the target. Within 20 s of
@@ -1510,10 +1545,12 @@
         const first = both ? Math.min(s.targetEpoch, snapAt) : snapAt;
         const last = both ? Math.max(s.targetEpoch, snapAt) : snapAt;
         const lead = Math.min(leadSec, Math.max(3, (first - s.startEpoch) / 1000 - 1));
-        simNow = first - lead * 1000;
+        simNow = kind === 'real' ? realNow : first - lead * 1000;      // real time: nothing is simulated
         eventEpoch = last;
         endEpoch = last + (both ? Math.max(8000, Celebration.duration() + 1500) : 8000);
-        title = startMode === 'auto' ? 'Snap test' : 'Snap test · start at ' + C.fmtClockMs(s.startEpoch, cfg.use24h);
+        title = kind === 'real'
+          ? 'Real-time test · the snap at ' + C.fmtClockMs(snapAt, cfg.use24h) + (startMode === 'auto' ? '' : ' (start as ' + C.fmtClockMs(s.startEpoch, cfg.use24h) + ')')
+          : startMode === 'auto' ? 'Snap test' : 'Snap test · start at ' + C.fmtClockMs(s.startEpoch, cfg.use24h);
       } else {
         const pos = clamp(Math.min(cfg.snapSec * 0.5, dur * 0.4), Math.min(20, dur * 0.2), Math.max(1, dur - 60));
         simNow = s.startEpoch + pos * 1000;
@@ -1524,12 +1561,13 @@
       this.token++;
       this.dropWaiter();
       SnapCam.close();
-      if (kind === 'snap') SnapCam.watchTest(atTarget); else SnapCam.live = null;
+      if (kind === 'snap' || kind === 'real') SnapCam.watchTest(atTarget); else SnapCam.live = null;
       Clock.testOffsetMs = simNow - realNow;
       UI.prevNow = 0;                    // the clock jumped (maybe past the target): no celebration for that
       this.test = {
         kind: kind, title: title, t0: simNow, eventEpoch: eventEpoch, endEpoch: endEpoch, startMode: startMode, atTarget: atTarget, targetEpoch: s.targetEpoch,
-        snapAt: kind === 'snap' ? this.snapEpoch(s) : null,
+        snapAt: kind === 'snap' || kind === 'real' ? this.snapEpoch(s) : null,
+        quality0: null,                    // how smoothly the PC plays the film: measured once it is locked on
         wasArmed: wasArmed, prevSession: wasArmed ? real : null,
         eventDone: false, result: null, knockAt: 0, recoveredAt: 0, note: ''
       };
@@ -1546,6 +1584,9 @@
     tickTest(now) {
       const t = this.test;
       if (!t) return;
+      // Smoothness is measured from a second after the film locked on: the frames a decoder drops
+      // while it starts up after a jump say nothing about how the film plays.
+      if (!t.quality0 && this.phase === 'synced' && performance.now() - this.st.syncedAt > 1000) t.quality0 = playbackQuality();
       // Never let a rehearsal run into the real thing.
       if (t.wasArmed && t.prevSession.startEpoch - Clock.real() < 60000) { this.endTest('The real start time is near'); return; }
 
@@ -1568,7 +1609,7 @@
       if (t.kind === 'start' && t.eventDone && !t.result && performance.now() - t.eventAt > 6000) {
         t.result = { ok: false, title: 'Auto-start test', text: 'The movie did not start by itself. Phase: ' + this.phase + '.' };
       }
-      if (t.kind === 'snap' && t.eventDone && !t.result) {
+      if ((t.kind === 'snap' || t.kind === 'real') && t.eventDone && !t.result) {
         const d = this.st.drift;
         if (this.phase === 'synced' && d != null) {
           const late = Math.round((cfg.snapSec - t.atTarget) * 1000) / 1000;     // with this start, the snap comes this long after the target
@@ -1588,6 +1629,13 @@
           }
         } else if (performance.now() - t.eventAt > 2000) {
           t.result = { ok: false, title: t.title, text: 'The film was not in sync at ' + (Math.abs(cfg.snapSec - t.atTarget) < 0.0005 ? targetWord(this.session) : 'the snap') + ' (' + this.phase + ').' };
+        }
+        // How smoothly this PC played the film during the test: a file it cannot play smoothly
+        // would stutter and be re-synced on the night too.
+        if (t.result) {
+          const sm = smoothness(t.quality0, this.st.autoRecals);
+          t.result.text += ' ' + sm.text;
+          if (sm.lagged && t.result.ok !== false) { t.result.ok = false; t.result.strip = true; }
         }
       }
       if (t.kind === 'slip' && t.knockAt && !t.result && this.phase === 'synced' && this.st.drift != null && performance.now() - this.st.syncedAt > 1200) {
@@ -1612,10 +1660,10 @@
       if (Media.ready) { video.playbackRate = 1; if (!video.paused) video.pause(); }
       const result = t.result || { ok: null, title: t.title, text: why || 'Ended before the result was in.' };
       // A rehearsal counts for the start time in use (a Snap test can try another one).
-      if ((result.ok || result.rehearsed) && (t.kind !== 'snap' || Math.abs(t.atTarget - startLead()) < 0.0005)) { cfg.rehearsed[t.kind] = true; save(); }
+      if ((result.ok || result.rehearsed) && ((t.kind !== 'snap' && t.kind !== 'real') || Math.abs(t.atTarget - startLead()) < 0.0005)) { cfg.rehearsed[t.kind === 'real' ? 'snap' : t.kind] = true; save(); }
       UI.addTestResult(result);
       // After a Snap test that was on the clock: the frames that were on screen around the target moment.
-      if (t.kind === 'snap' && t.result && (t.result.ok || t.result.strip)) setTimeout(() => SnapCam.afterTest(t), 600); else SnapCam.live = null;
+      if ((t.kind === 'snap' || t.kind === 'real') && t.result && (t.result.ok || t.result.strip)) setTimeout(() => SnapCam.afterTest(t), 600); else SnapCam.live = null;
       this.logEvent('Test run ended: ' + result.text);
       this.graph.length = 0;
       if (t.wasArmed) {
@@ -2013,7 +2061,7 @@
       if (this.sink) { this.sink(perf, meta); return; }
       const L = this.live;
       const T = Engine.test;
-      if (!L || !T || T.kind !== 'snap') return;
+      if (!L || !T || (T.kind !== 'snap' && T.kind !== 'real')) return;
       const t = meta.mediaTime;
       if (!(t >= L.from && t <= L.to)) return;
       const list = L.frames;
@@ -3847,8 +3895,7 @@
       setText(el.smArmedNote, Engine.test && !cfg.armed ? 'End the test run to change the start time.' : 'Stop the countdown to change the start time.');
       // The fixed choice is 2:30:30 before the target: 9:29:30 PM for midnight.
       const classicAt = C.fmtClockMs(at('classic'), cfg.use24h);
-      const opt = el.tsStartMode.querySelector('option[value="classic"]');
-      if (opt) setText(opt, 'Start at ' + classicAt);
+      [el.tsStartMode, el.tsRealStart].forEach((sel) => { const opt = sel.querySelector('option[value="classic"]'); if (opt) setText(opt, 'Start at ' + classicAt); });
       setText(el.smClassicWhat, isNewYearMoment(target) ? ', the time everybody quotes' : ', 2:30:30 before the target');
       setText(el.smAutoAt, C.fmtClockMs(at('auto'), cfg.use24h));
       setText(el.smAutoNote, 'Set by the snap point of this file, ' + fmtFilm(cfg.snapSec) + (snapConfirmed() ? '' : ' (not confirmed yet)') + ': ' + lands('auto') + '.');
@@ -4243,13 +4290,13 @@
       const end = t.endEpoch || t.eventEpoch + 20000;
       const span = Math.max(1, end - t.t0);
       el.thFill.style.width = (clamp((now - t.t0) / span, 0, 1) * 100).toFixed(1) + '%';
-      const mark = t.kind === 'snap' && t.snapAt != null ? t.snapAt : t.eventEpoch;
+      const mark = (t.kind === 'snap' || t.kind === 'real') && t.snapAt != null ? t.snapAt : t.eventEpoch;
       el.thMark.style.left = (clamp((mark - t.t0) / span, 0, 1) * 100).toFixed(1) + '%';
       const left = t.eventEpoch - now;
       let note;
       if (t.result) note = (t.result.ok ? 'PASS: ' : t.result.ok === false ? 'FAIL: ' : '') + t.result.text;
       else if (t.kind === 'start') note = left > 0 ? 'Auto-start in ' + C.countdownParts(left).total + ' s. Hands off.' : 'Measuring…';
-      else if (t.kind === 'snap') {
+      else if (t.kind === 'snap' || t.kind === 'real') {
         // With a start time chosen by hand the snap and the target are two moments: the snap first if it comes first.
         const toSnapMs = t.snapAt != null ? t.snapAt - now : left;
         note = toSnapMs > 0 ? 'Snap in ' + C.countdownParts(toSnapMs).total + ' s' : left > 0 ? targetWord(Engine.session).replace(/^m/, 'M') + ' in ' + C.countdownParts(left).total + ' s' : 'Measuring…';
@@ -4562,8 +4609,9 @@
     /* test tab */
     $$('[data-test]').forEach((b) => b.addEventListener('click', () => {
       const kind = b.dataset.test;
-      const lead = kind === 'start' ? +el.tsLeadStart.value : kind === 'snap' ? +el.tsLeadSnap.value : 0;
-      Engine.startTest(kind, lead, kind === 'snap' && el.tsStartMode.value !== 'set' ? el.tsStartMode.value : undefined);
+      const lead = kind === 'start' ? +el.tsLeadStart.value : kind === 'snap' ? +el.tsLeadSnap.value : kind === 'real' ? +el.tsRealLead.value : 0;
+      const pick = kind === 'snap' ? el.tsStartMode.value : kind === 'real' ? el.tsRealStart.value : 'set';
+      Engine.startTest(kind, lead, pick !== 'set' ? pick : undefined);
     }));
     el.thEnd.addEventListener('click', () => Engine.endTest('Stopped by you.'));
     el.crashBtn.addEventListener('click', () => {
@@ -4732,7 +4780,7 @@
         if (cfg.startMode !== 'own') return;
       }
       UI.showTab('test');
-      Engine.startTest('snap', 20);
+      Engine.startTest('real', 45);       // on the real clock: nothing simulated
     });
     el.startTimeLink.addEventListener('click', () => { UI.showTab('setup'); el.startSec.scrollIntoView({ block: 'start' }); });
     el.tgNewYear.addEventListener('change', setTarget);
