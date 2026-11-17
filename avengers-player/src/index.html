@@ -221,6 +221,7 @@
           <div><span id="ktSnapLbl">The snap lands</span><b id="ktSnap">—</b></div>
           <div><span>Snap point in your file</span><b id="ktPoint">2:30:30</b></div>
         </div>
+        <button id="startTimeLink" class="link" type="button">Start time: automatic · change</button>
 
         <button id="armBtn" class="btn btn-primary btn-xl" type="button">START THE COUNTDOWN</button>
         <p class="hint" id="armHint">Press it any day: the movie waits for December 31 and starts itself. Use the <b>Test</b> tab to rehearse right now.</p>
@@ -283,8 +284,9 @@
         </div>
         <div class="tcard">
           <h4><span>2</span>Snap test</h4>
-          <p>Jumps to just before midnight. Watch the snap land on 12:00:00, the date roll over to January 1 and the celebration. Afterwards the app shows the frames that were on screen around 12:00:00: if his fingers snap on another frame, one click moves the snap point there.</p>
+          <p>Jumps to just before midnight. Watch the snap land on 12:00:00, the date roll over to January 1 and the celebration. Afterwards the app shows the frames that were on screen around 12:00:00: if his fingers snap on another frame, one click moves the snap point there. Pick a start time to try it: the test says exactly where the snap lands with it.</p>
           <div class="row">
+            <select id="tsStartMode" aria-label="Start time for this test"><option value="set" selected>Start time as set</option><option value="auto">Automatic start</option><option value="classic">Start at 9:29:30 PM</option></select>
             <select id="tsLeadSnap" aria-label="Seconds before the snap"><option value="20">20 s before</option><option value="40" selected>40 s before</option><option value="75">75 s before</option><option value="150">2½ min before</option></select>
             <button class="btn btn-primary btn-sm" data-test="snap" type="button">Run</button>
           </div>
@@ -421,6 +423,24 @@
           <button id="snapCopy" class="link" type="button">Copy the details of this snap point</button>
         </div>
         <p class="hint" id="snapArmedNote" hidden>Stop the countdown to calibrate the snap point.</p>
+
+        <h3 class="sec" id="startSec">Start time</h3>
+        <p class="hint">When the movie starts. <b>Automatic</b> is set by the snap the app found in your file, so the snap lands on midnight. Any other start time moves the snap off midnight by the same amount; the Snap test shows you exactly where it lands.</p>
+        <label class="rad tall"><input type="radio" name="sm" id="smAuto" value="auto"><span>Automatic: <b id="smAutoAt">—</b> (recommended)<small id="smAutoNote">&nbsp;</small></span></label>
+        <label class="rad tall"><input type="radio" name="sm" id="smClassic" value="classic"><span><b id="smClassicAt">9:29:30 PM</b>, the time everybody quotes<small id="smClassicNote">&nbsp;</small></span></label>
+        <label class="rad tall"><input type="radio" name="sm" id="smOwn" value="own"><span>My own start time<small id="smOwnNote">&nbsp;</small></span></label>
+        <div class="snaprow">
+          <input id="smOwnInput" class="inp mono" type="text" spellcheck="false" aria-label="Your own start time" value="9:29:30 PM">
+          <button id="smOwnApply" class="btn btn-ghost btn-sm" type="button">Set</button>
+        </div>
+        <div class="nudge">
+          <button id="smOwnMinus1" class="btn btn-ghost btn-sm" type="button" title="Start one second earlier">−1 s</button>
+          <button id="smOwnMinus01" class="btn btn-ghost btn-sm" type="button" title="Start a tenth of a second earlier">−0.1 s</button>
+          <button id="smOwnPlus01" class="btn btn-ghost btn-sm" type="button" title="Start a tenth of a second later">+0.1 s</button>
+          <button id="smOwnPlus1" class="btn btn-ghost btn-sm" type="button" title="Start one second later">+1 s</button>
+        </div>
+        <button id="smTest" class="btn btn-ghost btn-wide" type="button">Test this start time (Snap test)</button>
+        <p class="hint" id="smArmedNote" hidden>Stop the countdown to change the start time.</p>
 
         <h3 class="sec">Sound language</h3>
         <label class="fld"><span>Preferred language</span><select id="optAudioLang"></select></label>

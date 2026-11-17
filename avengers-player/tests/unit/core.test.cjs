@@ -81,6 +81,38 @@ test('the film\'s time ticks with the clock and shows the snap\'s second at midn
   }
 });
 
+test('start times: typed the way people type them', () => {
+  const P = (x) => { const r = C.parseClockTime(x); return r ? Math.round(r.sec * 1000) / 1000 + (r.h12 ? '?' : '') : null; };
+  assert.equal(P('9:29:30'), (9 * 3600 + 29 * 60 + 30) + '?');
+  assert.equal(P('9:29:30 PM'), String(21 * 3600 + 29 * 60 + 30));
+  assert.equal(P('9:29:30pm'), String(21 * 3600 + 29 * 60 + 30));
+  assert.equal(P(' 9:29:29.5 p.m. '), String(21 * 3600 + 29 * 60 + 29.5));
+  assert.equal(P('21:29:30.250'), String(21 * 3600 + 29 * 60 + 30.25));
+  assert.equal(P('9:29 PM'), String(21 * 3600 + 29 * 60));
+  assert.equal(P('12:00:00 AM'), '0');
+  assert.equal(P('12:00:00 PM'), String(12 * 3600));
+  assert.equal(P('0:00:01'), '1');
+  for (const bad of ['', 'nine', '25:00:00', '9:60:00', '9:29:61', '13:00 PM', '0:10 AM', '9:29:30 XM', '9:29:30 M']) assert.equal(C.parseClockTime(bad), null, bad);
+});
+
+test('start times: seconds before the target, the reading that fits the film', () => {
+  const T = new Date(2027, 0, 1, 0, 0, 0, 0).getTime();         // New Year's midnight
+  const lead = (x, max) => C.leadForStartTime(C.parseClockTime(x), T, 60, max || 6 * 3600);
+  assert.equal(lead('9:29:30'), 9030, '9:29:30 is the evening before midnight');
+  assert.equal(lead('9:29:30 PM'), 9030);
+  assert.equal(lead('21:29:28.332'), 9031.668);
+  assert.equal(lead('9:29:29.5'), 9030.5);
+  assert.ok(Number.isNaN(lead('9:29:30 AM')), 'the morning is too long before midnight');
+  assert.ok(Number.isNaN(lead('11:59:30 PM')), 'thirty seconds before is too short');
+  assert.ok(Number.isNaN(C.leadForStartTime(null, T, 60, 9999)));
+  // A target in the afternoon: the start is the same day.
+  const T2 = new Date(2026, 11, 20, 15, 0, 0, 0).getTime();
+  assert.equal(C.leadForStartTime(C.parseClockTime('12:29:30'), T2, 60, 6 * 3600), 9030);
+  assert.equal(C.fmtClockMs(T - 9031668, false), '9:29:28.332 PM');
+  assert.equal(C.fmtClockMs(T - 9030000, false), '9:29:30 PM');
+  assert.equal(C.fmtClockMs(T - 9030000, true), '21:29:30');
+});
+
 test('clock formatting, 12 and 24 hour', () => {
   assert.equal(C.fmtClock(new Date(2026, 11, 31, 21, 29, 30), false), '9:29:30 PM');
   assert.equal(C.fmtClock(new Date(2026, 11, 31, 21, 29, 30), true), '21:29:30');

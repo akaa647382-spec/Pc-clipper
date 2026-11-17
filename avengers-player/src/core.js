@@ -999,6 +999,63 @@
     return p.ampm ? p.hms + ' ' + p.ampm : p.hms;
   }
 
+  /** "9:29:28.332 PM", or "9:29:30 PM" when the milliseconds are zero. */
+  function fmtClockMs(epochMs, use24) {
+    if (!isFinite(epochMs)) return '—';
+    const d = new Date(epochMs);
+    const p = clockParts(d, use24);
+    const ms = d.getMilliseconds();
+    return p.hms + (ms ? '.' + String(ms).padStart(3, '0') : '') + (p.ampm ? ' ' + p.ampm : '');
+  }
+
+  /**
+   * A time of day as people type it: "9:29:30", "9:29:29.5 PM", "21:29:30.250", "9:29 pm".
+   * Returns { sec: seconds after midnight (with the fraction), h12: true when it was typed
+   * without AM/PM and could be either } or null.
+   */
+  function parseClockTime(str) {
+    const m = /^\s*(\d{1,2})[:.](\d{2})(?:[:.](\d{2})(?:[.,](\d{1,3}))?)?(?:\s*([AaPp])\.?\s*[Mm]\.?)?\s*$/.exec(String(str == null ? '' : str));
+    if (!m) return null;
+    let h = +m[1];
+    const mi = +m[2];
+    const se = m[3] != null ? +m[3] : 0;
+    const frac = m[4] != null ? +('0.' + m[4]) : 0;
+    if (mi > 59 || se > 59) return null;
+    const ap = m[5] ? m[5].toUpperCase() : '';
+    if (ap) {
+      if (h < 1 || h > 12) return null;
+      h = (h % 12) + (ap === 'P' ? 12 : 0);
+    } else if (h > 23) {
+      return null;
+    }
+    return { sec: h * 3600 + mi * 60 + se + frac, h12: !ap && h >= 1 && h <= 12 };
+  }
+
+  /**
+   * How many seconds before `targetMs` a start at the typed time of day (from parseClockTime) is:
+   * the last such moment before the target. A time typed without AM/PM (9:29:30) is read the way
+   * that leaves between minLead and maxLead seconds; if both readings do, the nearer one.
+   * NaN when no reading fits.
+   */
+  function leadForStartTime(parsed, targetMs, minLead, maxLead) {
+    if (!parsed || !isFinite(targetMs)) return NaN;
+    const readings = [parsed.sec];
+    if (parsed.h12) readings.push((parsed.sec + 12 * 3600) % 86400);
+    const t = new Date(targetMs);
+    let best = NaN;
+    for (const sec of readings) {
+      const whole = Math.floor(sec + 1e-9);
+      const ms = Math.round((sec - whole) * 1000);
+      const at = (dayShift) => new Date(t.getFullYear(), t.getMonth(), t.getDate() + dayShift,
+        Math.floor(whole / 3600), Math.floor(whole / 60) % 60, whole % 60, ms).getTime();
+      let start = at(0);
+      if (start >= targetMs) start = at(-1);
+      const lead = (targetMs - start) / 1000;
+      if (lead >= minLead && lead <= maxLead && !(lead >= best)) best = lead;
+    }
+    return best;
+  }
+
   /** "Thu, Dec 31 · 9:29:30 PM" */
   function fmtDateTime(epochMs, use24) {
     if (!isFinite(epochMs)) return '—';
@@ -1025,9 +1082,12 @@
 
   /**
    * Everything the player needs to know about one viewing:
-   *   targetEpoch  wall-clock instant the snap must land on
+   *   targetEpoch  wall-clock instant of the target (midnight)
    *   startEpoch   wall-clock instant the film must be at 0:00
    *   endEpoch     wall-clock instant the film ends (null while the duration is unknown)
+   *   snapSec      where the film is when the clock reaches the target: the snap point of the
+   *                file (the snap lands on the target), or 2:30:30 or the user's own choice when
+   *                the start time was chosen by hand
    */
   function computeSession(o) {
     const snapMs = Math.round(o.snapSec * 1000);
@@ -1131,6 +1191,7 @@
     percentile: percentile, speechScore: speechScore, cueTimeline: cueTimeline, speechPlan: speechPlan, alignCues: alignCues, SUB_SCALES: SUB_SCALES, betterFit: betterFit, ALIGN: ALIGN,
     MONTHS: MONTHS, MONTHS_LONG: MONTHS_LONG, DAYS: DAYS, DAYS_LONG: DAYS_LONG,
     clamp: clamp, pad: pad, median: median, untilClockSecond: untilClockSecond, filmSecondOnClock: filmSecondOnClock, FILM_SPAN: FILM_SPAN,
+    fmtClockMs: fmtClockMs, parseClockTime: parseClockTime, leadForStartTime: leadForStartTime,
     fmtDuration: fmtDuration, parseDuration: parseDuration,
     countdownParts: countdownParts, fmtCountdown: fmtCountdown,
     clockParts: clockParts, fmtClock: fmtClock, fmtDateTime: fmtDateTime, dateKey: dateKey,

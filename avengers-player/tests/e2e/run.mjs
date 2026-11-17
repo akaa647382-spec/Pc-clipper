@@ -2346,6 +2346,124 @@ const scenarios = {
     } finally { await s.close(); }
   },
 
+  async starttime() {
+    // The start time can be chosen: automatic (the snap in the file decides), 9:29:30 PM, or one's
+    // own. Every countdown follows the choice, and the Snap test says where the snap lands with it.
+    // ENDGAME's flash begins at 2:30:31.667: the automatic start is 9:29:28.332 PM.
+    const ENDGAME = path.join(MEDIA, 'original-length.mp4');
+    if (!fs.existsSync(ENDGAME)) { console.log('  note  long test clips missing: run scripts/make-test-media.sh'); return; }
+    const g = (page) => page.evaluate(() => {
+      const t = (id) => document.getElementById(id).textContent;
+      const se = window.__AP.Engine.session;
+      return {
+        mode: window.__AP.cfg.startMode, own: window.__AP.cfg.startOwnSec, start: t('ktStart'), lands: t('ktSnap'), landsLbl: t('ktSnapLbl'), link: t('startTimeLink'),
+        autoAt: t('smAutoAt'), autoNote: t('smAutoNote'), classicAt: t('smClassicAt'), classicNote: t('smClassicNote'), ownNote: t('smOwnNote'),
+        ownInput: document.getElementById('smOwnInput').value, preflight: t('preflight'), lead: se ? se.targetEpoch - se.startEpoch : null
+      };
+    });
+    const shows = (page, id, re) => waitFor(page, ({ id, src }) => new RegExp(src).test(document.getElementById(id).textContent), { id, src: re.source }, 5000);
+    const results = (page) => page.textContent('#testResults');
+    const s = await launch(newProfile());
+    try {
+      // A 3:20 clip cannot start at 9:29:30 PM: it would be over long before midnight.
+      await loadMovie(s.page, MOVIE);
+      await s.page.click('.tab[data-tab="setup"]');
+      await s.page.check('#smClassic');
+      await s.page.click('.tab[data-tab="mission"]');
+      check('a 3:20 clip with 9:29:30 PM chosen: the pre-flight list says it does not fit', await shows(s.page, 'preflight', /The start time you chose does not fit this file/));
+      await s.page.click('#armBtn');
+      await sleep(600);
+      check('and the countdown is not started', (await state(s.page)).mode === 'free');
+      await s.page.click('.tab[data-tab="setup"]');
+      await s.page.check('#smAuto');
+
+      // ENDGAME, its snap point on the first frame of the flash and confirmed.
+      await loadMovie(s.page, ENDGAME);
+      if (await waitFor(s.page, () => !document.getElementById('modal').hidden && /Finding the snap/.test(document.getElementById('modalTitle').textContent), null, 15000)) {
+        await s.page.click('#modalActions button');
+        await waitFor(s.page, () => !window.__AP.SnapCam.busy && document.getElementById('modal').hidden, null, 8000);
+      }
+      await setSnap(s.page, '2:30:31.668');
+      await s.page.evaluate(() => window.__AP.Versions.confirm());
+      await sleep(300);
+      let v = await g(s.page);
+      check('automatic: the movie starts at 9:29:28 PM and the snap lands on midnight', v.mode === 'auto' && /Dec 31 · 9:29:28 PM/.test(v.start) && /Jan 1 · 12:00:00 AM/.test(v.lands) &&
+        v.landsLbl === 'The snap lands on midnight' && v.link === 'Start time: automatic · change' && v.lead === 9031668, JSON.stringify(v));
+      await s.page.click('#startTimeLink');
+      check('“Start time · change” opens Setup', await waitFor(s.page, () => document.getElementById('pane-setup').classList.contains('on'), null, 2000));
+      v = await g(s.page);
+      check('Setup shows the start times and where the snap lands with each', v.autoAt === '9:29:28.332 PM' && /2:30:31\.668: the snap lands on midnight/.test(v.autoNote) &&
+        v.classicAt === '9:29:30 PM' && /the snap lands 1\.668 s after midnight/.test(v.classicNote), JSON.stringify(v));
+
+      // 9:29:30 PM.
+      await s.page.check('#smClassic');
+      const shown = await shows(s.page, 'ktStart', /Dec 31 · 9:29:30 PM/);       // the panel is redrawn on the next frame
+      v = await g(s.page);
+      check('9:29:30 PM chosen: the movie starts at 9:29:30 PM', shown && v.mode === 'classic' && v.lead === 9030000, JSON.stringify(v));
+      await s.page.click('.tab[data-tab="mission"]');
+      check('the Mission tab says where the snap lands: 1.668 s after midnight', await shows(s.page, 'ktSnap', /^1\.668 s after midnight$/) && await shows(s.page, 'startTimeLink', /^Start time: 9:29:30 PM · change$/), (await g(s.page)).lands);
+      check('and the pre-flight list says the start was chosen by hand', await shows(s.page, 'preflight', /Start time chosen by hand: 9:29:30 PMWith this file the snap lands 1\.668 s after midnight/), (await g(s.page)).preflight.slice(0, 400));
+
+      // The Snap test with that start time says where the snap lands, and the strip shows it.
+      await s.page.click('.tab[data-tab="test"]');
+      await s.page.selectOption('#tsLeadSnap', '20');
+      await s.page.click('[data-test="snap"]');
+      check('Snap test with 9:29:30 PM: it locks on', await waitSynced(s.page, 12000));
+      check('its result: the snap came 1.668 s after midnight', await waitFor(s.page, () => /With this start time the snap came 1\.668 s after midnight/.test(document.getElementById('testResults').textContent), null, 60000), await results(s.page));
+      check('the strip opens', await stripOpen(s.page, 60000));
+      let f = await stripView(s.page);
+      const clockAt = await s.page.evaluate(() => { const v = window.__AP.SnapCam.view; const i = Array.from(document.getElementById('stripRow').children).findIndex((b) => b.classList.contains('has-clock')); return i >= 0 ? v.frames[i].t : null; });
+      check('it shows the frame on screen at 12:00:00 (2:30:30) and the snap point, 1.67 s later', /^The snap came 1\.6\d\d s after 12:00:00$/.test(f.title) && clockAt != null && Math.abs(clockAt - 9030) < 0.17 &&
+        f.tags.includes('now:SNAP POINT') && /This test started the movie at 9:29:30 PM\. At 12:00:00 the film was at 2:30:30\.000/.test(f.note) && /The automatic start, 9:29:28\.332 PM, puts it on 12:00:00/.test(f.note),
+        f.title + ' | clock frame ' + clockAt + ' | ' + f.tags.join(',') + ' | ' + f.note.slice(0, 300));
+      await shot(s.page, 'starttime-classic-strip');
+      await s.page.keyboard.press('Escape');
+      await stripClosed(s.page);
+      check('and the setting is still 9:29:30 PM', (await g(s.page)).mode === 'classic');
+
+      // One's own time, typed without AM/PM: the evening is the reading that fits.
+      await s.page.click('.tab[data-tab="setup"]');
+      await s.page.fill('#smOwnInput', '9:29:29.5');
+      await s.page.press('#smOwnInput', 'Enter');
+      v = await g(s.page);
+      check('own time 9:29:29.5: the snap lands 1.168 s after midnight', v.mode === 'own' && v.own === 9030.5 && /Starts at 9:29:29\.500 PM: the snap lands 1\.168 s after midnight/.test(v.ownNote), JSON.stringify(v));
+      await s.page.click('#smOwnMinus1');
+      await s.page.click('#smOwnPlus01');
+      v = await g(s.page);
+      check('−1 s, then +0.1 s: 9:29:28.600 PM, the snap lands 0.268 s after midnight', v.own === 9031.4 && /Starts at 9:29:28\.600 PM: the snap lands 0\.268 s after midnight/.test(v.ownNote), JSON.stringify(v));
+      await s.page.fill('#smOwnInput', '11:59:50 PM');
+      await s.page.press('#smOwnInput', 'Enter');
+      check('a start ten seconds before midnight is refused', (await g(s.page)).own === 9031.4 && await s.page.evaluate(() => document.getElementById('smOwnInput').classList.contains('bad')));
+
+      // The Snap test can try the automatic start without changing the setting.
+      await s.page.click('.tab[data-tab="test"]');
+      await s.page.selectOption('#tsStartMode', 'auto');
+      await s.page.click('[data-test="snap"]');
+      check('Snap test with the automatic start: the snap frame hits midnight', await waitFor(s.page, () => /PASS · Snap test/.test(document.getElementById('testResults').firstChild.textContent) && /The snap frame hit midnight/.test(document.getElementById('testResults').firstChild.textContent), null, 60000), await results(s.page));
+      check('the strip says it landed on 12:00:00', await stripOpen(s.page, 60000) && /^The snap landed on 12:00:00$/.test((await stripView(s.page)).title), (await stripView(s.page) || {}).title);
+      await s.page.keyboard.press('Escape');
+      await stripClosed(s.page);
+      check('and one\'s own time is still the one set', (await g(s.page)).mode === 'own' && (await g(s.page)).own === 9031.4);
+
+      // Armed with one's own start time: the countdown counts to it, and it cannot be changed.
+      await s.page.click('.tab[data-tab="mission"]');
+      await s.page.click('#armBtn');
+      check('armed with my own start time: nothing is asked, it waits for 9:29:28.6 PM', await waitPhase(s.page, 'standby', 6000) && (await g(s.page)).lead === 9031400, JSON.stringify(await g(s.page)));
+      check('while armed the start time cannot be changed', await s.page.isDisabled('#smClassic') && await s.page.isDisabled('#smOwnInput'));
+      await s.page.click('#armBtn');
+      await s.page.click('#armBtn');
+      check('stopped', await waitFor(s.page, () => window.__AP.Engine.mode === 'free', null, 4000));
+
+      // Back to automatic.
+      await s.page.click('.tab[data-tab="setup"]');
+      await s.page.check('#smAuto');
+      const back = await shows(s.page, 'ktSnap', /Jan 1 · 12:00:00 AM/) && await shows(s.page, 'ktStart', /Dec 31 · 9:29:28 PM/);
+      v = await g(s.page);
+      check('back to automatic: 9:29:28 PM, the snap on midnight', back && v.mode === 'auto' && v.landsLbl === 'The snap lands on midnight' && v.lead === 9031668, JSON.stringify(v));
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally { await s.close(); }
+  },
+
   async anycopy() {
     // Copies of the film come in any length. A 3:20:00 copy whose snap is four minutes later than in
     // the 2019 film is searched by itself, as far as its extra length reaches; a copy named as the

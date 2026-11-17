@@ -530,6 +530,13 @@ select.inline { padding: 2px 4px; font-size: 12px; }
 .inp.bad { border-color: var(--danger); }
 .rad { display: flex; gap: 10px; align-items: center; padding: 6px 0; font-size: 13px; cursor: pointer; }
 .rad input { accent-color: var(--acc); width: 16px; height: 16px; margin: 0; }
+.rad.tall { align-items: flex-start; }
+.rad.tall input { margin-top: 2px; flex: none; }
+.rad small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+.rad + .snaprow, .snaprow + .nudge { margin-top: 8px; }
+#smTest { margin-top: 10px; }
+#startTimeLink { display: block; margin: -6px 0 10px; }
+.kt b.off { color: var(--warn, #e0a030); }
 #tgCustomInput { width: 100%; margin-top: 6px; color-scheme: dark; }
 #tgCustomInput:disabled { opacity: .4; }
 .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--line2); border-radius: 10px; overflow: hidden; }
