@@ -112,6 +112,7 @@
       if (DEFAULTS[k] === null || typeof v === typeof DEFAULTS[k]) c[k] = v;
     }
     if (!(c.snapSec > 0 && c.snapSec < 86400)) c.snapSec = DEFAULTS.snapSec;
+    if (c.theme === 'hotrod') c.theme = 'tva';          // Hot Rod became the TVA theme
     if (!['auto', 'classic', 'own'].includes(c.startMode)) c.startMode = 'auto';
     if (!(c.startOwnSec >= 60 && c.startOwnSec <= 6 * 3600)) c.startOwnSec = DEFAULTS.startOwnSec;
     if (!(c.volume >= 0 && c.volume <= 1)) c.volume = 1;
@@ -3605,7 +3606,7 @@
 
   const THEMES = [
     { id: 'arc', name: 'Arc Reactor', c: ['#070c16', '#5fe3ff', '#f6c453'] },
-    { id: 'hotrod', name: 'Hot Rod', c: ['#1b0a0d', '#e02b35', '#ffc24a'] },
+    { id: 'tva', name: 'TVA', c: ['#1d130a', '#c8622a', '#f4a23c'] },
     { id: 'infinity', name: 'Infinity', c: ['#140d26', '#6b3df0', '#c19cff'] },
     { id: 'gamma', name: 'Gamma', c: ['#0a1b11', '#12b85a', '#d8ff5a'] },
     { id: 'stealth', name: 'Stealth', c: ['#131316', '#a0a0ac', '#f2f2f4'] },

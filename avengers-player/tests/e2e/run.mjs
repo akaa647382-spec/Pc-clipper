@@ -2192,14 +2192,14 @@ const scenarios = {
       await loadMovie(s.page, MOVIE);
       await s.page.click('.tab[data-tab="display"]');
       const themes = await s.page.$$eval('#themeGrid .theme', (n) => n.map((b) => b.dataset.id));
-      check('six app themes are offered', themes.length === 6, themes.join(','));
+      check('seven app themes are offered, TVA and Doom among them', themes.join(',') === 'arc,tva,infinity,gamma,stealth,midnight,doom', themes.join(','));
       for (const id of themes) {
         await s.page.click('#themeGrid .theme[data-id="' + id + '"]');
         await sleep(250);
         await shot(s.page, 'theme-' + id);
       }
-      await s.page.click('#themeGrid .theme[data-id="hotrod"]');
-      check('choosing a theme restyles the app', await s.page.evaluate(() => document.documentElement.dataset.theme === 'hotrod'));
+      await s.page.click('#themeGrid .theme[data-id="tva"]');
+      check('choosing a theme restyles the app', await s.page.evaluate(() => document.documentElement.dataset.theme === 'tva' && getComputedStyle(document.documentElement).getPropertyValue('--acc').trim() === '#f4a23c'));
       const hidden = (id) => waitFor(s.page, (id) => document.getElementById(id).hidden, id, 2000);
       const shown = (id) => waitFor(s.page, (id) => !document.getElementById(id).hidden, id, 2000);
       await s.page.keyboard.press('o');
@@ -2240,7 +2240,7 @@ const scenarios = {
       s = await launch(profile);
       await waitFor(s.page, () => window.__AP.Media.ready, null, 15000);
       const kept = await s.page.evaluate(() => ({ theme: document.documentElement.dataset.theme, snap: window.__AP.cfg.snapSec, view: document.getElementById('app').dataset.view }));
-      check('settings and the last movie survive a restart', kept.theme === 'hotrod' && kept.snap === 83.5 && kept.view === 'player', JSON.stringify(kept));
+      check('settings and the last movie survive a restart', kept.theme === 'tva' && kept.snap === 83.5 && kept.view === 'player', JSON.stringify(kept));
       check('no page errors', s.errors.length === 0, s.errors.join(' | '));
     } finally { await s.close(); }
   },
