@@ -2648,7 +2648,16 @@ const scenarios = {
       // (The film's time on screen changes with the clock's seconds: 5 minutes after 9:29:28.332 PM it reads 0:04:59 until the clock reaches 9:34:29.)
       check('it says the movie should be at 0:04:59 or 0:05:0x', /You are late to the countdown/.test(v.title) && /Right now it should be at 0:0(4:59|5:0\d)\./.test(v.body), v.title + ' | ' + v.body);
       check('the test bar asks for JOIN NOW, the big button joins, the status reads LATE', v.hud && /press JOIN NOW/.test(v.note) && v.arm === 'JOIN THE MOVIE NOW' && !v.armOff && v.label === 'TEST RUN · LATE · NOT ARMED', JSON.stringify(v));
-      await sleep(1200);
+      // Setup is locked while the test runs, as while armed: the real countdown must not change under it.
+      await s.page.click('.tab[data-tab="setup"]');
+      await sleep(400);
+      const lock = await s.page.evaluate(() => ({ off: document.getElementById('snapTools').classList.contains('disabled'), note: document.getElementById('snapArmedNote').textContent, shown: !document.getElementById('snapArmedNote').hidden }));
+      await s.page.fill('#snapInput', '2:00:00', { force: true });
+      await s.page.press('#snapInput', 'Enter');
+      const kept = await s.page.evaluate(() => Math.abs(window.__AP.cfg.snapSec - 9031.668) < 1e-6);
+      check('Setup is locked during the test: the snap point stays as it was', lock.off && lock.shown && /End the test run/.test(lock.note) && kept, JSON.stringify(lock) + ' kept=' + kept);
+      await s.page.click('.tab[data-tab="test"]');
+      await sleep(800);
       await s.page.click('#lateBtn');
       check('JOIN NOW: the film locks onto the clock', await waitSynced(s.page, 10000));
       const m = await measureSync(s.page, 1500);

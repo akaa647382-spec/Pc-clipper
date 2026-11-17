@@ -1015,7 +1015,7 @@
 
     /** The user picks a cut. `factory` goes back to the round figure even when a better one is known. */
     choose(id, factory) {
-      if (Engine.mode === 'armed') { toast('Stop the countdown to change the film version'); UI.renderSettings(); return; }
+      if (Engine.mode === 'armed' || Engine.test) { toast(Engine.test ? 'End the test run to change the film version' : 'Stop the countdown to change the film version'); UI.renderSettings(); return; }
       const v = C.filmVersion(id);
       cfg.filmVersion = v.id;
       if (v.snapSec != null) cfg.snapSec = factory ? v.snapSec : SnapMemory.startFor(v);
@@ -1281,6 +1281,7 @@
       SnapCam.cancelled = true;
       SnapCam.live = null;
       SnapCam.close();
+      if (this.test && this.test.kind === 'late') Late.dismissedFor = this.test.prevDismissed;
       if (this.test) { Clock.testOffsetMs = 0; UI.prevNow = 0; this.test = null; UI.onTest(); }
       this.mode = 'free';
       Celebration.stop();
@@ -1625,6 +1626,8 @@
           const by = clamp(Math.round(+opts.by || 300), 1, 12 * 3600);
           if (by > dur - 40) { toast('This file is only ' + C.fmtDuration(dur) + ' long: pick a shorter delay.', 'bad'); return; }
           simNow = s.startEpoch + by * 1000;
+          // After New Year's midnight there is nothing left to join (see Late.position).
+          if (isNewYearMoment(s.targetEpoch) && simNow > s.targetEpoch - 10000) { toast('With this start time that is already past ' + targetWord(s) + ': pick a shorter delay.', 'bad'); return; }
           eventEpoch = simNow;
           title = 'Late start test · ' + fmtLate(by) + ' late';
         }
@@ -1777,6 +1780,7 @@
       if (!t.joined) {
         this.session = t.session;       // nothing may move it while it waits (a time check, another snap point)
         if (t.watchSnap && now >= t.eventEpoch) this.endTest('JOIN NOW was not pressed before ' + targetWord(t.session) + '.');
+        else if (Late.position(now) == null) this.endTest('At this point there is nothing left to join (the end of the file, or past ' + targetWord(t.session) + ').');
         else if (now - t.t0 > 5 * 60000) this.endTest('JOIN NOW was not pressed within five minutes.');
         return;
       }
@@ -1784,6 +1788,7 @@
       const m = this.mark;
       if (!t.lockedAt && this.phase === 'synced' && m && m.firstDrift != null) {
         t.lockedAt = p;
+        t.startedClock = m.epoch;                             // the clock's instant the film started on its mark
         t.firstDrift = m.firstDrift;                          // the first measurement with the film running
         t.pos = m.pos;                                        // where the film was sent
         t.took = (this.st.syncedAt - t.joinedAt) / 1000;      // from JOIN NOW to play, pressed on the clock's mark
@@ -1796,7 +1801,7 @@
       const resyncs = this.st.autoRecals ? ' (re-synced ' + this.st.autoRecals + ' time' + (this.st.autoRecals > 1 ? 's' : '') + ' on the way)' : '';
       if (t.watchSnap) {
         if (t.eventDone && t.lockedAt) {
-          if (t.lockedAt > t.eventAt) {
+          if (t.startedClock > t.eventEpoch) {
             t.result = { ok: false, title: t.title, text: how() + ' That was after ' + targetWord(t.session) + ': JOIN NOW came too late to see the snap.' };
           } else {
             const v = this.snapVerdict(t);
@@ -4376,7 +4381,7 @@
           'One look settles it: press “Play from 10 s before” below and watch for the snap.');
       }
       const later = Versions.laterSnap();
-      const canTry = later != null && Engine.mode !== 'armed' && Math.abs(cfg.snapSec - later) > 0.5;
+      const canTry = later != null && Engine.mode !== 'armed' && !Engine.test && Math.abs(cfg.snapSec - later) > 0.5;
       setHidden(el.snapShiftTry, !canTry);
       if (canTry) setText(el.snapShiftTry, 'Snap not there? Try ' + C.fmtDuration(later, { forceHours: true }) + ' (' + fmtSpan(extra) + ' later)');
       $$('button', el.optCelebration).forEach((b) => b.classList.toggle('on', b.dataset.v === cfg.celebration));
@@ -4853,9 +4858,10 @@
     },
 
     renderSetupLive() {
-      const armed = Engine.mode === 'armed';
+      const armed = Engine.mode === 'armed' || !!Engine.test;      // (the late test runs with nothing armed)
       el.snapTools.classList.toggle('disabled', armed || !Media.ready);
       setHidden(el.snapArmedNote, !armed);
+      setText(el.snapArmedNote, Engine.test ? 'End the test run to calibrate the snap point.' : 'Stop the countdown to calibrate the snap point.');
       const t = Media.ready ? video.currentTime : 0;
       setText(el.snapNow, C.fmtDuration(t, { ms: true, forceHours: true }));
     },
@@ -4913,7 +4919,7 @@
 
   function applySnap(sec, opts) {
     opts = opts || {};
-    if (Engine.mode === 'armed') { toast('Stop the countdown to change the snap point'); UI.renderSettings(); return; }
+    if (Engine.mode === 'armed' || Engine.test) { toast(Engine.test ? 'End the test run to change the snap point' : 'Stop the countdown to change the snap point'); UI.renderSettings(); return; }
     if (!(sec > 0) || !isFinite(sec) || sec >= 86400) { el.snapInput.classList.add('bad'); return; }
     el.snapInput.classList.remove('bad');
     cfg.snapSec = Math.round(sec * 1000) / 1000;
@@ -5168,12 +5174,12 @@
     });
     el.snapShiftTry.addEventListener('click', () => {
       const later = Versions.laterSnap();
-      if (later == null || Engine.mode === 'armed') return;
+      if (later == null || Engine.mode === 'armed' || Engine.test) return;
       applySnap(later);
       UI.openSnapFinder();
     });
     el.filmVersion.addEventListener('change', () => Versions.choose(el.filmVersion.value));
-    const free = () => Media.ready && Engine.mode === 'free';
+    const free = () => Media.ready && Engine.mode === 'free' && !Engine.test;
     el.snapGoto.addEventListener('click', () => {
       if (!free()) return;
       video.currentTime = clamp(cfg.snapSec - 10, 0, Math.max(0, video.duration - 1));
@@ -5191,7 +5197,7 @@
       applySnap(t, { confirmed: true });
     });
     const setTarget = () => {
-      if (Engine.mode === 'armed') { toast('Stop the countdown to change the target'); UI.renderSettings(); return; }
+      if (Engine.mode === 'armed' || Engine.test) { toast(Engine.test ? 'End the test run to change the target' : 'Stop the countdown to change the target'); UI.renderSettings(); return; }
       cfg.targetMode = el.tgCustom.checked ? 'custom' : 'newyear';
       cfg.customTarget = el.tgCustomInput.value || '';
       save();
@@ -5201,7 +5207,7 @@
     };
     // Start time: automatic (the snap in the file decides), 9:29:30 PM, or the user's own.
     const setStartMode = (mode) => {
-      if (Engine.mode === 'armed' || cfg.armed) { toast(Engine.test && !cfg.armed ? 'End the test run to change the start time' : 'Stop the countdown to change the start time'); UI.renderSettings(); return; }
+      if (Engine.mode === 'armed' || cfg.armed || Engine.test) { toast(Engine.test && !cfg.armed ? 'End the test run to change the start time' : 'Stop the countdown to change the start time'); UI.renderSettings(); return; }
       const before = startLead();
       cfg.startMode = mode;
       if (Math.abs(startLead() - before) >= 0.0005) cfg.rehearsed = {};      // a rehearsal was of the start time used then
@@ -5222,7 +5228,7 @@
     }));
     const ownFromInput = () => C.leadForStartTime(C.parseClockTime(el.smOwnInput.value), (Engine.session || Engine.computeFree()).targetEpoch, 60, 6 * 3600);
     const setOwn = (lead) => {
-      if (Engine.mode === 'armed' || cfg.armed) { toast(Engine.test && !cfg.armed ? 'End the test run to change the start time' : 'Stop the countdown to change the start time'); UI.renderSettings(); return; }
+      if (Engine.mode === 'armed' || cfg.armed || Engine.test) { toast(Engine.test && !cfg.armed ? 'End the test run to change the start time' : 'Stop the countdown to change the start time'); UI.renderSettings(); return; }
       if (!(lead >= 60 && lead <= 6 * 3600)) {
         const sess = Engine.session || Engine.computeFree();
         el.smOwnInput.classList.add('bad');
