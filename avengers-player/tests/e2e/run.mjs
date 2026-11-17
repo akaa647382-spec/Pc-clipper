@@ -2710,8 +2710,49 @@ const scenarios = {
       check('back on: still armed, waiting for the same start', await waitPhase(s.page, 'standby', 20000) && await s.page.evaluate((t) => window.__AP.cfg.armed && window.__AP.Engine.session.startEpoch === t, start));
       check('it says the countdown is still armed', await waitFor(s.page, () => window.__AP.Engine.events.some((e) => /^Back after the PC went off: the countdown is still armed and the movie starts at \d+:\d\d:\d\d(\.\d{3})? [AP]M\.$/.test(e.text)), null, 10000),
         (await s.page.evaluate(() => window.__AP.Engine.events.map((e) => e.text).filter((t) => /Back after/.test(t)).join(' | '))) || 'nothing said');
+      // A minute before the start the power cut test and the crash drill are refused: the app would be off then.
+      await s.page.click('.tab[data-tab="test"]');
+      await s.page.click('#powerBtn');
+      await s.page.click('#crashBtn');
+      const said = await s.page.evaluate(() => Array.from(document.querySelectorAll('#toasts .toast')).map((t) => t.textContent).join(' | '));
+      await sleep(1500);
+      check('a minute before the start both drills are refused, and the app stays up', (said.match(/Too close to the start or the snap/g) || []).length === 2 && await s.page.evaluate(() => window.__AP.Engine.mode === 'armed'), said);
       check('no page errors', s.errors.length === 0, s.errors.join(' | '));
     } finally {
+      await Promise.race([s.close(), sleep(15000)]);
+      try { execSync('pkill -9 -f ' + JSON.stringify(profile) + ' || true'); } catch (e) { /* nothing left */ }
+    }
+  },
+
+  async restartmanager() {
+    // An installer's Restart Manager closes the app ('close-app') while the session goes on: that is
+    // not a shutdown, so the crash watchdog must bring the app back at once.
+    const profile = newProfile();
+    const logFile = path.join(profile, 'avengers-player.log');
+    const readLog = () => { try { return fs.readFileSync(logFile, 'utf8'); } catch (e) { return ''; } };
+    const s = await launch(profile);
+    let newPid = null;
+    try {
+      await loadMovie(s.page, MOVIE);
+      await setSnap(s.page, SNAP);
+      await armIn(s.page, -30);
+      check('armed and playing in sync', await waitSynced(s.page, 10000));
+      const mark = readLog().length;
+      await s.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].emit('session-end', { reasons: ['close-app'], preventDefault() {} }));
+      process.kill(s.app.process().pid, 'SIGKILL');          // Windows ends the process (the watchdog lives on)
+      let tail = '';
+      const deadline = Date.now() + 30000;
+      while (Date.now() < deadline) {
+        await sleep(500);
+        tail = readLog().slice(mark);
+        if (/Locked on: started/.test(tail)) break;
+      }
+      check('a Restart Manager close is logged as such, with no session-end marker', /closed by the Windows Restart Manager \(an installer\): the crash watchdog brings the app back/.test(tail) && !fs.existsSync(path.join(profile, 'session-end')), tail.split('\n')[0]);
+      check('the crash watchdog brings the app back and it locks onto the clock', /restarted by the crash watchdog/.test(tail) && /Locked on: started/.test(tail));
+      newPid = +(/ pid (\d+) \(restarted/.exec(tail) || [])[1] || null;
+    } finally {
+      try { fs.writeFileSync(path.join(profile, 'clean-exit'), 'test'); } catch (e) { /* profile gone */ }
+      if (newPid) { try { process.kill(newPid, 'SIGKILL'); } catch (e) { /* already gone */ } }
       await Promise.race([s.close(), sleep(15000)]);
       try { execSync('pkill -9 -f ' + JSON.stringify(profile) + ' || true'); } catch (e) { /* nothing left */ }
     }
@@ -2726,7 +2767,8 @@ const scenarios = {
     const logFile = path.join(profile, 'avengers-player.log');
     const readLog = () => { try { return fs.readFileSync(logFile, 'utf8'); } catch (e) { return ''; } };
     const cutPower = (app) => {
-      const pid = app.process().pid;
+      let pid = 0;
+      try { pid = app.process().pid; } catch (e) { return 0; }      // already gone (closed by the end of the session)
       const rows = execSync('ps -eo pid=,ppid=').toString().trim().split('\n').map((l) => l.trim().split(/\s+/).map(Number));
       const all = [pid];
       for (let i = 0; i < all.length; i++) for (const [c, pp] of rows) if (pp === all[i]) all.push(c);
@@ -2734,12 +2776,24 @@ const scenarios = {
       return all.length;
     };
     const events = (page) => page.evaluate(() => window.__AP.Engine.events.map((e) => e.text).join('\n'));
+    // A half-hour clip with the snap at 25:00: the power cut test is refused within two minutes of
+    // the snap, so the snap has to be far away for the whole scenario.
+    const CLIP = path.join(MEDIA, 'talk-long.mp4');
     let s = await launch(profile);
     let drillPid = null;
     try {
-      await loadMovie(s.page, MOVIE);
-      await setSnap(s.page, SNAP);
-      await armIn(s.page, -30);
+      await loadMovie(s.page, CLIP);
+      await setSnap(s.page, '0:25:00');
+      await s.page.evaluate(() => {
+        const { cfg, Engine } = window.__AP;
+        const d = new Date(Date.now() + (1500 - 30) * 1000);       // the movie started 30 s ago
+        const pad = (n) => String(n).padStart(2, '0');
+        cfg.targetMode = 'custom';
+        cfg.customTarget = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+        Engine.session = Engine.computeFree();
+      });
+      await s.page.click('#armBtn');
+      await startAnyway(s.page);
       check('armed and playing in sync', await waitSynced(s.page, 10000));
       await sleep(1500);
       const before = await state(s.page);
@@ -2785,10 +2839,23 @@ const scenarios = {
       check('the pre-flight list says it too', await waitFor(s.page, () => /Running on the battery \(9%\)/.test(document.getElementById('preflight').textContent), null, 3000));
       await s.page.evaluate(() => { const P = window.__AP.Power; P.battery = { charging: true, level: 0.1, addEventListener() {} }; P.check(); });
       check('plugged in again', await waitFor(s.page, () => /Plugged in/.test(document.getElementById('preflight').textContent), null, 3000));
+      // Windows saying so (the main process's power events) counts as well.
+      const send = (type) => s.app.evaluate(({ BrowserWindow }, t) => BrowserWindow.getAllWindows()[0].webContents.send('power:event', { type: t }), type);
+      await send('on-battery');
+      check('Windows says "on battery": said while armed', await waitFor(s.page, () => /running on its battery \(10%\)/.test(document.getElementById('toasts').textContent) && /Running on the battery/.test(document.getElementById('preflight').textContent), null, 3000));
+      await send('on-ac');
+      check('and "plugged in"', await waitFor(s.page, () => /Plugged in/.test(document.getElementById('preflight').textContent), null, 3000));
 
-      // 4. Windows shuts down with the app open, and the settings file did not survive whole.
+      // 4. Windows shuts down with the app open (the window's own 'session-end' event, then it closes),
+      //    and the settings file did not survive whole.
+      const logMark = readLog().length;
+      await s.app.evaluate(({ BrowserWindow }) => { const w = BrowserWindow.getAllWindows()[0]; w.emit('session-end', { reasons: ['shutdown'], preventDefault() {} }); w.close(); });
+      await sleep(2500);
+      const shutLog = readLog().slice(logMark);
+      check('Windows ending the session: marked, not taken for a quit, the start-at-login entry left in place', fs.existsSync(path.join(profile, 'session-end')) && !fs.existsSync(path.join(profile, 'clean-exit')) &&
+        /Windows is ending the session \(shutdown\): the countdown is armed and comes back at the next sign-in/.test(shutLog) && /window closed by the end of the Windows session/.test(shutLog), shutLog.split('\n').slice(0, 4).join(' / '));
+      check('and the crash watchdog does not start the app into a session that is ending', !/\[watchdog\] the app disappeared/.test(shutLog));
       cutPower(s.app);
-      fs.writeFileSync(path.join(profile, 'session-end'), new Date().toISOString());
       const f = path.join(profile, 'settings.json');
       fs.writeFileSync(f, Buffer.alloc(fs.statSync(f).size));      // zeroed, as a power cut can leave a file
       await sleep(2500);
@@ -2817,7 +2884,7 @@ const scenarios = {
         return a && b ? (Date.parse(b) - Date.parse(a)) / 1000 : NaN;
       })();
       check('it stayed off for the 10 s chosen', offFor >= 9.5 && offFor < 11.5, offFor.toFixed(1) + ' s');
-      check('the new instance imported the movie and resumed on the clock', /Movie loaded: movie\.mp4/.test(tail) && /In sync at [\d:]+ \(resume\)/.test(tail));
+      check('the new instance imported the movie and resumed on the clock', /Movie loaded: talk-long\.mp4/.test(tail) && /In sync at [\d:]+ \(resume\)/.test(tail));
       check('the power cut test passed: back on the clock', /Power cut test passed: The app was cut off at .* with nothing saved on the way out, and started again 1\d s later the way Windows starts it when the PC is back on\. It imported the movie by itself and put it at 0:0\d:\d\d\.\d{3}, .*the clock: \d+ s after the cut the film was running on the clock again; three seconds on it was [+−±]\d+ ms from the clock\./.test(tail), (tail.match(/Power cut test (passed|failed)[^\n]*/) || ['no result'])[0]);
       drillPid = +(/ pid (\d+)\n/.exec(tail.slice(tail.indexOf('the PC is "back on"'))) || [])[1] || null;
       check('no page errors', s.errors.length === 0, s.errors.join(' | '));

@@ -137,7 +137,13 @@ test('how the last run ended: power cut, empty battery, shutdown, killed, crash,
   const d = classifyLastRun({ ...base, drill: { at: T, offMs: 30000 }, bootedAt: T - 1e6 });
   assert.strictEqual(d.ended, 'cut');
   assert.deepStrictEqual(d.drill, { at: T, offMs: 30000 });
-  // Nothing says when it last ran: cannot tell, so the PC is taken to have gone off.
-  assert.strictEqual(classifyLastRun({ ...base, lastAlive: NaN, bootedAt: T }).ended, 'cut');
-  assert.strictEqual(classifyLastRun({ ...base, lastAlive: NaN, bootedAt: T }).lastAlive, null);
+  // No heartbeat on record (an older version was running, e.g. an upgrade while armed): cannot tell.
+  assert.strictEqual(classifyLastRun({ ...base, lastAlive: NaN, aliveMissing: true, bootedAt: T }).ended, 'unknown');
+  assert.strictEqual(classifyLastRun({ ...base, lastAlive: NaN, aliveMissing: true, bootedAt: T }).lastAlive, null);
+  // A heartbeat file left damaged: what a power cut can do to a file being written.
+  assert.strictEqual(classifyLastRun({ ...base, lastAlive: NaN, aliveMissing: false, bootedAt: T }).ended, 'cut');
+  // The uptime cannot be read: cannot tell.
+  assert.strictEqual(classifyLastRun({ ...base, bootedAt: NaN }).ended, 'unknown');
+  // When the PC started is handed on (how long it was off is measured to it).
+  assert.strictEqual(classifyLastRun({ ...base, bootedAt: T + 4 * 60000 }).bootedAt, T + 4 * 60000);
 });

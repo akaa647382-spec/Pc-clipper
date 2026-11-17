@@ -62,7 +62,7 @@
       async ffSpeechCancel() { return true; },
       onFfProgress() {},
       async appInfo() { return { version: 'dev', electron: '', chrome: '', platform: 'browser', logFile: '', isTest: false }; },
-      showItem() {}, openLog() {}, log() {}, crashNow() {}, powerCutNow() {},
+      showItem() {}, openLog() {}, log() {}, crashNow() {}, powerCutNow() {}, lastRun() { return null; },
       async powerState() { return { onBattery: false }; },
       onPower() {}
     };
@@ -359,7 +359,9 @@
      * keep looking for it, every 5 s for the first minute and every 30 s after that.
      */
     retryWhileArmed(perf) {
-      if (this.ready || this.loading || !cfg.armed || !cfg.moviePath || !native.isNative) return;
+      // (Not before the start-up has tried itself: it waits a moment for the internet time first, and
+      // loading the movie twice as the app starts would only cost time.)
+      if (this.ready || this.loading || !cfg.armed || !cfg.moviePath || !native.isNative || !UI.booted) return;
       if (perf < (this.retryAt || 0)) return;
       this.retries = (this.retries || 0) + 1;
       this.retryAt = perf + (this.retries <= 12 ? 5000 : 30000);
@@ -2179,37 +2181,36 @@
    */
   const Recovery = {
     info: null,          // how the last run ended, from the main process (see readLastRun in main.js)
-    claimed: null,       // that, taken by the first restore after this start (see claim)
-    taken: false,
+    claimed: null,       // that, taken by the restore now under way (see claim)
     said: false,
     reported: false,
 
-    take(appInfo) {
-      const lr = appInfo && appInfo.lastRun;
+    take(lr) {
       // (After a crash the watchdog's own message says so: see boot.)
       if (!lr || lr.ended === 'clean' || lr.ended === 'watchdog' || !cfg.armed) return;
-      this.info = Object.assign({ startedAt: appInfo.startedAt }, lr);
+      this.info = lr;
       const when = lr.lastAlive ? ' (last seen running at ' + C.fmtClock(new Date(lr.lastAlive + Clock.netOffsetMs), cfg.use24h) + ')' : '';
       Engine.logEvent((lr.ended === 'shutdown' ? 'Windows was shut down, restarted or signed out with the countdown armed'
         : lr.drill ? 'Power cut test: the app was cut off'
           : lr.ended === 'killed' ? 'The app was closed without warning while the PC kept running'
-            : 'The PC went off without warning (a power cut, an empty battery, the power button)') + when + ': picking up where the clock says');
+            : lr.ended === 'unknown' ? 'The app stopped without being closed'
+              : 'The PC went off without warning (a power cut, an empty battery, the power button)') + when + ': picking up where the clock says');
     },
 
     /**
-     * Taken by the first restore after the app started, whatever comes of it. A later restore (a
-     * reload after a video error, the film taken back) must not report an old power cut as new.
+     * Taken by a restore in the first minute after the app started (the comeback itself; the movie
+     * can be loaded twice as the app starts), until it has been said. A later restore (a reload
+     * after a video error, the film taken back) must not report an old power cut as new.
      */
     claim() {
-      this.claimed = this.taken ? null : this.info;
-      this.taken = true;
+      this.claimed = !this.said && performance.now() < 60000 ? this.info : null;
       return this.claimed;
     },
 
     /** Why the app was gone, in a few words, for the messages below. */
     why(lr) {
       return lr.drill ? 'the power cut test' : lr.ended === 'shutdown' ? 'Windows was shut down, restarted or signed out'
-        : lr.ended === 'killed' ? 'the app was closed without warning' : 'the PC went off';
+        : lr.ended === 'killed' ? 'the app was closed without warning' : lr.ended === 'unknown' ? 'the app stopped' : 'the PC went off';
     },
 
     // (The main process wrote its times with the PC clock: spans are measured on that clock too,
@@ -2234,7 +2235,7 @@
           ok: true, title: 'Power cut test',
           text: 'The app was cut off at ' + this.cutAt(lr) + ' with nothing saved on the way out, and started again ' + this.startedLater(lr) +
             ' the way Windows starts it when the PC is back on. The countdown came back armed: the movie still starts at ' + clockOf(s.startEpoch) +
-            '. (Cut the power while the movie plays to see the film put back on the clock.)'
+            '. (Cut the power while the movie plays, well before the snap, to see the film put back on the clock.)'
         };
         UI.addTestResult(r);
         Engine.logEvent('Power cut test passed: ' + r.text);
@@ -2252,12 +2253,18 @@
       const s = Engine.session;
       const now = Clock.now();
       const gone = lr.lastAlive ? lr.lastAlive + Clock.netOffsetMs : null;
-      const missed = s && gone != null && gone < s.targetEpoch && now >= s.targetEpoch ? ' ' + (isNewYearMoment(s.targetEpoch) ? 'Midnight' : 'The target moment') + ' came while it was off.' : '';
+      // Said only when the last sign of life was more than one heartbeat (15 s) before it: a cut
+      // seconds after midnight has the film on midnight already.
+      const missed = s && gone != null && gone + 15000 < s.targetEpoch && now >= s.targetEpoch ? ' ' + (isNewYearMoment(s.targetEpoch) ? 'Midnight' : 'The target moment') + ' came while it was off.' : '';
+      // How long the PC was off: from the last sign of life to the PC starting again (not to now,
+      // which also counts the start-up and the sign-in).
+      const offFor = lr.lastAlive && Number.isFinite(lr.bootedAt) && lr.bootedAt > lr.lastAlive ? (lr.bootedAt - lr.lastAlive) / 1000 : null;
       let text;
       if (lr.drill) text = 'Power cut test: the app is back ' + fmtSpan((raw - lr.drill.at) / 1000) + ' after it was cut off, and ' + pos + '.';
       else if (lr.ended === 'shutdown') text = 'Back after Windows was shut down, restarted or signed out' + (off != null && off >= 60 ? ' (' + fmtLate(off) + ' ago)' : '') + ': ' + pos + '.' + missed;
       else if (lr.ended === 'killed') text = 'Back after the app was closed without warning: ' + pos + '.' + missed;
-      else text = 'Back after the PC went off' + (off != null && off >= 20 ? ' for about ' + fmtLate(off) : '') + ' (a power cut, an empty battery or the power button): ' + pos + '.' + missed;
+      else if (lr.ended === 'unknown') text = 'Back after the app stopped: ' + pos + '.';
+      else text = 'Back after the PC went off' + (offFor != null && offFor >= 20 ? ' for about ' + fmtLate(offFor) : '') + ' (a power cut, an empty battery or the power button): ' + pos + '.' + missed;
       toast(text, 'good', 9000);
       Engine.logEvent(text);
     },
@@ -2324,8 +2331,7 @@
     /** True while a laptop runs on its battery. */
     onBattery() {
       const b = this.battery;
-      if (b && typeof b.charging === 'boolean') return !b.charging;
-      return !!this.mainOnBattery;
+      return (!!b && typeof b.charging === 'boolean' && !b.charging) || !!this.mainOnBattery;
     },
 
     /** The battery level in percent, or null when unknown. */
@@ -2344,7 +2350,7 @@
       return 'The PC is running on its battery' + (pct != null ? ' (' + pct + '%)' : '') + ': plug it in for the film.' +
         (cfg.autoRestart === false
           ? ' If the battery runs out the film stops, and with “Come back by itself after a crash or a power cut” switched off in Setup the app stays closed.'
-          : ' If the battery runs out, the app opens again when the PC is back on and picks up where the clock says.');
+          : ' If the battery runs out, the app opens again when the PC is back on and you sign in, and picks up where the clock says.');
     },
 
     /** Said when the countdown is armed (or resumed) on a battery; not more than every ten minutes. */
@@ -4479,7 +4485,7 @@
       if (Power.known) {
         const pct = Power.percent();
         const back = cfg.autoRestart === false ? 'Switch on “Come back by itself after a crash or a power cut” in Setup, so the app opens again after a power cut.'
-          : 'If the power goes off anyway, the app opens again when the PC is back on and picks up where the clock says.';
+          : 'If the power goes off anyway, the app opens again when the PC is back on and you sign in, and picks up where the clock says.';
         items.push(Power.onBattery() ? [false, 'Running on the battery' + (pct != null ? ' (' + pct + '%)' : ''), 'Plug the PC in for the film. ' + back] : [true, 'Plugged in', back]);
       }
       const reh = cfg.rehearsed || {};
@@ -4786,7 +4792,7 @@
       }
       else if (t.kind === 'late') {
         const snapAt = Engine.snapEpoch(t.session);
-        if (!t.joined) note = 'You are late: press JOIN NOW, Enter or Space';
+        if (!t.joined) note = Late.showing ? 'You are late: press JOIN NOW, Enter or Space' : 'You are late: click the LATE bar at the top, or JOIN THE MOVIE NOW, to join';
         else if (!t.lockedAt) note = 'Joining: the film goes to where the clock says it should be…';
         else if (!t.watchSnap) note = 'Joined ' + fmtOff(t.firstDrift) + ' from the clock. Checking that it holds…';
         else note = snapAt > now ? 'Joined. Snap in ' + tick(snapAt) + ' s' : left > 0 ? targetWord(t.session).replace(/^m/, 'M') + ' in ' + tick(t.eventEpoch) + ' s' : 'Measuring…';
@@ -5119,12 +5125,21 @@
     }));
     el.thEnd.addEventListener('click', () => Engine.endTest('Stopped by you.'));
     el.nightEnd.addEventListener('click', () => Engine.endTest('Ended by you.'));
+    // A drill takes the app away for a while: never across the start, the target or the snap.
+    // (`offSec`: how long it is gone; `spare`: room for starting again and getting back in sync.)
+    const drillTooClose = (offSec, spare) => {
+      const s = Engine.session;
+      if (!s) return false;
+      const now = Clock.now();
+      return [s.startEpoch, s.targetEpoch, Engine.snapEpoch(s)].some((e) => e > now - 20000 && e - now < (offSec + spare) * 1000);
+    };
     el.powerBtn.addEventListener('click', () => {
       if (Engine.test) { toast('End the test run first'); return; }
       if (Engine.mode !== 'armed') { toast('Start the countdown first: the app only comes back while it is armed'); return; }
       if (cfg.autoRestart === false) { toast('Switch on "Come back by itself after a crash or a power cut" in Setup first'); return; }
       if (!native.isNative) { toast('Not available in the browser build'); return; }
       const off = +el.tsPowerOff.value || 30;
+      if (drillTooClose(off, 120)) { toast('Too close to the start or the snap: the app would be off then. Run it earlier.', 'bad'); return; }
       // Nothing is saved first: a power cut does not wait for that either.
       Engine.logEvent('Power cut test: the app is cut off now and started again in ' + off + ' s');
       toast('Cutting the app off… it comes back in ' + off + ' s', '', 2000);
@@ -5134,6 +5149,7 @@
       if (Engine.test) { toast('End the test run first'); return; }
       if (Engine.mode !== 'armed') { toast('Start the countdown first: recovery only works while it is armed'); return; }
       if (cfg.autoRestart === false) { toast('Switch on "Come back by itself after a crash or a power cut" in Setup first'); return; }
+      if (drillTooClose(20, 40)) { toast('Too close to the start or the snap: the app would be off then. Run it earlier.', 'bad'); return; }
       saveNow();
       Engine.logEvent('Crash drill: the app is about to crash on purpose');
       toast('Crashing on purpose… it will be back in a few seconds');
@@ -5504,7 +5520,6 @@
         Engine.logEvent('The app was restarted by the crash watchdog');
         setTimeout(() => toast('Recovered after a crash', 'good'), 1500);
       }
-      Recovery.take(info);
       el.aboutInfo.textContent = v.trim() + (info.electron ? ' · Electron ' + info.electron + ' · Chromium ' + String(info.chrome).split('.')[0] : '') +
         '. An unofficial fan-made player. It plays your own copy of the film and ships no film content.';
     }).catch(() => {});
@@ -5516,23 +5531,28 @@
     }
     if (!Number.isFinite(cfg.armedTarget)) cfg.armed = false;
     tellArmed(cfg.armed);
+    // How the last run ended (a power cut, a shutdown): known before anything can restore the countdown.
+    try { Recovery.take(native.lastRun()); } catch (e) { /* not known: nothing special is said */ }
 
     // Know the true time before deciding where the film should be.
     const firstTime = NetTime.measure(false);
     if (cfg.armed) await Promise.race([firstTime, sleep(2500)]);
 
     UI.showImport();
-    if (cfg.moviePath) {
-      let info = null;
-      try { info = await native.openMovie(cfg.moviePath); } catch (e) { info = null; }
-      if (info) {
-        const ok = await Media.load(info);
-        if (ok && wantFs) await UI.setFullscreen(true);
-      } else if (cfg.armed) {
-        UI.importError('The countdown is armed, but the movie cannot be found at <b>' + esc(cfg.moviePath) + '</b>. Plug the drive back in or choose the movie again. The app keeps looking for it.');
+    try {
+      if (cfg.moviePath) {
+        let info = null;
+        try { info = await native.openMovie(cfg.moviePath); } catch (e) { info = null; }
+        if (info) {
+          const ok = await Media.load(info);
+          if (ok && wantFs) await UI.setFullscreen(true);
+        } else if (cfg.armed) {
+          UI.importError('The countdown is armed, but the movie cannot be found at <b>' + esc(cfg.moviePath) + '</b>. Plug the drive back in or choose the movie again. The app keeps looking for it.');
+        }
       }
+    } finally {
+      UI.booted = true;               // from here on an armed countdown keeps trying to load the movie by itself
     }
-    UI.booted = true;
   }
 
   // For the automated tests and for debugging from the developer tools.

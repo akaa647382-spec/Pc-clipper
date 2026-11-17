@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('apNative', {
 
   // settings (synchronous load so the first paint already has the right theme and state)
   loadState: () => ipcRenderer.sendSync('state:load'),
+  // how the last run ended (a power cut, a shutdown, ...), read once as the page starts
+  lastRun: () => ipcRenderer.sendSync('app:last-run'),
   saveState: (obj) => ipcRenderer.invoke('state:save', obj),
 
   // movie

@@ -76,6 +76,7 @@ let win = null;
 let armed = false;
 let quitting = false;
 let sessionEnding = false;           // Windows is shutting down, restarting or signing out
+let comeBack = false;                // armed with "Come back by itself" on: the watchdog and the sign-in entry are in place
 let blockerId = null;
 let unresponsiveTimer = null;
 let watchdog = null;
@@ -97,7 +98,7 @@ function readLastRun() {
   if (IS_TEST && Number.isFinite(Number(process.env.AP_BOOTED_AT))) bootedAt = Number(process.env.AP_BOOTED_AT);
   return classifyLastRun({
     clean: read(CLEAN_EXIT) != null, recovered: RECOVERED, shutdownAt: Date.parse(read(SESSION_END) || ''),
-    lastAlive: Number(read(ALIVE)), drill: drill, bootedAt: bootedAt
+    lastAlive: Number(read(ALIVE)), aliveMissing: read(ALIVE) == null, drill: drill, bootedAt: bootedAt
   });
 }
 let lastRun = { ended: 'clean', lastAlive: null, shutdownAt: null, drill: null };
@@ -180,7 +181,8 @@ function setAlive(on) {
 
 /** Windows is ending the session with the app open. Written at once: nothing else runs after this. */
 function markSessionEnd(why) {
-  log('main', 'Windows is ending the session (' + why + ')' + (armed ? ': the countdown is armed and comes back at the next sign-in' : ''));
+  log('main', 'Windows is ending the session (' + why + ')' + (armed ? (comeBack ? ': the countdown is armed and comes back at the next sign-in'
+    : ': the countdown is armed, but "Come back by itself" is off: it will not reopen by itself') : ''));
   try { writeDurable(SESSION_END, new Date().toISOString()); } catch (e) { /* the next start then says "power cut" instead */ }
 }
 
@@ -301,7 +303,7 @@ function createWindow() {
     // An installer's Restart Manager closing the app ('close-app') is not the end of the session:
     // it is treated like any other kill, and the crash watchdog brings the app back at once.
     if (reasons.includes('close-app') && !reasons.some((r) => r === 'logoff' || r === 'shutdown' || r === 'critical')) {
-      log('main', 'closed by the Windows Restart Manager (an installer): the crash watchdog brings the app back');
+      log('main', 'closed by the Windows Restart Manager (an installer)' + (comeBack ? ': the crash watchdog brings the app back' : ''));
       return;
     }
     sessionEnding = true;
@@ -400,6 +402,7 @@ function registerIpc() {
     armed = !!o.armed;
     setKeepAwake(armed);
     const guard = armed && o.autoRestart !== false;
+    comeBack = guard;
     if (guard) startWatchdog(); else stopWatchdog();
     setStartAtLogin(guard);
     setAlive(armed);
@@ -444,14 +447,17 @@ function registerIpc() {
     setTimeout(() => { try { process.kill(process.pid, 'SIGKILL'); } catch (err) { process.exit(1); } }, 300);
   });
 
-  ipcMain.handle('app:info', () => {
-    // How the last run ended is told once: a page reloaded later (after a crash of the page) must
-    // not report a power cut from hours ago again.
-    const lr = lastRun;
+  // How the last run ended, read synchronously by the page as it starts (before it can restore the
+  // countdown), and told once: a page reloaded later (after a crash of the page) must not report a
+  // power cut from hours ago again.
+  ipcMain.on('app:last-run', (e) => {
+    if (!own(e)) { e.returnValue = null; return; }
+    e.returnValue = Object.assign({ startedAt: STARTED_AT }, lastRun);
     lastRun = { ended: 'clean', lastAlive: null, shutdownAt: null, drill: null };
-    return infoWith(lr);
   });
-  const infoWith = (lr) => ({
+
+  ipcMain.handle('app:info', () => infoWith());
+  const infoWith = () => ({
     version: app.getVersion(),
     electron: process.versions.electron,
     chrome: process.versions.chrome,
@@ -459,7 +465,6 @@ function registerIpc() {
     logFile: LOG_FILE,
     isTest: IS_TEST,
     recovered: RECOVERED,
-    lastRun: lr,
     startedAt: STARTED_AT,
     pid: process.pid
   });
