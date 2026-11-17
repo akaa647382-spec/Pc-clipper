@@ -2460,6 +2460,15 @@ const scenarios = {
       const back = await shows(s.page, 'ktSnap', /Jan 1 · 12:00:00 AM/) && await shows(s.page, 'ktStart', /Dec 31 · 9:29:28 PM/);
       v = await g(s.page);
       check('back to automatic: 9:29:28 PM, the snap on midnight', back && v.mode === 'auto' && v.landsLbl === 'The snap lands on midnight' && v.lead === 9031668, JSON.stringify(v));
+      check('one\'s own time is kept for next time', /Your time, 9:29:28\.600 PM, is kept/.test(v.ownNote), v.ownNote);
+      await s.page.check('#smOwn');
+      check('choosing it again brings it back', (await g(s.page)).mode === 'own' && (await g(s.page)).own === 9031.4);
+      // A time typed but not set yet is what a nudge starts from.
+      await s.page.fill('#smOwnInput', '9:29:29 PM');
+      await s.page.click('#smOwnPlus01');
+      v = await g(s.page);
+      check('typed 9:29:29 PM, then +0.1 s: 9:29:29.100 PM', v.own === 9030.9 && /Starts at 9:29:29\.100 PM/.test(v.ownNote), JSON.stringify(v));
+      await s.page.check('#smAuto');
       check('no page errors', s.errors.length === 0, s.errors.join(' | '));
     } finally { await s.close(); }
   },

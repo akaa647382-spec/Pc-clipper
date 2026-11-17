@@ -29,7 +29,7 @@
     </header>
 
     <p class="lead">Import the movie, press <b>Start the Countdown</b>, go fullscreen and wait.
-      The film starts itself at <b id="imStart">9:29:30 PM</b> on December 31 so the snap lands on the first second of the new year.</p>
+      The film starts itself at <b id="imStart">9:29:30 PM</b> on December 31, so <span id="imLands">the snap lands on the first second of the new year</span>.</p>
 
     <div id="imLate" class="resume late-note" hidden>
       <div class="resume-title">The movie should be playing right now</div>
@@ -427,7 +427,7 @@
         <h3 class="sec" id="startSec">Start time</h3>
         <p class="hint">When the movie starts. <b>Automatic</b> is set by the snap the app found in your file, so the snap lands on midnight. Any other start time moves the snap off midnight by the same amount; the Snap test shows you exactly where it lands.</p>
         <label class="rad tall"><input type="radio" name="sm" id="smAuto" value="auto"><span>Automatic: <b id="smAutoAt">—</b> (recommended)<small id="smAutoNote">&nbsp;</small></span></label>
-        <label class="rad tall"><input type="radio" name="sm" id="smClassic" value="classic"><span><b id="smClassicAt">9:29:30 PM</b>, the time everybody quotes<small id="smClassicNote">&nbsp;</small></span></label>
+        <label class="rad tall"><input type="radio" name="sm" id="smClassic" value="classic"><span><b id="smClassicAt">9:29:30 PM</b><span id="smClassicWhat">, the time everybody quotes</span><small id="smClassicNote">&nbsp;</small></span></label>
         <label class="rad tall"><input type="radio" name="sm" id="smOwn" value="own"><span>My own start time<small id="smOwnNote">&nbsp;</small></span></label>
         <div class="snaprow">
           <input id="smOwnInput" class="inp mono" type="text" spellcheck="false" aria-label="Your own start time" value="9:29:30 PM">

@@ -45,7 +45,10 @@ function stillArmed() {
     const s = JSON.parse(fs.readFileSync(path.join(dataDir, 'settings.json'), 'utf8'));
     const r = s && s.renderer;
     if (!r || r.armed !== true || r.autoRestart === false) return false;
-    return Number.isFinite(r.armedTarget) && Date.now() < r.armedTarget + 60 * 60 * 1000;
+    // Until an hour after the target, or ten minutes after the film ends when it ends later
+    // (a start time chosen late in the evening).
+    const until = Math.max(r.armedTarget + 60 * 60 * 1000, Number.isFinite(r.armedEnd) ? r.armedEnd + 10 * 60 * 1000 : 0);
+    return Number.isFinite(r.armedTarget) && Date.now() < until;
   } catch (e) {
     return false;
   }

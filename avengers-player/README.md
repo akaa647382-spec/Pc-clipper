@@ -5,7 +5,7 @@ for the whole two and a half hours, and lands the snap on **12:00:00 AM**: the v
 found in your own file and put on midnight to the millisecond. It works with any copy of *Avengers: Endgame* or
 *Avengers Endgame: Encore*: Remux, Blu-ray or WEB rip, 4K or 1080p, whatever its exact length.
 
-**[Download the installer](../download/Avengers-Player-Setup-1.4.0.exe)** (Windows 10 / 11, 64-bit, about 93 MB).
+**[Download the installer](../download/Avengers-Player-Setup-1.5.0.exe)** (Windows 10 / 11, 64-bit, about 93 MB).
 You bring your own copy of the movie. Nothing is uploaded anywhere.
 
 Older version, kept as it was: **[1.3.0 (legacy)](../download/Avengers-Player-Setup-1.3.0-legacy.exe)**. Only one
@@ -15,8 +15,8 @@ version is installed at a time: installing one over the other asks first, then r
 
 ## Install
 
-1. Run `Avengers-Player-Setup-1.4.0.exe`. It installs for your user only, so there is no administrator prompt.
-   If Avengers Player is already installed, Setup says so first and asks: *update it to version 1.4.0?*, *install
+1. Run `Avengers-Player-Setup-1.5.0.exe`. It installs for your user only, so there is no administrator prompt.
+   If Avengers Player is already installed, Setup says so first and asks: *update it to version 1.5.0?*, *install
    it again?* (the same version), or, when the installed one is newer, *replace it with this version?* **Yes** puts
    the new version into the folder of the old one (your settings, snap points and an armed countdown stay as they
    are); **No** leaves everything as it is and closes Setup. On a PC without it, Setup simply installs it.
@@ -30,7 +30,26 @@ version is installed at a time: installing one over the other asks first, then r
 2. Click **START THE COUNTDOWN**. You can do this days ahead: the movie waits for December 31.
 3. Press **F** for fullscreen. A standby screen counts down to the start.
 4. Walk away. The movie starts by itself at the time shown in the Mission tab: a second or two before 9:29:30 PM,
-   exactly as early as the snap in your copy needs.
+   exactly as early as the snap in your copy needs (or at the start time you chose, see below).
+
+## Start time: automatic, 9:29:30 PM, or your own
+
+**Setup → Start time** (or *Start time · change* in the Mission tab) has three choices:
+
+| Choice | The movie starts | The snap lands |
+|---|---|---|
+| **Automatic** (recommended) | when the snap found in your file needs, e.g. 9:29:28.332 PM for a Blu-ray copy | on 12:00:00 |
+| **9:29:30 PM** | at 9:29:30 PM, the figure everybody quotes (it comes from the streaming version) | as late as your copy's snap is after 2:30:30: about 1.5 s late on a Blu-ray copy |
+| **My own time** | at the time you type (*9:29:29.5* is read as the evening), or nudge with −1 s, −0.1 s, +0.1 s, +1 s | earlier or later by the same amount |
+
+Every countdown, the standby screen, the late join, recovery and a restart after a crash follow the choice. The
+Mission tab and the pre-flight list say where the snap lands with it. The start time cannot be changed while the
+countdown is armed; a file too short for the chosen start is refused.
+
+**Test it.** *Test this start time* (Setup), or the Snap test with *Start time as set*, *Automatic start* or *Start at
+9:29:30 PM* (Test tab), jumps to just before midnight with that start and says exactly where the snap lands, for
+example *"With this start time the snap came 1.668 s after midnight"*. The film strip afterwards marks the frame that
+was on screen at 12:00:00 and the snap point, so you can see the difference with your own eyes.
 
 **If the app crashes, it comes back by itself.** While the countdown is armed a small watchdog keeps an eye on the
 app. If the app crashes or is killed, the watchdog starts it again within a couple of seconds; after a restart of the PC,
@@ -55,7 +74,7 @@ Each test prints a result with the measured error in milliseconds.
 "Start at 9:29:30 PM" puts the snap at 2:30:30, and that is a round number. In the film the fingers snap a moment
 later, and how much later differs from copy to copy: a Blu-ray copy, a streaming copy and the 2026 Encore cut are
 all timed differently. So the app takes nothing from a table. **When you import a movie, it finds the snap in that
-file by itself and sets the countdown by it.**
+file by itself and sets the countdown by it** (with a start time chosen by hand, it shows where the snap lands).
 
 1. Import the movie. After a moment a box says *Finding the snap in this film*: the app plays that part of the film
    without sound and looks at every frame. It takes ten seconds or so, once per file.
