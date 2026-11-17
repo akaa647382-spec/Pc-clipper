@@ -1074,6 +1074,7 @@
    */
   function fmtStartCountdown(startMs, nowMs, withMs) {
     const whole = Math.floor(startMs / 1000) * 1000;
+    if (startMs === whole) withMs = false;          // a start on a whole second has no milliseconds to show
     if (nowMs < whole) {
       const secs = Math.ceil((whole - nowMs) / 1000 - 1e-9);
       return withMs ? fmtCountdownMs(secs * 1000 + (startMs - whole)) : fmtCountdown(secs * 1000);

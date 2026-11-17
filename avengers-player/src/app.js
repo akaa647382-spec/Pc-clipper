@@ -243,6 +243,13 @@
   /** "the snap lands 1.668 s after midnight", with a word when the snap point itself is unchecked. */
   const landsText = (s) => 'the snap lands ' + (onTarget(s) ? 'on ' : lateText(snapLate(s)) + ' ') + targetWord(s) +
     (snapConfirmed() || (!Media.info && !!cfg.snapConfirmedFor && cfg.snapConfirmedFor.endsWith('|' + cfg.snapSec.toFixed(3))) ? '' : ' (if the snap point is right: it has not been checked yet)');
+  /**
+   * How far the film is from where the clock says, as shown. A stopped film falls behind by a
+   * second per second: read at the clock's second, so the number changes with the clock. A
+   * playing film's offset stays the same and is read as it is.
+   */
+  const offOnClock = (now) => video.currentTime - Engine.expected(video.paused ? Math.floor(now / 1000) * 1000 : now);
+
   /** A start time as shown: to the millisecond ("9:29:28.348 PM"), the instant the movie launches. */
   const clockOf = (epoch) => (cfg.showMs ? C.fmtClockMs(epoch, cfg.use24h) : C.fmtClock(new Date(epoch), cfg.use24h));
   const dateTimeOf = (epoch) => (cfg.showMs ? C.fmtDateTimeMs(epoch, cfg.use24h) : C.fmtDateTime(epoch, cfg.use24h));
@@ -1342,7 +1349,7 @@
         }
         if (tok !== this.token) return;
         if (reason === 'recover' || reason === 'manual') toast('Back in sync', 'good');
-        if (reason === 'late') toast('Joined at ' + C.fmtDuration(pos, { forceHours: true }) + ': the film is where the clock says it should be', 'good');
+        if (reason === 'late') toast('Joined at ' + C.fmtDuration(Math.max(0, C.filmSecondOnClock(this.session, Clock.now())), { forceHours: true }) + ': the film is where the clock says it should be', 'good');
         this.logEvent('In sync at ' + C.fmtDuration(pos) + ' (' + reason + ')');
         save();
         return;
@@ -1435,6 +1442,7 @@
       this.st.rate = 1;
       this.st.slipReason = reason;
       this.st.slipAt = performance.now();
+      this.st.slipClock = Math.floor(Clock.now() / 1000) * 1000;     // its countdown runs on the clock's seconds
       this.st.slipHold = false;
       this.st.slips++;
       this.setPhase('slipped');
@@ -1768,7 +1776,7 @@
           const exp = this.expected(now);
           // The start must never be missed: just before it, recover no matter what.
           if (exp > -3 && exp < 0) { this.recover('start time'); break; }
-          if (cfg.autoRecover && !this.st.slipHold && perf - this.st.slipAt >= cfg.autoRecoverSec * 1000) this.recover('automatic');
+          if (cfg.autoRecover && !this.st.slipHold && now >= this.st.slipClock + cfg.autoRecoverSec * 1000) this.recover('automatic');
           break;
         }
         default:
@@ -4210,9 +4218,11 @@
          changes, so the countdown on the status card ticks with the clock */
       const p = performance.now();
       const second = Math.floor(now / 1000);
-      if (p - this.lastSlow > 120 || this.dirty.all || second !== this.lastSlowSecond) {
+      const stage = s ? (now < s.startEpoch ? 0 : now < s.targetEpoch ? 1 : 2) : -1;     // the launch and the target are moments too
+      if (p - this.lastSlow > 120 || this.dirty.all || second !== this.lastSlowSecond || stage !== this.lastSlowStage) {
         this.lastSlow = p;
         this.lastSlowSecond = second;
+        this.lastSlowStage = stage;
         this.renderStatus(now, toStart, toSnap, newYear);
         if (this.tab === 'sync') this.renderSync(now);
         if (this.tab === 'setup') this.renderSetupLive();
@@ -4282,7 +4292,7 @@
         else { label = 'READY · NOT ARMED'; big = startCountdown(s, now); sub = 'until the movie has to start'; }
       } else if (e.phase === 'slipped' || e.phase === 'blocked') {
         state = 'slipped'; label = 'OUT OF SYNC';
-        big = exp < 0 ? startCountdown(s, now) : fmtOff(video.currentTime - exp);
+        big = exp < 0 ? startCountdown(s, now) : fmtOff(offOnClock(now));
         sub = exp < 0 ? 'until the start. Press Recalibrate.' : (video.currentTime < exp ? 'behind the clock. Press Recalibrate.' : 'ahead of the clock. Press Recalibrate.');
       } else if (toStart > 0) {
         state = e.test ? 'test' : 'standby'; label = e.test ? 'TEST RUN · WAITING FOR THE START' : 'ARMED · THE MOVIE STARTS IN';
@@ -4309,12 +4319,12 @@
       let body;
       if (exp < 0) body = 'The movie should still be waiting at the start.';
       else {
-        const off = video.currentTime - exp;
+        const off = offOnClock(now);
         body = 'The movie is ' + fmtOff(off) + (off < 0 ? ' behind' : ' ahead of') + ' the clock.';
       }
       setText(el.slipBody, body);
       if (cfg.autoRecover && !e.st.slipHold) {
-        const left = Math.max(0, Math.ceil(cfg.autoRecoverSec - (performance.now() - e.st.slipAt) / 1000));
+        const left = C.countdownParts(e.st.slipClock + cfg.autoRecoverSec * 1000 - now).total;
         setText(el.slipAuto, 'Recalibrating by itself in ' + left + ' s · or press R, Enter or Space');
       } else {
         setText(el.slipAuto, 'Press R, Enter or Space');
@@ -4332,14 +4342,16 @@
       el.thMark.style.left = (clamp((mark - t.t0) / span, 0, 1) * 100).toFixed(1) + '%';
       const left = t.eventEpoch - now;
       let note;
+      // Its countdowns count to the clock second of each moment, so they change with the clock.
+      const tick = (ep) => C.countdownParts(C.untilClockSecond(ep, now)).total;
       if (t.result) note = (t.result.ok ? 'PASS: ' : t.result.ok === false ? 'FAIL: ' : '') + t.result.text;
-      else if (t.kind === 'start') note = left > 0 ? 'Auto-start in ' + C.countdownParts(left).total + ' s. Hands off.' : 'Measuring…';
+      else if (t.kind === 'start') note = left > 0 ? 'Auto-start in ' + tick(t.eventEpoch) + ' s. Hands off.' : 'Measuring…';
       else if (t.kind === 'snap' || t.kind === 'real') {
         // With a start time chosen by hand the snap and the target are two moments: the snap first if it comes first.
         const toSnapMs = t.snapAt != null ? t.snapAt - now : left;
-        note = toSnapMs > 0 ? 'Snap in ' + C.countdownParts(toSnapMs).total + ' s' : left > 0 ? targetWord(Engine.session).replace(/^m/, 'M') + ' in ' + C.countdownParts(left).total + ' s' : 'Measuring…';
+        note = toSnapMs > 0 ? 'Snap in ' + tick(t.snapAt != null ? t.snapAt : t.eventEpoch) + ' s' : left > 0 ? targetWord(Engine.session).replace(/^m/, 'M') + ' in ' + tick(t.eventEpoch) + ' s' : 'Measuring…';
       }
-      else note = t.knockAt ? 'Knocked out of sync: press Recalibrate' : 'Slip coming in ' + C.countdownParts(left).total + ' s';
+      else note = t.knockAt ? 'Knocked out of sync: press Recalibrate' : 'Slip coming in ' + tick(t.eventEpoch) + ' s';
       setText(el.thNote, note);
     },
 
@@ -4380,7 +4392,7 @@
       setAttr(el.syncMeter, 'data-state', st.state);
       setText(el.syState, e.mode === 'armed' ? st.label : 'NOT ARMED');
       if (e.mode === 'armed' && e.phase === 'slipped' && Media.ready) {
-        const off = video.currentTime - e.expected(now);
+        const off = offOnClock(now);
         setText(el.syDrift, (off < 0 ? '−' : '+') + fmtOff(off));
         el.syNeedle.style.left = off < 0 ? '2%' : '98%';
       } else {
@@ -4389,7 +4401,7 @@
       }
       setText(el.syPos, Media.ready ? C.fmtDuration(video.currentTime, { ms: true, forceHours: true }) : '—');
       const exp = e.session ? e.expected(now) : NaN;
-      setText(el.syExp, !isFinite(exp) ? '—' : exp < 0 ? 'not started (−' + C.fmtDuration(-exp) + ')' : C.fmtDuration(exp, { ms: true, forceHours: true }));
+      setText(el.syExp, !isFinite(exp) ? '—' : exp < 0 ? 'not started (−' + startCountdown(e.session, now) + ')' : C.fmtDuration(exp, { ms: true, forceHours: true }));
       setText(el.syRate, (Media.ready ? video.playbackRate : 1).toFixed(3) + '×');
       const r = NetTime.result;
       setText(el.sySource, NetTime.busy ? 'checking…' : cfg.useNetTime && NetTime.usable() ? 'Internet time (' + r.method.toUpperCase() + ')' : 'PC clock');
