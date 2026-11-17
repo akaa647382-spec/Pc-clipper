@@ -114,7 +114,7 @@
       if (DEFAULTS[k] === null || typeof v === typeof DEFAULTS[k]) c[k] = v;
     }
     if (!(c.snapSec > 0 && c.snapSec < 86400)) c.snapSec = DEFAULTS.snapSec;
-    if (c.theme === 'tva') c.theme = 'hotrod';          // the TVA theme (1.9.3 only) is Hot Rod again
+    if (c.theme === 'midnight') c.theme = 'tva';        // Midnight Gold became the TVA theme (1.10.1)
     if (!['auto', 'classic', 'own'].includes(c.startMode)) c.startMode = 'auto';
     if (!(c.startOwnSec >= 60 && c.startOwnSec <= 6 * 3600)) c.startOwnSec = DEFAULTS.startOwnSec;
     if (!(c.volume >= 0 && c.volume <= 1)) c.volume = 1;
@@ -3981,7 +3981,7 @@
     { id: 'infinity', name: 'Infinity', c: ['#140d26', '#6b3df0', '#c19cff'] },
     { id: 'gamma', name: 'Gamma', c: ['#0a1b11', '#12b85a', '#d8ff5a'] },
     { id: 'stealth', name: 'Stealth', c: ['#131316', '#a0a0ac', '#f2f2f4'] },
-    { id: 'midnight', name: 'Midnight Gold', c: ['#14110a', '#c8901e', '#f6c453'] },
+    { id: 'tva', name: 'TVA', c: ['#1d130a', '#c8622a', '#f4a23c'] },
     { id: 'doom', name: 'Doom', c: ['#0d1610', '#1f7a47', '#c4ccd2'] }
   ];
   const CELEB_HINT = {

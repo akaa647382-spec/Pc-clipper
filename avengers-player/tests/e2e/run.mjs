@@ -2193,7 +2193,7 @@ const scenarios = {
       await loadMovie(s.page, MOVIE);
       await s.page.click('.tab[data-tab="display"]');
       const themes = await s.page.$$eval('#themeGrid .theme', (n) => n.map((b) => b.dataset.id));
-      check('seven app themes are offered, Doom among them', themes.join(',') === 'arc,hotrod,infinity,gamma,stealth,midnight,doom', themes.join(','));
+      check('seven app themes are offered, TVA in place of Midnight Gold, Doom among them', themes.join(',') === 'arc,hotrod,infinity,gamma,stealth,tva,doom', themes.join(','));
       for (const id of themes) {
         await s.page.click('#themeGrid .theme[data-id="' + id + '"]');
         await sleep(250);
@@ -2242,6 +2242,47 @@ const scenarios = {
       await waitFor(s.page, () => window.__AP.Media.ready, null, 15000);
       const kept = await s.page.evaluate(() => ({ theme: document.documentElement.dataset.theme, snap: window.__AP.cfg.snapSec, view: document.getElementById('app').dataset.view }));
       check('settings and the last movie survive a restart', kept.theme === 'hotrod' && kept.snap === 83.5 && kept.view === 'player', JSON.stringify(kept));
+      // Midnight Gold became TVA: a saved Midnight Gold choice opens as TVA.
+      await s.close();
+      const file = path.join(profile, 'settings.json');
+      const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+      saved.renderer.theme = 'midnight';
+      fs.writeFileSync(file, JSON.stringify(saved));
+      s = await launch(profile);
+      check('a saved Midnight Gold theme opens as TVA', await s.page.evaluate(() => document.documentElement.dataset.theme === 'tva' && window.__AP.cfg.theme === 'tva' &&
+        getComputedStyle(document.documentElement).getPropertyValue('--acc2').trim() === '#c8622a'));
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally { await s.close(); }
+  },
+
+  async standbyfit() {
+    // The standby screen weeks ahead: "44d 01:12:21.185" fits the screen, also a narrow window, and
+    // its glow is not cut off at the edges of its box (that drew a rectangle behind the numbers).
+    const s = await launch(newProfile());
+    try {
+      await loadMovie(s.page, MOVIE);
+      await setSnap(s.page, '1:40.185');
+      await s.page.evaluate(() => { const { cfg, Engine } = window.__AP; cfg.targetMode = 'newyear'; Engine.session = Engine.computeFree(); });
+      await s.page.click('#armBtn');
+      await startAnyway(s.page);
+      check('weeks ahead: the standby screen counts down', await waitFor(s.page, () => !document.getElementById('standby').hidden, null, 10000));
+      const look = () => s.page.evaluate(() => {
+        const n = document.getElementById('sbCount');
+        const r = n.getBoundingClientRect();
+        const st = document.getElementById('stage').getBoundingClientRect();
+        return { text: n.textContent, ms: !!n.querySelector('.ms'), overflow: getComputedStyle(n).overflow, fits: n.scrollWidth <= n.clientWidth + 1,
+          inside: r.left >= st.left - 1 && r.right <= st.right + 1, shadow: getComputedStyle(n).textShadow };
+      });
+      await sleep(600);
+      let v = await look();
+      check('days and milliseconds, e.g. “44d 01:12:21.815”', /^\d+d \d\d:\d\d:\d\d\.\d{3}$/.test(v.text) && v.ms, v.text);
+      check('no glow and no box behind the numbers', v.shadow === 'none' && v.overflow === 'visible', JSON.stringify(v));
+      check('it fits the screen', v.fits && v.inside, JSON.stringify(v));
+      await s.app.evaluate(({ BrowserWindow }) => { const w = BrowserWindow.getAllWindows()[0]; w.unmaximize(); w.setSize(1024, 640); });
+      await sleep(1500);
+      v = await look();
+      check('and a narrow window', v.fits && v.inside, JSON.stringify(v));
+      await s.page.evaluate(() => window.__AP.Engine.disarm());
       check('no page errors', s.errors.length === 0, s.errors.join(' | '));
     } finally { await s.close(); }
   },
