@@ -2795,7 +2795,7 @@ const scenarios = {
       s = await launch(profile);
       check('a zeroed settings file: the backup is used and the countdown comes back armed', await waitSynced(s.page, 20000) && (await state(s.page)).armed);
       ev = await events(s.page);
-      check('after a shutdown it says “Back after the PC was shut down or restarted”', /Back after the PC was shut down or restarted: the movie is at [\d:]+, where the clock says\./.test(ev), (ev.match(/Back after[^\n]*/) || [''])[0]);
+      check('after a shutdown it says “Back after Windows was shut down, restarted or signed out”', /Back after Windows was shut down, restarted or signed out: the movie is at [\d:]+, where the clock says\./.test(ev), (ev.match(/Back after[^\n]*/) || [''])[0]);
 
       // 5. The power cut test in the Test tab: the app cuts itself off and the helper starts it as at sign-in.
       await s.page.click('.tab[data-tab="test"]');

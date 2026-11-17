@@ -2184,7 +2184,7 @@
       if (!lr || lr.ended === 'clean' || lr.ended === 'watchdog' || !cfg.armed) return;
       this.info = Object.assign({ startedAt: appInfo.startedAt }, lr);
       const when = lr.lastAlive ? ' (last seen running at ' + C.fmtClock(new Date(lr.lastAlive), cfg.use24h) + ')' : '';
-      Engine.logEvent((lr.ended === 'shutdown' ? 'The PC was shut down or restarted with the countdown armed'
+      Engine.logEvent((lr.ended === 'shutdown' ? 'Windows was shut down, restarted or signed out with the countdown armed'
         : lr.drill ? 'Power cut test: the app was cut off'
           : lr.ended === 'killed' ? 'The app was closed without warning while the PC kept running'
             : 'The PC went off without warning (a power cut, an empty battery, the power button)') + when + ': picking up where the clock says');
@@ -2192,7 +2192,7 @@
 
     /** Why the app was gone, in a few words, for the messages below. */
     why(lr) {
-      return lr.drill ? 'the power cut test' : lr.ended === 'shutdown' ? 'the PC was shut down or restarted'
+      return lr.drill ? 'the power cut test' : lr.ended === 'shutdown' ? 'Windows was shut down, restarted or signed out'
         : lr.ended === 'killed' ? 'the app was closed without warning' : 'the PC went off';
     },
 
@@ -2234,7 +2234,7 @@
       const missed = s && lr.lastAlive && lr.lastAlive < s.targetEpoch && now >= s.targetEpoch ? ' ' + (isNewYearMoment(s.targetEpoch) ? 'Midnight' : 'The target moment') + ' came while it was off.' : '';
       let text;
       if (lr.drill) text = 'Power cut test: the app is back ' + fmtSpan((now - lr.drill.at) / 1000) + ' after it was cut off, and ' + pos + '.';
-      else if (lr.ended === 'shutdown') text = 'Back after the PC was shut down or restarted' + (off != null && off >= 60 ? ' (' + fmtLate(off) + ' ago)' : '') + ': ' + pos + '.' + missed;
+      else if (lr.ended === 'shutdown') text = 'Back after Windows was shut down, restarted or signed out' + (off != null && off >= 60 ? ' (' + fmtLate(off) + ' ago)' : '') + ': ' + pos + '.' + missed;
       else if (lr.ended === 'killed') text = 'Back after the app was closed without warning: ' + pos + '.' + missed;
       else text = 'Back after the PC went off' + (off != null && off >= 20 ? ' for about ' + fmtLate(off) : '') + ' (a power cut, an empty battery or the power button): ' + pos + '.' + missed;
       toast(text, 'good', 9000);

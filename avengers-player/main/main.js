@@ -148,8 +148,11 @@ function stopWatchdog() {
 function setStartAtLogin(on) {
   if (process.platform !== 'win32' || !app.isPackaged) return;
   try {
-    // A fixed name, so the uninstaller knows exactly which entry to remove.
-    if (app.getLoginItemSettings({ name: LOGIN_ITEM }).openAtLogin !== !!on) app.setLoginItemSettings({ openAtLogin: !!on, name: LOGIN_ITEM });
+    // A fixed name, so the uninstaller knows exactly which entry to remove. Written or removed every
+    // time: on Windows getLoginItemSettings() cannot look an entry up by its name (it only takes a
+    // path and arguments), so asking first said "not there" and a disarmed countdown left the entry
+    // behind, opening the app at every sign-in.
+    app.setLoginItemSettings({ openAtLogin: !!on, name: LOGIN_ITEM });
   } catch (e) {
     log('main', 'start-at-login could not be changed: ' + (e && e.message));
   }
@@ -293,14 +296,16 @@ function createWindow() {
   // Shut down, restart or sign out: Windows ends the process right after this, without a 'close'.
   // The countdown stays armed and the start-at-login entry stays in place, so the app opens again
   // at the next sign-in and picks up where the clock says.
-  win.on('session-end', (e) => { sessionEnding = true; markSessionEnd(e && e.reasons && e.reasons.length ? e.reasons.join(', ') : 'shut down or restart'); });
-  // Asked first. Should the window be closed after this, that is the shutdown, not the user quitting:
-  // no question, and the countdown keeps its way back at the next sign-in. (Cancelled shutdowns:
-  // after a minute a close is the user's again.)
-  win.on('query-session-end', () => {
+  win.on('session-end', (e) => {
+    const reasons = e && Array.isArray(e.reasons) ? e.reasons : [];
+    // An installer's Restart Manager closing the app ('close-app') is not the end of the session:
+    // it is treated like any other kill, and the crash watchdog brings the app back at once.
+    if (reasons.includes('close-app') && !reasons.some((r) => r === 'logoff' || r === 'shutdown' || r === 'critical')) {
+      log('main', 'closed by the Windows Restart Manager (an installer): the crash watchdog brings the app back');
+      return;
+    }
     sessionEnding = true;
-    log('main', 'Windows asks whether the session may end');
-    setTimeout(() => { sessionEnding = false; }, 60000);
+    markSessionEnd(reasons.length ? reasons.join(', ') : 'shut down or restart');
   });
 
   win.on('close', (e) => {
@@ -424,7 +429,12 @@ function registerIpc() {
     stopWatchdog();
     try {
       writeDurable(POWER_DRILL, JSON.stringify({ at: Date.now(), offMs: offMs }));
-      spawnHelper({ powerCut: offMs }).unref();
+      // A helper that could not be started reports it later, as an 'error' event with no process id:
+      // the app must not cut itself off with nothing to bring it back.
+      const helper = spawnHelper({ powerCut: offMs });
+      helper.on('error', (err) => log('main', 'power cut helper: ' + (err && err.message)));
+      if (!helper.pid) throw new Error('the helper that starts the app again did not start');
+      helper.unref();
     } catch (err) {
       log('main', 'power cut test could not start: ' + (err && err.message));
       try { fs.unlinkSync(POWER_DRILL); } catch (e2) { /* none */ }

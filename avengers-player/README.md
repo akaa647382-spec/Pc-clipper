@@ -60,7 +60,7 @@ yourself is different: it asks first, and then stays closed.)
 again when the PC is back on and you sign in, however long it was off. It loads the countdown, imports the movie and
 puts it where the clock says, then tells you, for example *"Back after the PC went off for about 4 minutes (a power
 cut, an empty battery or the power button): the movie is at 1:23:45, where the clock says."* After a shutdown or a
-restart it says *"Back after the PC was shut down or restarted"*. Its settings are forced onto the disk every time
+restart it says *"Back after Windows was shut down, restarted or signed out"*. Its settings are forced onto the disk every time
 they are saved, so a power cut cannot leave them half written (and if a file is ever damaged anyway, the previous
 copy is used). If the PC only went to sleep (the lid, the power button, a low battery), the film goes straight back
 to where the clock says the moment it wakes up. While armed on a laptop's battery the app tells you to plug it in,
