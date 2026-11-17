@@ -3,6 +3,7 @@
 //   node tests/e2e/run.mjs snap slip  run only the scenarios whose name contains one of the words
 import fs from 'node:fs';
 import path from 'node:path';
+import { execSync } from 'node:child_process';
 import { ensureDisplay, ensureMedia, newProfile, launch, loadMovie, state, shot, sleep, MEDIA } from './harness.mjs';
 
 ensureDisplay(import.meta.url);
@@ -1263,7 +1264,7 @@ const scenarios = {
       check('the snap point is already set: 2:30:31.668, where the flash begins, 1.668 s after the round figure', Math.abs(v.snap - 9031.668) < 1e-6 && v.version === 'original', v.snap + ' ' + v.version);
       check('the countdown is calibrated to it: the movie starts at 9:29:28.332 PM', await shows(s.page, 'ktStart', /Dec 31 · 9:29:28\.332 PM/) && /Jan 1 · 12:00:00 AM/.test(v.target), v.start);
       check('the pre-flight list says the app found it, and how', await shows(s.page, 'preflight', /Snap point confirmed in this file2:30:31\.668 · found by the app: the flash of the snap/) && !(await info(s.page)).findBtn, v.preflight.slice(0, 260));
-      check('the strip shows the frame it chose', /^Snap found: 2:30:31\.668$/.test(f.title) && /The app has put the snap on the frame marked SET NOW/.test(f.note) && /The movie now starts at 9:29:28 PM/.test(f.note) &&
+      check('the strip shows the frame it chose', /^Snap found: 2:30:31\.668$/.test(f.title) && /The app has put the snap on the frame marked SET NOW/.test(f.note) && /The movie now starts at 9:29:28\.332 PM/.test(f.note) &&
         Math.abs(f.selT - 9031.6667) < 0.01 && Math.abs(f.nowT - 9031.6667) < 0.01 && f.ok === 'Yes, the snap is on this frame' && f.tags.includes('now:SET NOW') && f.tags.includes('pick:SNAP?'), f.title + ' | ' + f.note.slice(0, 200) + ' | ' + f.tags.join(','));
       check('with the film itself paused on that frame, sound and speed untouched', f.paused && f.videoT >= 9031.666 && f.videoT < 9031.834 && !f.muted && f.rate === 1, JSON.stringify({ t: f.videoT, muted: f.muted, rate: f.rate }));
       await shot(s.page, 'versions-auto-endgame');
@@ -2605,6 +2606,219 @@ const scenarios = {
       await stripClosed(s.page);
       check('no page errors', s.errors.length === 0, s.errors.join(' | '));
     } finally { await s.close(); }
+  },
+
+  async latetest() {
+    // The late start test: the app's clock past the start time with nothing armed, the real
+    // "You are late" box, JOIN NOW, and the film on the clock. Then a minute before midnight: the
+    // snap lands after a late join.
+    const ENDGAME = path.join(MEDIA, 'original-length.mp4');
+    if (!fs.existsSync(ENDGAME)) { console.log('  note  long test clips missing: run scripts/make-test-media.sh'); return; }
+    const s = await launch(newProfile());
+    try {
+      await loadMovie(s.page, ENDGAME);
+      if (await waitFor(s.page, () => !document.getElementById('modal').hidden && /Finding the snap/.test(document.getElementById('modalTitle').textContent), null, 15000)) {
+        await s.page.click('#modalActions button');
+        await waitFor(s.page, () => !window.__AP.SnapCam.busy && document.getElementById('modal').hidden, null, 8000);
+      }
+      await setSnap(s.page, '2:30:31.668');
+      await s.page.evaluate(() => window.__AP.Versions.confirm());
+      await s.page.click('.tab[data-tab="test"]');
+      const look = () => s.page.evaluate(() => {
+        const { Engine, Clock } = window.__AP;
+        const g = (id) => document.getElementById(id);
+        const d = new Date(Clock.now());
+        return {
+          mode: Engine.mode, test: Engine.test && Engine.test.kind, joined: !!(Engine.test && Engine.test.joined), h: d.getHours(), m: d.getMinutes(),
+          sinceStart: Engine.session ? (Clock.now() - Engine.session.startEpoch) / 1000 : null,
+          box: !g('late').hidden, title: g('lateTitle').textContent, body: g('lateBody').textContent,
+          hud: !g('testHud').hidden, note: g('thNote').textContent, label: g('stLabel').textContent,
+          arm: g('armBtn').textContent, armOff: g('armBtn').disabled, results: g('testResults').textContent
+        };
+      });
+      check('the last choice reads “Join at 11:59:00 PM, watch the snap”', /^Join at 11:59:00 PM, watch the snap$/.test(await s.page.$eval('#tsLateBy option[value="snap"]', (o) => o.textContent)));
+
+      // Five minutes late.
+      await s.page.selectOption('#tsLateBy', '300');
+      await s.page.click('[data-test="late"]');
+      let v = await look();
+      check('the app\'s clock is 5 minutes past the start, nothing armed', v.test === 'late' && v.mode === 'free' && !v.joined && Math.abs(v.sinceStart - 300) < 2, JSON.stringify(v));
+      check('the real “You are late” box comes up', await waitFor(s.page, () => !document.getElementById('late').hidden, null, 3000));
+      v = await look();
+      // (The film's time on screen changes with the clock's seconds: 5 minutes after 9:29:28.332 PM it reads 0:04:59 until the clock reaches 9:34:29.)
+      check('it says the movie should be at 0:04:59 or 0:05:0x', /You are late to the countdown/.test(v.title) && /Right now it should be at 0:0(4:59|5:0\d)\./.test(v.body), v.title + ' | ' + v.body);
+      check('the test bar asks for JOIN NOW, the big button joins, the status reads LATE', v.hud && /press JOIN NOW/.test(v.note) && v.arm === 'JOIN THE MOVIE NOW' && !v.armOff && v.label === 'TEST RUN · LATE · NOT ARMED', JSON.stringify(v));
+      await sleep(1200);
+      await s.page.click('#lateBtn');
+      check('JOIN NOW: the film locks onto the clock', await waitSynced(s.page, 10000));
+      const m = await measureSync(s.page, 1500);
+      check('every frame within 60 ms of the clock after joining', Math.abs(m.worst) < 0.06, ms(m.worst) + ' over ' + m.n + ' frames');
+      check('PASS, with where it jumped and how close it landed', await waitFor(s.page, () => /PASS · Late start test · 5 minutes late/.test(document.getElementById('testResults').textContent), null, 15000), (await look()).results.slice(0, 300));
+      v = await look();
+      check('the result says how it joined', /JOIN NOW at 9:34:\d\d\.\d{3} PM, 5 minutes after the start: the film jumped to 0:05:0\d\.\d{3} and started \d\.\d s later, (right on the clock|\d+ ms (ahead of|behind) the clock)\. Three seconds on it was [+−±]\d+ ms from the clock\./.test(v.results), v.results.slice(0, 400));
+      check('the test ends by itself and the real clock is back', await waitFor(s.page, () => !window.__AP.Engine.test && window.__AP.Clock.testOffsetMs === 0 && window.__AP.Engine.mode === 'free', null, 12000));
+      check('with the real clock there is no late box', await s.page.evaluate(() => document.getElementById('late').hidden && document.getElementById('latePill').hidden));
+
+      // A minute before midnight, joined with the keyboard: the snap lands on midnight anyway.
+      await s.page.selectOption('#tsLateBy', 'snap');
+      await s.page.click('[data-test="late"]');
+      check('11:59 PM: the late box is up', await waitFor(s.page, () => !document.getElementById('late').hidden, null, 3000));
+      v = await look();
+      check('the app\'s clock reads 11:59 PM', v.h === 23 && v.m === 59 && v.mode === 'free', JSON.stringify(v));
+      await sleep(800);
+      await s.page.keyboard.press('Space');
+      check('Space joins, and the film locks onto the clock', await waitSynced(s.page, 10000));
+      check('midnight comes with the film on the clock', await waitFor(s.page, () => window.__AP.Engine.events.some((e) => /Target moment reached/.test(e.text)), null, 80000));
+      const party = await s.page.evaluate(() => {
+        const { Engine, Celebration } = window.__AP;
+        return { fx: !!(Celebration.fx && Celebration.fx.running), banner: !document.getElementById('banner').hidden, test: !!Engine.test, ev: Engine.events.slice(-4).map((e) => e.text) };
+      });
+      check('the celebration plays, the test still running', (party.fx || party.banner) && party.test, JSON.stringify(party));
+      // (A result goes into the list when its test ends, after the celebration.)
+      check('the snap frame hits midnight after the late join', await waitFor(s.page, () => /PASS · Late start test · join a minute before midnight/.test(document.getElementById('testResults').textContent) && /The snap frame hit midnight/.test(document.getElementById('testResults').textContent), null, 30000), (await look()).results.slice(0, 400));
+      check('and the test ends by itself', await waitFor(s.page, () => !window.__AP.Engine.test && window.__AP.Clock.testOffsetMs === 0, null, 30000));
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally { await s.close(); }
+  },
+
+  async powerearly() {
+    // The PC goes off before the movie has started: when it is back on, the countdown simply carries on.
+    const profile = newProfile();
+    let s = await launch(profile);
+    try {
+      await loadMovie(s.page, MOVIE);
+      await setSnap(s.page, SNAP);
+      await armIn(s.page, 60);
+      check('armed, waiting for the start', await waitPhase(s.page, 'standby', 10000));
+      const start = await s.page.evaluate(() => window.__AP.Engine.session.startEpoch);
+      const pid = s.app.process().pid;
+      const rows = execSync('ps -eo pid=,ppid=').toString().trim().split('\n').map((l) => l.trim().split(/\s+/).map(Number));
+      const all = [pid];
+      for (let i = 0; i < all.length; i++) for (const [c, pp] of rows) if (pp === all[i]) all.push(c);
+      for (const p of all.reverse()) { try { process.kill(p, 'SIGKILL'); } catch (e) { /* gone */ } }
+      await sleep(3000);
+      s = await launch(profile, { AP_BOOTED_AT: String(Date.now()) });
+      check('back on: still armed, waiting for the same start', await waitPhase(s.page, 'standby', 20000) && await s.page.evaluate((t) => window.__AP.cfg.armed && window.__AP.Engine.session.startEpoch === t, start));
+      check('it says the countdown is still armed', await waitFor(s.page, () => window.__AP.Engine.events.some((e) => /^Back after the PC went off: the countdown is still armed and the movie starts at \d+:\d\d:\d\d(\.\d{3})? [AP]M\.$/.test(e.text)), null, 10000),
+        (await s.page.evaluate(() => window.__AP.Engine.events.map((e) => e.text).filter((t) => /Back after/.test(t)).join(' | '))) || 'nothing said');
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally {
+      await Promise.race([s.close(), sleep(15000)]);
+      try { execSync('pkill -9 -f ' + JSON.stringify(profile) + ' || true'); } catch (e) { /* nothing left */ }
+    }
+  },
+
+  async powercut() {
+    // The PC goes off with the countdown armed: a power cut, an empty battery, the power button held.
+    // Every process of the app dies at once, the crash watchdog with it, and nothing is saved on the
+    // way out. Then the PC is "turned back on": the app is started the way Windows starts it at
+    // sign-in, with no arguments, and has to pick up where the clock says.
+    const profile = newProfile();
+    const logFile = path.join(profile, 'avengers-player.log');
+    const readLog = () => { try { return fs.readFileSync(logFile, 'utf8'); } catch (e) { return ''; } };
+    const cutPower = (app) => {
+      const pid = app.process().pid;
+      const rows = execSync('ps -eo pid=,ppid=').toString().trim().split('\n').map((l) => l.trim().split(/\s+/).map(Number));
+      const all = [pid];
+      for (let i = 0; i < all.length; i++) for (const [c, pp] of rows) if (pp === all[i]) all.push(c);
+      for (const p of all.reverse()) { try { process.kill(p, 'SIGKILL'); } catch (e) { /* gone */ } }
+      return all.length;
+    };
+    const events = (page) => page.evaluate(() => window.__AP.Engine.events.map((e) => e.text).join('\n'));
+    let s = await launch(profile);
+    let drillPid = null;
+    try {
+      await loadMovie(s.page, MOVIE);
+      await setSnap(s.page, SNAP);
+      await armIn(s.page, -30);
+      check('armed and playing in sync', await waitSynced(s.page, 10000));
+      await sleep(1500);
+      const before = await state(s.page);
+      check('while armed the app writes down that it is running', fs.existsSync(path.join(profile, 'alive')));
+      const n = cutPower(s.app);
+      check('power cut: every process of the app gone at once, the watchdog too', n >= 2, n + ' processes');
+      const cutAt = Date.now();
+      await sleep(4000);                                   // the PC is off
+      check('nothing brought the app back while the PC was off', !/\[watchdog\] the app disappeared/.test(readLog()));
+
+      // 1. Back on: started as at sign-in. (The PC "started" after the cut: the tests cannot restart it.)
+      s = await launch(profile, { AP_BOOTED_AT: String(Date.now()) });
+      check('back on: the countdown is armed again and the film locks onto the clock by itself', await waitSynced(s.page, 20000) && (await state(s.page)).armed);
+      const after = await state(s.page);
+      const lost = (Date.now() - cutAt) / 1000;
+      check('the film is where the clock says, not where it stopped', Math.abs(after.t - after.expected) < 0.12 && after.t > before.t + 4, 'was at ' + before.t.toFixed(1) + ' s, now ' + after.t.toFixed(1) + ' s (' + lost.toFixed(1) + ' s later)');
+      const sm = await measureSync(s.page, 1500);
+      check('every frame within 60 ms of the clock', Math.abs(sm.worst) < 0.06, ms(sm.worst) + ' over ' + sm.n + ' frames');
+      check('the log says how the last run ended: cut off', /the last run did not end on purpose \(cut\)/.test(readLog()));
+      let ev = await events(s.page);
+      check('it says so: “Back after the PC went off … the movie is at …, where the clock says”', /Back after the PC went off \(a power cut, an empty battery or the power button\): the movie is at 0:0\d:\d\d, where the clock says\./.test(ev) && /In sync at [\d:]+ \(resume\)/.test(ev), (ev.match(/Back after[^\n]*/) || [''])[0]);
+      // Had the PC kept running (the app ended from Task Manager), it would not say the PC went off.
+      const killedText = await s.page.evaluate(() => {
+        const R = window.__AP.Recovery;
+        const keep = { info: R.info, told: R.told };
+        R.info = { ended: 'killed', lastAlive: Date.now() - 5000 }; R.told = false;
+        R.resumed({ pos: 61 });
+        Object.assign(R, keep);
+        const t = Array.from(document.querySelectorAll('#toasts .toast')).map((x) => x.textContent);
+        return t[t.length - 1] || '';
+      });
+      check('an app killed while the PC kept running: “Back after the app was closed without warning”', /^Back after the app was closed without warning: the movie is at 0:01:01, where the clock says\.$/.test(killedText), killedText);
+
+      // 2. The PC wakes up from sleep: straight back on the clock, no out-of-sync box.
+      await s.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.send('power:event', { type: 'resume' }));
+      check('waking up from sleep re-cues the film at once', await waitFor(s.page, () => window.__AP.Engine.events.some((e) => /In sync at .* \(wake\)/.test(e.text)), null, 6000));
+      check('and it is locked to the clock again', await waitSynced(s.page, 8000) && (await state(s.page)).phase === 'synced');
+
+      // 3. Unplugged, battery running low: said while armed.
+      await s.page.evaluate(() => { const P = window.__AP.Power; P.battery = { charging: false, level: 0.09, addEventListener() {} }; P.check(); });
+      const toasts = await s.page.evaluate(() => Array.from(document.querySelectorAll('#toasts .toast')).map((t) => t.textContent).join(' | '));
+      check('on the battery: “plug it in”, and “Battery at 9%”', /running on its battery \(9%\): plug it in/.test(toasts) && /Battery at 9%: plug the PC in now/.test(toasts), toasts);
+      check('the pre-flight list says it too', await waitFor(s.page, () => /Running on the battery \(9%\)/.test(document.getElementById('preflight').textContent), null, 3000));
+      await s.page.evaluate(() => { const P = window.__AP.Power; P.battery = { charging: true, level: 0.1, addEventListener() {} }; P.check(); });
+      check('plugged in again', await waitFor(s.page, () => /Plugged in/.test(document.getElementById('preflight').textContent), null, 3000));
+
+      // 4. Windows shuts down with the app open, and the settings file did not survive whole.
+      cutPower(s.app);
+      fs.writeFileSync(path.join(profile, 'session-end'), new Date().toISOString());
+      const f = path.join(profile, 'settings.json');
+      fs.writeFileSync(f, Buffer.alloc(fs.statSync(f).size));      // zeroed, as a power cut can leave a file
+      await sleep(2500);
+      s = await launch(profile);
+      check('a zeroed settings file: the backup is used and the countdown comes back armed', await waitSynced(s.page, 20000) && (await state(s.page)).armed);
+      ev = await events(s.page);
+      check('after a shutdown it says “Back after the PC was shut down or restarted”', /Back after the PC was shut down or restarted: the movie is at [\d:]+, where the clock says\./.test(ev), (ev.match(/Back after[^\n]*/) || [''])[0]);
+
+      // 5. The power cut test in the Test tab: the app cuts itself off and the helper starts it as at sign-in.
+      await s.page.click('.tab[data-tab="test"]');
+      await s.page.selectOption('#tsPowerOff', '10');
+      const mark = readLog().length;
+      await s.page.click('#powerBtn');
+      let tail = '';
+      const deadline = Date.now() + 60000;
+      while (Date.now() < deadline) {
+        await sleep(500);
+        tail = readLog().slice(mark);
+        if (/Power cut test (passed|failed)/.test(tail)) break;
+      }
+      check('the button cuts the whole app off', /power cut test: cutting the app off for 10 s/.test(tail));
+      check('nothing comes back for 10 s, then it is started as at sign-in', /\[watchdog\] power cut test: the PC is "back on"/.test(tail) && !/restarted by the crash watchdog/.test(tail));
+      const offFor = (() => {
+        const a = (tail.match(/^(\S+) \[watchdog\] power cut test: the app is off/m) || [])[1];
+        const b = (tail.match(/^(\S+) \[watchdog\] power cut test: the PC is "back on"/m) || [])[1];
+        return a && b ? (Date.parse(b) - Date.parse(a)) / 1000 : NaN;
+      })();
+      check('it stayed off for the 10 s chosen', offFor >= 9.5 && offFor < 11.5, offFor.toFixed(1) + ' s');
+      check('the new instance imported the movie and resumed on the clock', /Movie loaded: movie\.mp4/.test(tail) && /In sync at [\d:]+ \(resume\)/.test(tail));
+      check('the power cut test passed: back on the clock', /Power cut test passed: The app was cut off at .* with nothing saved on the way out, and started again 1\d s later the way Windows starts it when the PC is back on\. It imported the movie by itself and put it at 0:0\d:\d\d\.\d{3}, .*the clock: \d+ s after the cut the film was running on the clock again\./.test(tail), (tail.match(/Power cut test (passed|failed)[^\n]*/) || ['no result'])[0]);
+      drillPid = +(/ pid (\d+)\n/.exec(tail.slice(tail.indexOf('the PC is "back on"'))) || [])[1] || null;
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally {
+      // A deliberate exit first (the watchdog then stays quiet), then whatever the drill started.
+      await Promise.race([s.close(), sleep(15000)]);
+      try { fs.writeFileSync(path.join(profile, 'clean-exit'), 'test'); } catch (e) { /* profile gone */ }
+      if (drillPid) { try { process.kill(drillPid, 'SIGKILL'); } catch (e) { /* already gone */ } }
+      try { execSync('pkill -9 -f ' + JSON.stringify(profile) + ' || true'); } catch (e) { /* nothing left */ }
+    }
   }
 };
 

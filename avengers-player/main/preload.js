@@ -39,6 +39,12 @@ contextBridge.exposeInMainWorld('apNative', {
 
   // the crash drill: takes the whole app down so the watchdog can be seen bringing it back
   crashNow: () => ipcRenderer.send('drill:crash'),
+  // the power cut test: cuts the whole app off, then starts it again as Windows does at sign-in
+  powerCutNow: (offSec) => ipcRenderer.send('drill:powercut', Number(offSec) || 30),
+
+  // power: sleep, wake, battery
+  powerState: () => ipcRenderer.invoke('power:state'),
+  onPower: (cb) => on('power:event', cb),
 
   // internet time
   measureTime: () => ipcRenderer.invoke('time:measure'),

@@ -1,7 +1,7 @@
 {
   "name": "avengers-player",
   "productName": "Avengers Player",
-  "version": "1.9.4",
+  "version": "1.10.0",
   "description": "New Year sync player: starts the movie by itself so the snap lands exactly on midnight.",
   "main": "main/main.js",
   "private": true,

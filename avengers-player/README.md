@@ -52,9 +52,19 @@ example *"With this start time the snap came 1.668 s after midnight"*. The film 
 was on screen at 12:00:00 and the snap point, so you can see the difference with your own eyes.
 
 **If the app crashes, it comes back by itself.** While the countdown is armed a small watchdog keeps an eye on the
-app. If the app crashes or is killed, the watchdog starts it again within a couple of seconds; after a restart of the PC,
-Windows opens it again when you sign in. Either way it imports the movie again and jumps to exactly where the clock says
-the film should be. Nothing to click. (Closing the app yourself is different: it asks first, and then stays closed.)
+app. If the app crashes or is killed, the watchdog starts it again within a couple of seconds. Either way it imports
+the movie again and jumps to exactly where the clock says the film should be. Nothing to click. (Closing the app
+yourself is different: it asks first, and then stays closed.)
+
+**A power cut, an empty battery or a PC that is switched off.** While the countdown is armed, Windows opens the app
+again when the PC is back on and you sign in, however long it was off. It loads the countdown, imports the movie and
+puts it where the clock says, then tells you, for example *"Back after the PC went off for about 4 minutes (a power
+cut, an empty battery or the power button): the movie is at 1:23:45, where the clock says."* After a shutdown or a
+restart it says *"Back after the PC was shut down or restarted"*. Its settings are forced onto the disk every time
+they are saved, so a power cut cannot leave them half written (and if a file is ever damaged anyway, the previous
+copy is used). If the PC only went to sleep (the lid, the power button, a low battery), the film goes straight back
+to where the clock says the moment it wakes up. While armed on a laptop's battery the app tells you to plug it in,
+and again at 20, 10 and 5 percent.
 
 ## Rehearse first (Test tab)
 
@@ -77,6 +87,8 @@ The other tests also move the app's own clock, not your PC clock.
 | **Auto-start** | Jumps to a few seconds before 9:29:30 PM. The movie must start alone, on the dot. |
 | **Snap** | Jumps to just before midnight. Watch the snap land on 12:00:00, the date roll over to January 1 and the animation play. |
 | **Slip and recovery drill** | Knocks the film out of sync on purpose so you can practise **Recalibrate**. |
+| **Late start** | For anyone who opens the app after the movie should have started. The app's clock is put 10 s, 5 minutes or an hour past the start time with nothing armed, so the real *You are late* box comes up. Press **JOIN NOW**, Enter or Space: the film jumps to where the clock says and starts on the clock. The result says how long joining took and how close to the clock it landed. *Join at 11:59:00 PM, watch the snap* joins a minute before midnight, so you see the snap land on 12:00:00 after a late join. |
+| **Power cut** | With the countdown armed, pick how long the PC stays off (10 s, 30 s, 1 minute) and press *Cut the power*. The whole app is cut off at once, watchdog included, with nothing saved on the way out. After that time it is started again the way Windows starts it when the PC is back on, imports the movie by itself and puts it where the clock says; the result says how far behind or ahead of the clock it landed. (It cuts the app off, not your PC.) |
 | **Crash recovery** | With the countdown armed, press *Crash the app now*. The app crashes for real and is back, in sync, a few seconds later. |
 
 Each test prints a result with the measured error in milliseconds.
@@ -281,7 +293,9 @@ want, and switches the sound back on if the player was left muted.
 
 - Run the Auto-start and Snap tests with the real movie file. The pre-flight list in the Mission tab should be green.
 - Plug the laptop in and leave the lid open. While armed the app stops the PC from falling asleep by itself, but
-  closing the lid or pressing the power button still puts it to sleep, and a battery still runs out.
+  closing the lid or pressing the power button still puts it to sleep, and a battery still runs out. (If either
+  happens, the film goes back where the clock says when the PC wakes up or is back on; the pre-flight list says
+  whether the PC is plugged in.)
 - Leave Windows Update alone until January 1.
 - Start the countdown early in the evening and leave the app open.
 
@@ -314,6 +328,10 @@ want, and switches the sound back on if the player was left muted.
   screen a little after the last word, by an amount no two files agree on. Against subtitles inside the movie file
   it is good to a few hundredths of a second. When the voices are buried under the rest of the sound, it says it
   cannot tell and moves nothing.
+- Power cuts were tested by killing every process of the app at once (the watchdog included) and starting it again
+  the way Windows does at sign-in, on Linux. That Windows opens the app at sign-in after a real power cut depends on
+  the start-at-login entry the app sets while armed (and on you signing in); it was not tried on a real Windows PC
+  with the plug pulled. The Power cut test runs the same path on your PC, minus the sign-in.
 - The internet time check was tested against stand-in time servers only. If it cannot reach a real one on your PC, the
   pre-flight list says so and the app uses the PC clock as it is.
 - Sound through Bluetooth speakers or a TV can lag behind the picture by a tenth of a second or more. That delay

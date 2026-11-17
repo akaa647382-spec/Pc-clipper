@@ -58,7 +58,7 @@ const MAX_INSTALLER_BYTES = 95 * 1024 * 1024;
 const RUNTIME_DIRS = ['/main', '/src'];
 const RUNTIME_FILES = ['/package.json', '/build/icon.png', '/build/icon.ico'];
 const REQUIRED_APP_FILES = [
-  'main/main.js', 'main/preload.js', 'main/store.js', 'main/ntp.js', 'main/ffmpeg.js', 'main/watchdog.js',
+  'main/main.js', 'main/preload.js', 'main/store.js', 'main/lastrun.js', 'main/ntp.js', 'main/ffmpeg.js', 'main/watchdog.js',
   'src/index.html', 'src/styles.css', 'src/core.js', 'src/subs-core.js', 'src/fx.js', 'src/app.js',
 ];
 

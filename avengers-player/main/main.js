@@ -6,14 +6,17 @@
  * cannot do reliably on its own: native file access, true fullscreen, keeping the PC awake,
  * real network time (NTP), crash recovery, settings that survive a crash, and the FFmpeg helper.
  */
-const { app, BrowserWindow, Menu, dialog, ipcMain, powerSaveBlocker, shell, screen } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, powerMonitor, powerSaveBlocker, shell, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
 const { spawn } = require('child_process');
-const { Store } = require('./store');
+const os = require('os');
+const { Store, writeDurable } = require('./store');
+const { classifyLastRun } = require('./lastrun');
 
 const IS_TEST = process.env.AP_TEST === '1';
+const STARTED_AT = Date.now();                              // when this instance was started (the power cut test reports it)
 // Tests run against a throwaway profile so they never touch the real settings.
 if (process.env.AP_USER_DATA) app.setPath('userData', process.env.AP_USER_DATA);
 
@@ -72,12 +75,48 @@ if (process.platform === 'win32') app.setAppUserModelId('com.avengersplayer.app'
 let win = null;
 let armed = false;
 let quitting = false;
+let sessionEnding = false;           // Windows is shutting down, restarting or signing out
 let blockerId = null;
 let unresponsiveTimer = null;
 let watchdog = null;
 const CLEAN_EXIT = path.join(USER_DATA, 'clean-exit');     // present only after the app was closed on purpose
+const SESSION_END = path.join(USER_DATA, 'session-end');   // Windows was shutting down, restarting or signing out
+const ALIVE = path.join(USER_DATA, 'alive');               // while armed: the last moment the app was seen running
+const POWER_DRILL = path.join(USER_DATA, 'power-drill');   // the power cut test: when the app was cut off
 const RECOVERED = process.argv.includes('--recovered');     // this instance was started by the crash watchdog
 const LOGIN_ITEM = 'AvengersPlayer';                        // name of the start-at-login entry (see installer.nsi)
+
+/** How the last run ended (see lastrun.js), read before this run puts down markers of its own. */
+function readLastRun() {
+  const read = (f) => { try { return fs.readFileSync(f, 'utf8'); } catch (e) { return null; } };
+  let drill = null;
+  try { drill = JSON.parse(read(POWER_DRILL) || 'null'); } catch (e) { drill = null; }
+  let bootedAt = NaN;
+  try { bootedAt = Date.now() - os.uptime() * 1000; } catch (e) { /* cannot tell */ }
+  // The automated tests cannot restart the PC: they say when it "started".
+  if (IS_TEST && Number.isFinite(Number(process.env.AP_BOOTED_AT))) bootedAt = Number(process.env.AP_BOOTED_AT);
+  return classifyLastRun({
+    clean: read(CLEAN_EXIT) != null, recovered: RECOVERED, shutdownAt: Date.parse(read(SESSION_END) || ''),
+    lastAlive: Number(read(ALIVE)), drill: drill, bootedAt: bootedAt
+  });
+}
+let lastRun = { ended: 'clean', lastAlive: null, shutdownAt: null, drill: null };
+
+/** How to start this app again: the way Windows starts it at sign-in (the installed app takes no arguments). */
+function relaunchSpec() {
+  const skip = (a) => a === '--recovered' || /^--(inspect|remote-debugging)/.test(a);
+  return { exe: process.execPath, args: app.isPackaged ? [] : process.argv.slice(1).filter((a) => !skip(a)), cwd: process.cwd() };
+}
+
+/** Starts watchdog.js (the app's own executable running as plain Node), detached from this process. */
+function spawnHelper(mode) {
+  const args = [path.join(__dirname, 'watchdog.js'), String(process.pid), USER_DATA, JSON.stringify(relaunchSpec())];
+  if (mode) args.push(JSON.stringify(mode));
+  return spawn(process.execPath, args, {
+    env: Object.assign({}, process.env, { ELECTRON_RUN_AS_NODE: '1' }),
+    detached: true, stdio: 'ignore', windowsHide: true
+  });
+}
 
 /**
  * Crash recovery beyond a page reload: while the countdown is armed, a tiny second process watches
@@ -86,16 +125,7 @@ const LOGIN_ITEM = 'AvengersPlayer';                        // name of the start
 function startWatchdog() {
   if (watchdog || process.env.AP_NO_WATCHDOG === '1') return;
   try {
-    const skip = (a) => a === '--recovered' || /^--(inspect|remote-debugging)/.test(a);
-    const relaunch = {
-      exe: process.execPath,
-      args: app.isPackaged ? [] : process.argv.slice(1).filter((a) => !skip(a)),
-      cwd: process.cwd()
-    };
-    watchdog = spawn(process.execPath, [path.join(__dirname, 'watchdog.js'), String(process.pid), USER_DATA, JSON.stringify(relaunch)], {
-      env: Object.assign({}, process.env, { ELECTRON_RUN_AS_NODE: '1' }),
-      detached: true, stdio: 'ignore', windowsHide: true
-    });
+    watchdog = spawnHelper(null);
     const mine = watchdog;
     watchdog.on('error', (e) => { log('main', 'watchdog failed: ' + e.message); if (watchdog === mine) watchdog = null; });
     watchdog.on('exit', () => { if (watchdog === mine) watchdog = null; });
@@ -128,6 +158,27 @@ function setStartAtLogin(on) {
 function markCleanExit() {
   try { fs.writeFileSync(CLEAN_EXIT, new Date().toISOString()); } catch (e) { /* worst case the watchdog restarts us */ }
   stopWatchdog();
+  setAlive(false);
+}
+
+let aliveTimer = null;
+/**
+ * While armed, the time is written down every 15 seconds. When the PC goes off without warning
+ * (a power cut, an empty battery), the next start knows roughly when that was.
+ */
+function setAlive(on) {
+  clearInterval(aliveTimer);
+  aliveTimer = null;
+  if (!on) { try { fs.unlinkSync(ALIVE); } catch (e) { /* none */ } return; }
+  const beat = () => { try { fs.writeFileSync(ALIVE, String(Date.now())); } catch (e) { /* a convenience only */ } };
+  beat();
+  aliveTimer = setInterval(beat, 15000);
+}
+
+/** Windows is ending the session with the app open. Written at once: nothing else runs after this. */
+function markSessionEnd(why) {
+  log('main', 'Windows is ending the session (' + why + ')' + (armed ? ': the countdown is armed and comes back at the next sign-in' : ''));
+  try { writeDurable(SESSION_END, new Date().toISOString()); } catch (e) { /* the next start then says "power cut" instead */ }
 }
 
 function send(channel, payload) {
@@ -239,7 +290,26 @@ function createWindow() {
   });
   win.on('responsive', () => { clearTimeout(unresponsiveTimer); log('main', 'window responsive again'); });
 
+  // Shut down, restart or sign out: Windows ends the process right after this, without a 'close'.
+  // The countdown stays armed and the start-at-login entry stays in place, so the app opens again
+  // at the next sign-in and picks up where the clock says.
+  win.on('session-end', (e) => { sessionEnding = true; markSessionEnd(e && e.reasons && e.reasons.length ? e.reasons.join(', ') : 'shut down or restart'); });
+  // Asked first. Should the window be closed after this, that is the shutdown, not the user quitting:
+  // no question, and the countdown keeps its way back at the next sign-in. (Cancelled shutdowns:
+  // after a minute a close is the user's again.)
+  win.on('query-session-end', () => {
+    sessionEnding = true;
+    log('main', 'Windows asks whether the session may end');
+    setTimeout(() => { sessionEnding = false; }, 60000);
+  });
+
   win.on('close', (e) => {
+    if (sessionEnding) {
+      // Shut down with the countdown armed: nothing is marked as a deliberate quit, so the
+      // start-at-login entry stays and the app opens again at the next sign-in.
+      log('main', 'window closed by the end of the Windows session');
+      return;
+    }
     if (armed && !quitting && !IS_TEST) {
       const choice = dialog.showMessageBoxSync(win, {
         type: 'warning',
@@ -327,6 +397,11 @@ function registerIpc() {
     const guard = armed && o.autoRestart !== false;
     if (guard) startWatchdog(); else stopWatchdog();
     setStartAtLogin(guard);
+    setAlive(armed);
+  });
+
+  ipcMain.handle('power:state', () => {
+    try { return { onBattery: !!powerMonitor.isOnBatteryPower() }; } catch (err) { return { onBattery: false }; }
   });
 
   ipcMain.on('log', (e, line) => { if (own(e)) log('ui', line); });
@@ -339,7 +414,34 @@ function registerIpc() {
     setTimeout(() => process.crash(), 300);
   });
 
-  ipcMain.handle('app:info', () => ({
+  // The power cut test: the whole app is cut off at once, crash watchdog included, with nothing
+  // saved on the way out, as a power cut or an empty battery would cut it off. A helper waits the
+  // chosen time and starts the app again exactly as Windows does at sign-in: no arguments.
+  ipcMain.on('drill:powercut', (e, offSec) => {
+    if (!own(e) || !armed) return;
+    const offMs = Math.round(Math.min(600, Math.max(5, Number(offSec) || 30)) * 1000);
+    log('main', 'power cut test: cutting the app off for ' + offMs / 1000 + ' s');
+    stopWatchdog();
+    try {
+      writeDurable(POWER_DRILL, JSON.stringify({ at: Date.now(), offMs: offMs }));
+      spawnHelper({ powerCut: offMs }).unref();
+    } catch (err) {
+      log('main', 'power cut test could not start: ' + (err && err.message));
+      try { fs.unlinkSync(POWER_DRILL); } catch (e2) { /* none */ }
+      startWatchdog();
+      return;
+    }
+    setTimeout(() => { try { process.kill(process.pid, 'SIGKILL'); } catch (err) { process.exit(1); } }, 300);
+  });
+
+  ipcMain.handle('app:info', () => {
+    // How the last run ended is told once: a page reloaded later (after a crash of the page) must
+    // not report a power cut from hours ago again.
+    const lr = lastRun;
+    lastRun = { ended: 'clean', lastAlive: null, shutdownAt: null, drill: null };
+    return infoWith(lr);
+  });
+  const infoWith = (lr) => ({
     version: app.getVersion(),
     electron: process.versions.electron,
     chrome: process.versions.chrome,
@@ -347,8 +449,10 @@ function registerIpc() {
     logFile: LOG_FILE,
     isTest: IS_TEST,
     recovered: RECOVERED,
+    lastRun: lr,
+    startedAt: STARTED_AT,
     pid: process.pid
-  }));
+  });
 
   ipcMain.handle('movie:pick', async (e) => {
     if (!own(e)) return null;
@@ -572,12 +676,25 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(() => {
     log('main', 'start v' + app.getVersion() + ' electron ' + process.versions.electron + ' pid ' + process.pid + (RECOVERED ? ' (restarted by the crash watchdog)' : ''));
-    try { fs.unlinkSync(CLEAN_EXIT); } catch (e) { /* no marker from last time */ }
+    lastRun = readLastRun();
+    if (lastRun.ended !== 'clean' && (store.get().renderer || {}).armed) {
+      log('main', 'the last run did not end on purpose (' + lastRun.ended + ')' + (lastRun.lastAlive ? ', last seen running ' + new Date(lastRun.lastAlive).toISOString() : '') + ': the armed countdown picks up where the clock says');
+    }
+    for (const f of [CLEAN_EXIT, SESSION_END, POWER_DRILL]) { try { fs.unlinkSync(f); } catch (e) { /* no marker from last time */ } }
     // No armed countdown on record: make sure nothing is left that would start the app at login.
     const saved = store.get().renderer || {};
     if (!saved.armed) setStartAtLogin(false);
     registerIpc();
     createWindow();
+    // Sleep, wake and the battery: the page re-syncs the moment the PC wakes up and warns while
+    // an armed countdown runs on a battery.
+    const tell = (type) => () => { log('main', 'power: ' + type); send('power:event', { type: type }); };
+    powerMonitor.on('suspend', tell('suspend'));
+    powerMonitor.on('resume', tell('resume'));
+    powerMonitor.on('on-battery', tell('on-battery'));
+    powerMonitor.on('on-ac', tell('on-ac'));
+    // (Linux and macOS: Windows says so through the window's 'session-end'.)
+    powerMonitor.on('shutdown', () => markSessionEnd('the system is shutting down'));
   });
 
   app.on('window-all-closed', () => { setKeepAwake(false); if (quitting) stopWatchdog(); app.quit(); });

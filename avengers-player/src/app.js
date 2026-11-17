@@ -62,7 +62,9 @@
       async ffSpeechCancel() { return true; },
       onFfProgress() {},
       async appInfo() { return { version: 'dev', electron: '', chrome: '', platform: 'browser', logFile: '', isTest: false }; },
-      showItem() {}, openLog() {}, log() {}, crashNow() {}
+      showItem() {}, openLog() {}, log() {}, crashNow() {}, powerCutNow() {},
+      async powerState() { return { onBattery: false }; },
+      onPower() {}
     };
   }
   const native = window.apNative || browserShim();
@@ -186,6 +188,13 @@
     return (ms > 0 ? '+' : ms < 0 ? '−' : '±') + Math.abs(ms) + ' ms';
   };
   const fmtSpan = (sec) => (sec < 90 ? Math.round(sec) + ' s' : C.fmtDuration(sec));
+  /** "10 s", "5 minutes", "1 hour": how late, in words. */
+  const fmtLate = (sec) => {
+    if (sec < 60) return Math.round(sec) + ' s';
+    if (sec < 3600) { const m = Math.round(sec / 60); return m + ' minute' + (m === 1 ? '' : 's'); }
+    const h = Math.round(sec / 360) / 10;
+    return h + ' hour' + (h === 1 ? '' : 's');
+  };
   const fmtOff = (sec) => {
     const a = Math.abs(sec);
     if (a < 1) return Math.round(a * 1000) + ' ms';
@@ -268,13 +277,13 @@
 
   /* ============================================================== toasts === */
 
-  function toast(text, kind) {
+  function toast(text, kind, ms) {
     const t = document.createElement('div');
     t.className = 'toast' + (kind ? ' ' + kind : '');
     t.textContent = text;
     el.toasts.appendChild(t);
     while (el.toasts.children.length > 3) el.toasts.firstChild.remove();
-    setTimeout(() => t.remove(), 3300);
+    setTimeout(() => t.remove(), ms || 3300);
   }
 
   /* =============================================================== modal === */
@@ -1216,10 +1225,15 @@
         (cfg.startMode !== 'auto' ? ' (start time chosen by hand: ' + startName(cfg.startMode, s) + '; the snap lands ' + lateText(late) + ' ' + targetWord(s) + ')' : ''));
       if (!opts.restore && !joining && cfg.startMode !== 'auto') toast('Armed: the movie starts at ' + clockOf(s.startEpoch) + ', the time you chose: ' + landsText(s) + '.');
       else if (!opts.restore && !joining && !snapConfirmed()) toast('Armed with a snap point that has not been checked. The Snap test shows whether it lands.');
+      Power.onArm();
       UI.onMode();
+      // Resumed with the film due to be running (a crash, a power cut, the PC switched off and on
+      // again): it goes straight to where the clock says, and says so.
+      const resuming = !!opts.restore && Clock.now() >= s.startEpoch;
+      if (opts.restore && !resuming) Recovery.stillArmed(s);
       // Not awaited: before the start time this only finishes when the film starts, and whoever
       // armed (startup, the button) has other things to do meanwhile.
-      this.recalibrate(joining ? 'late' : 'arm').catch((e) => this.logEvent('Recalibration failed: ' + (e && e.message)));
+      this.recalibrate(joining ? 'late' : resuming ? 'resume' : 'arm').catch((e) => this.logEvent('Recalibration failed: ' + (e && e.message)));
     },
 
     /**
@@ -1296,7 +1310,7 @@
       this.st.rate = 1;
       if (video.playbackRate !== 1) video.playbackRate = 1;
       applyVolume();
-      const counted = reason !== 'arm' && reason !== 'test' && reason !== 'late';
+      const counted = reason !== 'arm' && reason !== 'test' && reason !== 'late' && reason !== 'resume';
       if (counted) {
         this.st.recals++;
         this.st.lastRecal = { at: Date.now(), reason: reason };
@@ -1351,6 +1365,8 @@
         if (tok !== this.token) return;
         if (reason === 'recover' || reason === 'manual') toast('Back in sync', 'good');
         if (reason === 'late') toast('Joined at ' + C.fmtDuration(Math.max(0, C.filmSecondOnClock(this.session, Clock.now())), { forceHours: true }) + ': the film is where the clock says it should be', 'good');
+        if (reason === 'wake') toast('The PC woke up: the film is back at ' + C.fmtDuration(Math.max(0, C.filmSecondOnClock(this.session, Clock.now())), { forceHours: true }) + ', where the clock says', 'good', 6000);
+        if (reason === 'resume') Recovery.resumed(this.mark);
         this.logEvent('In sync at ' + C.fmtDuration(pos) + ' (' + reason + ')');
         save();
         return;
@@ -1449,6 +1465,20 @@
       this.setPhase('slipped');
       this.logEvent('Slipped (' + reason + ')');
       UI.showSlip();
+    },
+
+    /**
+     * The PC woke up from sleep or hibernation (the lid, the power button, a battery running low).
+     * The film stood still meanwhile: it goes straight back to where the clock says. (tick() also
+     * notices the jump of the clock and asks the time servers again before anything is decided.)
+     */
+    onWake() {
+      this.logEvent('The PC woke up');
+      if (this.mode !== 'armed' || !Media.ready || !this.session) return;
+      if (this.phase === 'slipped' && this.st.slipHold) return;          // out of sync on purpose: left alone
+      const exp = this.expected(Clock.now());
+      // While it waits for the start the wait itself notices a missed start, so only a running film is re-cued.
+      if (['synced', 'slipped', 'blocked', 'cueing'].includes(this.phase) && exp > 0 && exp < video.duration - 0.3) this.recalibrate('wake');
     },
 
     recover(by) {
@@ -1579,6 +1609,25 @@
         title = kind === 'real'
           ? 'Real-time test · the snap at ' + C.fmtClockMs(snapAt, cfg.use24h) + (startMode === 'auto' ? '' : ' (start as ' + clockOf(s.startEpoch) + ')')
           : startMode === 'auto' ? 'Snap test' : 'Snap test · start at ' + clockOf(s.startEpoch);
+      } else if (kind === 'late') {
+        // Somebody who opens the app after the movie should have started. The clock is put that far
+        // past the start time and nothing is armed: the real "You are late" box comes up, and
+        // JOIN NOW does what it does on the night (joinTest). opts.by 'snap': a minute before the
+        // target, so the snap is watched after the late join.
+        if (opts.by === 'snap') {
+          if (dur < atTarget + 2) { toast('This file is only ' + C.fmtDuration(dur) + ' long: with the start time set it would be over before ' + targetWord(s) + '.', 'bad'); return; }
+          const snapAt = this.snapEpoch(s);
+          simNow = Math.max(s.startEpoch + 5000, s.targetEpoch - 60000);
+          eventEpoch = Math.abs(snapAt - s.targetEpoch) <= 20000 ? Math.max(s.targetEpoch, snapAt) : s.targetEpoch;
+          endEpoch = eventEpoch + Math.max(8000, Celebration.duration() + 1500);
+          title = 'Late start test · join a minute before ' + targetWord(s);
+        } else {
+          const by = clamp(Math.round(+opts.by || 300), 1, 12 * 3600);
+          if (by > dur - 40) { toast('This file is only ' + C.fmtDuration(dur) + ' long: pick a shorter delay.', 'bad'); return; }
+          simNow = s.startEpoch + by * 1000;
+          eventEpoch = simNow;
+          title = 'Late start test · ' + fmtLate(by) + ' late';
+        }
       } else {
         const pos = clamp(Math.min(cfg.snapSec * 0.5, dur * 0.4), Math.min(20, dur * 0.2), Math.max(1, dur - 60));
         simNow = s.startEpoch + pos * 1000;
@@ -1597,9 +1646,23 @@
         snapAt: kind === 'snap' || kind === 'real' ? this.snapEpoch(s) : null,
         quality0: null,                    // how smoothly the PC plays the film: measured once it is locked on
         wasArmed: wasArmed, prevSession: wasArmed ? real : null,
-        eventDone: false, result: null, knockAt: 0, recoveredAt: 0, note: ''
+        eventDone: false, result: null, knockAt: 0, recoveredAt: 0, note: '',
+        // The late test: its own session (nothing is armed until JOIN NOW), and "Not now" as it was before.
+        session: s, watchSnap: kind === 'late' && opts.by === 'snap', joined: false, prevDismissed: Late.dismissedFor
       };
       this.session = s;
+      if (kind === 'late') {
+        // Nothing armed: the film stands still and the "You are late" box comes up, as on the night.
+        Late.dismissedFor = 0;
+        this.mode = 'free';
+        if (Media.ready) { video.playbackRate = 1; if (!video.paused) video.pause(); }
+        this.setPhase('idle');
+        this.graph.length = 0;
+        this.logEvent('Test run started: ' + title);
+        UI.onMode();
+        UI.onTest();
+        return;
+      }
       this.mode = 'armed';
       this.st.recals = 0; this.st.autoRecals = 0; this.st.slips = 0; this.st.recentAuto = [];
       this.graph.length = 0;
@@ -1637,27 +1700,9 @@
       if (t.kind === 'start' && t.eventDone && !t.result && performance.now() - t.eventAt > 6000) {
         t.result = { ok: false, title: 'Auto-start test', text: 'The movie did not start by itself. Phase: ' + this.phase + '.' };
       }
+      if (t.kind === 'late') this.tickLate(t, now);
       if ((t.kind === 'snap' || t.kind === 'real') && t.eventDone && !t.result) {
-        const d = this.st.drift;
-        if (this.phase === 'synced' && d != null) {
-          const late = Math.round((cfg.snapSec - t.atTarget) * 1000) / 1000;     // with this start, the snap comes this long after the target
-          if (Math.abs(late) < 0.0005) {
-            t.result = { ok: Math.abs(d) <= 0.06, title: t.title, text: 'The snap frame hit ' + targetWord(this.session) + ' ' + (Math.abs(d) < 0.001 ? 'exactly' : fmtOff(d) + (d > 0 ? ' early' : ' late')) + '.' };
-          } else {
-            // The film ran on the clock; with this start time the snap is simply not on the target.
-            const inStep = Math.abs(d) <= 0.06;
-            const word = targetWord(this.session);
-            t.result = {
-              ok: inStep ? null : false, strip: inStep, rehearsed: inStep, title: t.title,
-              text: inStep
-                ? 'With this start time the snap came ' + lateText(late) + ' ' + word + ' (the film itself ran on the clock, ' + fmtMs(d) + '). The automatic start, ' +
-                  clockOf(this.session.targetEpoch - Math.round(cfg.snapSec * 1000)) + ', puts it on ' + word + '.'
-                : 'The film was not in step with the clock at ' + word + ' (' + fmtOff(d) + (d > 0 ? ' early' : ' late') + ').'
-            };
-          }
-        } else if (performance.now() - t.eventAt > 2000) {
-          t.result = { ok: false, title: t.title, text: 'The film was not in sync at ' + (Math.abs(cfg.snapSec - t.atTarget) < 0.0005 ? targetWord(this.session) : 'the snap') + ' (' + this.phase + ').' };
-        }
+        t.result = this.snapVerdict(t);
         // How smoothly this PC played the film during the test: a file it cannot play smoothly
         // would stutter and be re-synced on the night too.
         if (t.result) {
@@ -1674,6 +1719,102 @@
       if (t.endEpoch != null && now >= t.endEpoch) this.endTest();
     },
 
+    /**
+     * At the snap (and the target): whether the film was on the clock, as a test result. Null until
+     * it can be said. With a start time chosen by hand the snap is not on the target.
+     */
+    snapVerdict(t) {
+      const d = this.st.drift;
+      if (this.phase === 'synced' && d != null) {
+        const late = Math.round((cfg.snapSec - t.atTarget) * 1000) / 1000;     // with this start, the snap comes this long after the target
+        if (Math.abs(late) < 0.0005) {
+          return { ok: Math.abs(d) <= 0.06, title: t.title, text: 'The snap frame hit ' + targetWord(this.session) + ' ' + (Math.abs(d) < 0.001 ? 'exactly' : fmtOff(d) + (d > 0 ? ' early' : ' late')) + '.' };
+        }
+        // The film ran on the clock; with this start time the snap is simply not on the target.
+        const inStep = Math.abs(d) <= 0.06;
+        const word = targetWord(this.session);
+        return {
+          ok: inStep ? null : false, strip: inStep, rehearsed: inStep, title: t.title,
+          text: inStep
+            ? 'With this start time the snap came ' + lateText(late) + ' ' + word + ' (the film itself ran on the clock, ' + fmtMs(d) + '). The automatic start, ' +
+              clockOf(this.session.targetEpoch - Math.round(cfg.snapSec * 1000)) + ', puts it on ' + word + '.'
+            : 'The film was not in step with the clock at ' + word + ' (' + fmtOff(d) + (d > 0 ? ' early' : ' late') + ').'
+        };
+      }
+      if (performance.now() - t.eventAt > 2000) {
+        return { ok: false, title: t.title, text: 'The film was not in sync at ' + (Math.abs(cfg.snapSec - t.atTarget) < 0.0005 ? targetWord(this.session) : 'the snap') + ' (' + this.phase + ').' };
+      }
+      return null;
+    },
+
+    /** The late test is waiting for JOIN NOW: nothing armed, the "You are late" box up. */
+    lateWaiting() {
+      return !!this.test && this.test.kind === 'late' && !this.test.joined;
+    },
+
+    /**
+     * The late test: JOIN NOW was pressed. From here on it is the real late join, recalibrate('late'):
+     * the film goes to where the clock says it should be and starts on the clock. Nothing is saved.
+     */
+    joinTest(by) {
+      const t = this.test;
+      if (!t || t.kind !== 'late' || t.joined) return;
+      t.joined = true;
+      t.joinedAt = performance.now();
+      t.joinedClock = Clock.now();
+      this.session = t.session;
+      this.mode = 'armed';
+      this.st.recals = 0; this.st.autoRecals = 0; this.st.slips = 0; this.st.recentAuto = [];
+      this.logEvent('Late test: JOIN NOW (' + (by || 'button') + '), ' + fmtLate(Math.max(0, (t.joinedClock - t.session.startEpoch) / 1000)) + ' after the start');
+      UI.onMode();
+      UI.onTest();
+      this.recalibrate('late');
+    },
+
+    /** The late test: how long joining took, and how close to the clock the film landed. */
+    tickLate(t, now) {
+      const p = performance.now();
+      if (!t.joined) {
+        this.session = t.session;       // nothing may move it while it waits (a time check, another snap point)
+        if (t.watchSnap && now >= t.eventEpoch) this.endTest('JOIN NOW was not pressed before ' + targetWord(t.session) + '.');
+        else if (now - t.t0 > 5 * 60000) this.endTest('JOIN NOW was not pressed within five minutes.');
+        return;
+      }
+      if (t.result) return;
+      const m = this.mark;
+      if (!t.lockedAt && this.phase === 'synced' && m && m.firstDrift != null) {
+        t.lockedAt = p;
+        t.firstDrift = m.firstDrift;                          // the first measurement with the film running
+        t.pos = m.pos;                                        // where the film was sent
+        t.took = (this.st.syncedAt - t.joinedAt) / 1000;      // from JOIN NOW to play, pressed on the clock's mark
+      }
+      const how = () => {
+        const f = t.firstDrift;
+        return 'JOIN NOW at ' + clockOf(t.joinedClock) + ', ' + fmtLate(Math.max(0, (t.joinedClock - t.session.startEpoch) / 1000)) + ' after the start: the film jumped to ' +
+          fmtFilm(t.pos) + ' and started ' + t.took.toFixed(1) + ' s later, ' + (Math.abs(f) < 0.001 ? 'right on the clock' : fmtOff(f) + (f > 0 ? ' ahead of' : ' behind') + ' the clock') + '.';
+      };
+      const resyncs = this.st.autoRecals ? ' (re-synced ' + this.st.autoRecals + ' time' + (this.st.autoRecals > 1 ? 's' : '') + ' on the way)' : '';
+      if (t.watchSnap) {
+        if (t.eventDone && t.lockedAt) {
+          if (t.lockedAt > t.eventAt) {
+            t.result = { ok: false, title: t.title, text: how() + ' That was after ' + targetWord(t.session) + ': JOIN NOW came too late to see the snap.' };
+          } else {
+            const v = this.snapVerdict(t);
+            if (v) t.result = Object.assign(v, { title: t.title, text: how() + ' ' + v.text.replace(/\.$/, resyncs + '.') });
+          }
+        }
+      } else if (t.lockedAt && p - t.lockedAt > 3000 && this.phase === 'synced' && this.st.drift != null && p - this.st.syncedAt > 1000) {
+        const d = this.st.drift;
+        t.result = { ok: Math.abs(d) <= 0.06, title: t.title, text: how() + ' Three seconds on it was ' + fmtMs(d) + ' from the clock' + resyncs + '.' };
+        t.endEpoch = now + 5000;
+      }
+      // A join that never gets the film onto the clock is a failure, not a test that runs for ever.
+      if (!t.result && (t.lockedAt ? !t.watchSnap && p - t.lockedAt > 30000 : p - t.joinedAt > 20000)) {
+        t.result = { ok: false, title: t.title, text: t.lockedAt ? how() + ' It did not stay on the clock (' + this.phase + ').' : 'After JOIN NOW the film did not lock onto the clock (' + this.phase + ').' };
+        t.endEpoch = now + 3000;
+      }
+    },
+
     endTest(why) {
       const t = this.test;
       if (!t) return;
@@ -1682,6 +1823,12 @@
       Clock.testOffsetMs = 0;
       UI.prevNow = 0;                    // the clock jumped back: that is not the target going by
       this.test = null;
+      if (t.kind === 'late') {
+        // "Not now" is as it was before the test; the real clock decides whether anybody is late.
+        Late.dismissedFor = t.prevDismissed;
+        setHidden(el.late, true);
+        setHidden(el.latePill, true);
+      }
       Celebration.stop();
       UI.hideSlip();
       el.blocked.hidden = true;
@@ -1751,7 +1898,8 @@
         this.strayMs = 0;
       }
       if (this.mode !== 'armed') {
-        this.session = this.computeFree();
+        // The late test waits here for JOIN NOW, on its own session: nothing is armed.
+        if (this.lateWaiting()) this.tickTest(now); else this.session = this.computeFree();
         this.trackAudio();
         AudioTracks.watch(perf);
         if (!this.test) Media.retryWhileArmed(perf);
@@ -1821,6 +1969,7 @@
           save();
         }
         this.logEvent('Locked on: started ' + fmtOff(r.drift) + (r.drift > 0 ? ' early' : ' late'));
+        if (m.reason === 'resume') Recovery.locked(m);
       }
 
       if (r.action === 'hard') { this.autoRecal('drift', r.drift); return; }
@@ -1927,7 +2076,7 @@
     /** Seconds into the film right now, or null when the film is not due to be playing. */
     position(now) {
       const s = Engine.session;
-      if (!Media.ready || Engine.mode !== 'free' || Engine.test || !s) return null;
+      if (!Media.ready || Engine.mode !== 'free' || (Engine.test && !Engine.lateWaiting()) || !s) return null;
       const t = now == null ? Clock.now() : now;
       if (t < s.startEpoch) return null;
       if (t >= s.targetEpoch && isNewYearMoment(s.targetEpoch)) return null;     // New Year has come: nothing left to join
@@ -1941,7 +2090,7 @@
     join(by) {
       if (this.position() == null) return false;
       Engine.logEvent('Late: joining the movie where the clock says it should be (' + (by || 'button') + ')');
-      Engine.arm({ late: true });
+      if (Engine.lateWaiting()) Engine.joinTest(by); else Engine.arm({ late: true });
       return true;
     },
 
@@ -2007,6 +2156,184 @@
         actions: [{ label: 'OK', primary: true, onClick: () => Modal.close() }],
         onEscape: () => Modal.close()
       });
+    }
+  };
+
+  /* ================================================ power cuts and batteries === */
+
+  /**
+   * The PC can go off with the countdown armed: a power cut, an empty laptop battery, the power
+   * button held down, Windows shutting down or restarting. While armed, Windows opens the app again
+   * at the next sign-in; it imports the movie again and the countdown picks up where the clock says,
+   * however long the PC was off. The settings that say so are forced onto the disk on every save,
+   * so a power cut cannot leave them half written. This says what happened, once, when the film is
+   * back on the clock, and after the power cut test it gives that test's result.
+   */
+  const Recovery = {
+    info: null,          // how the last run ended, from the main process (see readLastRun in main.js)
+    told: false,
+
+    take(appInfo) {
+      const lr = appInfo && appInfo.lastRun;
+      // (After a crash the watchdog's own message says so: see boot.)
+      if (!lr || lr.ended === 'clean' || lr.ended === 'watchdog' || !cfg.armed) return;
+      this.info = Object.assign({ startedAt: appInfo.startedAt }, lr);
+      const when = lr.lastAlive ? ' (last seen running at ' + C.fmtClock(new Date(lr.lastAlive), cfg.use24h) + ')' : '';
+      Engine.logEvent((lr.ended === 'shutdown' ? 'The PC was shut down or restarted with the countdown armed'
+        : lr.drill ? 'Power cut test: the app was cut off'
+          : lr.ended === 'killed' ? 'The app was closed without warning while the PC kept running'
+            : 'The PC went off without warning (a power cut, an empty battery, the power button)') + when + ': picking up where the clock says');
+    },
+
+    /** Why the app was gone, in a few words, for the messages below. */
+    why(lr) {
+      return lr.drill ? 'the power cut test' : lr.ended === 'shutdown' ? 'the PC was shut down or restarted'
+        : lr.ended === 'killed' ? 'the app was closed without warning' : 'the PC went off';
+    },
+
+    /** Back before the movie had to start: the countdown simply carries on. Said once. */
+    stillArmed(s) {
+      const lr = this.info;
+      if (!lr || this.told) return;
+      this.told = true;
+      const text = 'Back after ' + this.why(lr) + ': the countdown is still armed and the movie starts at ' + clockOf(s.startEpoch) + '.';
+      toast(text, 'good', 9000);
+      Engine.logEvent(text);
+      if (lr.drill && !this.reported) {
+        // The power cut test before the start: what can be shown is that the countdown survived it.
+        this.reported = true;
+        const r = {
+          ok: true, title: 'Power cut test',
+          text: 'The app was cut off at ' + clockOf(lr.drill.at) + ' with nothing saved on the way out, and started again ' + this.startedLater(lr) +
+            ' the way Windows starts it when the PC is back on. The countdown came back armed: the movie still starts at ' + clockOf(s.startEpoch) +
+            '. (Cut the power while the movie plays to see the film put back on the clock.)'
+        };
+        UI.addTestResult(r);
+        Engine.logEvent('Power cut test passed: ' + r.text);
+      }
+    },
+
+    startedLater(lr) {
+      return Number.isFinite(lr.startedAt) ? fmtSpan((lr.startedAt - lr.drill.at) / 1000) + ' later' : 'later';
+    },
+
+    /** The armed countdown has just put the film back where the clock says (after a restart). */
+    resumed(mark) {
+      const pos = 'the movie is at ' + C.fmtDuration(Math.max(0, mark ? mark.pos : Engine.expected()), { forceHours: true }) + ', where the clock says';
+      const lr = this.info;
+      if (!lr || this.told) { toast('Back in the movie: ' + pos, 'good', 5000); return; }
+      this.told = true;
+      const now = Clock.now();
+      const off = lr.lastAlive ? (now - lr.lastAlive) / 1000 : null;
+      const s = Engine.session;
+      const missed = s && lr.lastAlive && lr.lastAlive < s.targetEpoch && now >= s.targetEpoch ? ' ' + (isNewYearMoment(s.targetEpoch) ? 'Midnight' : 'The target moment') + ' came while it was off.' : '';
+      let text;
+      if (lr.drill) text = 'Power cut test: the app is back ' + fmtSpan((now - lr.drill.at) / 1000) + ' after it was cut off, and ' + pos + '.';
+      else if (lr.ended === 'shutdown') text = 'Back after the PC was shut down or restarted' + (off != null && off >= 60 ? ' (' + fmtLate(off) + ' ago)' : '') + ': ' + pos + '.' + missed;
+      else if (lr.ended === 'killed') text = 'Back after the app was closed without warning: ' + pos + '.' + missed;
+      else text = 'Back after the PC went off' + (off != null && off >= 20 ? ' for about ' + fmtLate(off) : '') + ' (a power cut, an empty battery or the power button): ' + pos + '.' + missed;
+      toast(text, 'good', 9000);
+      Engine.logEvent(text);
+    },
+
+    /** The first measurement after the restart: the power cut test's result. */
+    locked(m) {
+      const lr = this.info;
+      if (!lr || !lr.drill || this.reported) return;
+      this.reported = true;
+      const d = m.firstDrift;
+      const now = Clock.now();
+      const started = this.startedLater(lr);
+      const r = {
+        ok: Math.abs(d) <= 0.06,
+        title: 'Power cut test',
+        text: 'The app was cut off at ' + clockOf(lr.drill.at) + ' with nothing saved on the way out, and started again ' + started +
+          ' the way Windows starts it when the PC is back on. It imported the movie by itself and put it at ' + fmtFilm(m.pos) + ', ' +
+          (Math.abs(d) < 0.001 ? 'right on the clock' : fmtOff(d) + (d > 0 ? ' ahead of' : ' behind') + ' the clock') +
+          ': ' + fmtSpan((now - lr.drill.at) / 1000) + ' after the cut the film was running on the clock again.'
+      };
+      UI.addTestResult(r);
+      Engine.logEvent('Power cut test ' + (r.ok ? 'passed' : 'failed') + ': ' + r.text);
+    }
+  };
+
+  /**
+   * The battery. A three-hour film can empty a laptop battery: while the countdown is armed on a
+   * battery the app says so, and again at 20, 10 and 5 percent. The PC waking up from sleep puts
+   * the film straight back where the clock says (Engine.onWake).
+   */
+  const Power = {
+    battery: null,           // the BatteryManager, where the browser has one
+    mainOnBattery: null,     // what Windows says (the main process), where it can tell
+    wasOn: false,
+    warned: 101,             // the lowest level already warned about while unplugged (%)
+
+    init() {
+      try { native.onPower((p) => this.event(p && p.type)); } catch (e) { /* not in the browser build */ }
+      try { native.powerState().then((st) => { this.mainOnBattery = !!(st && st.onBattery); this.check(); }).catch(() => {}); } catch (e) { /* no main process */ }
+      try {
+        if (navigator.getBattery) {
+          navigator.getBattery().then((b) => {
+            this.battery = b;
+            b.addEventListener('chargingchange', () => this.check());
+            b.addEventListener('levelchange', () => this.check());
+            this.check();
+          }).catch(() => {});
+        }
+      } catch (e) { /* no battery information */ }
+    },
+
+    /** Whether anything is known about the power at all. */
+    get known() { return !!this.battery || this.mainOnBattery != null; },
+
+    /** True while a laptop runs on its battery. */
+    onBattery() {
+      const b = this.battery;
+      if (b && typeof b.charging === 'boolean') return !b.charging;
+      return !!this.mainOnBattery;
+    },
+
+    /** The battery level in percent, or null when unknown. */
+    percent() {
+      const b = this.battery;
+      return b && Number.isFinite(b.level) ? Math.round(b.level * 100) : null;
+    },
+
+    event(type) {
+      if (type === 'resume') Engine.onWake();
+      else if (type === 'suspend') { Engine.logEvent('The PC is going to sleep'); saveNow(); }
+      else if (type === 'on-battery' || type === 'on-ac') { this.mainOnBattery = type === 'on-battery'; this.check(); }
+    },
+
+    unpluggedText(pct) {
+      return 'The PC is running on its battery' + (pct != null ? ' (' + pct + '%)' : '') + ': plug it in for the film. If the battery runs out, the app opens again when the PC is back on and picks up where the clock says.';
+    },
+
+    /** Said when the countdown is armed (or resumed) on a battery; not more than every ten minutes. */
+    onArm() {
+      if (!this.onBattery() || performance.now() - (this.armSaidAt || -1e9) < 600000) return;
+      this.armSaidAt = performance.now();
+      toast(this.unpluggedText(this.percent()), 'bad', 9000);
+    },
+
+    check() {
+      const on = this.onBattery();
+      const pct = this.percent();
+      const armed = Engine.mode === 'armed' && !Engine.test;
+      if (on !== this.wasOn) {
+        this.wasOn = on;
+        this.warned = 101;
+        Engine.logEvent(on ? 'Running on the battery' + (pct != null ? ' (' + pct + '%)' : '') : 'Plugged in');
+        if (armed) toast(on ? this.unpluggedText(pct) : 'Plugged in again', on ? 'bad' : 'good', on ? 9000 : 3300);
+      }
+      if (on && pct != null) {
+        const step = [5, 10, 20].find((x) => pct <= x && x < this.warned);
+        if (step) {
+          this.warned = step;
+          if (armed) { toast('Battery at ' + pct + '%: plug the PC in now', 'bad', 9000); Engine.logEvent('Battery at ' + pct + '%'); }
+        }
+      }
+      UI.dirty.preflight = true;
     }
   };
 
@@ -2817,7 +3144,7 @@
       Clock.netOffsetMs = want;
       if (want !== 0) this.applied = true;
       Engine.ctrl.reset();
-      if (Engine.mode === 'free') Engine.session = Engine.computeFree();
+      if (Engine.mode === 'free' && !Engine.test) Engine.session = Engine.computeFree();
       UI.dirty.all = true;
     },
 
@@ -3782,9 +4109,10 @@
 
     renderArmButton() {
       const b = el.armBtn;
-      b.disabled = !!Engine.test || !Media.ready;
+      const lateTest = Engine.lateWaiting();      // the late test: the button joins, as it would on the night
+      b.disabled = (!!Engine.test && !lateTest) || !Media.ready;
       b.classList.toggle('armed', Engine.mode === 'armed' && !Engine.test);
-      if (Engine.test) setText(b, 'TEST RUNNING');
+      if (Engine.test && !lateTest) setText(b, 'TEST RUNNING');
       else if (Engine.mode === 'armed') setText(b, b.classList.contains('confirm') ? 'CLICK AGAIN TO STOP' : 'COUNTDOWN ARMED');
       else setText(b, this.lateNow ? 'JOIN THE MOVIE NOW' : 'START THE COUNTDOWN');
       setText(el.armHint, Engine.mode === 'armed' && !Engine.test
@@ -3959,7 +4287,7 @@
     /** Setup → Start time: the three choices, with where the snap lands for each. */
     renderStartTime() {
       // Armed also while the countdown is reloading the film or has lent it out (cfg.armed).
-      const armed = Engine.mode === 'armed' || cfg.armed;
+      const armed = Engine.mode === 'armed' || cfg.armed || !!Engine.test;
       // (At startup, and while an armed countdown reloads the film, there may be no armed session yet.)
       const s = Engine.test ? Engine.computeFree()
         : Engine.mode === 'armed' && Engine.session ? Engine.session
@@ -3984,6 +4312,9 @@
       const startOpt = el.tsNightAt.querySelector('option[value="start"]');
       const startAt = target - Math.round(startLead() * 1000);
       if (startOpt) setText(startOpt, clockOf(Math.floor((startAt - 20000) / 60000) * 60000) + ': watch it start by itself at ' + clockOf(startAt));
+      // The late test that joins a minute before the target, to watch the snap.
+      const lateOpt = el.tsLateBy.querySelector('option[value="snap"]');
+      if (lateOpt) setText(lateOpt, 'Join at ' + clockOf(target - 60000) + ', watch the snap');
       setText(el.smClassicWhat, isNewYearMoment(target) ? ', the time everybody quotes' : ', 2:30:30 before the target');
       setText(el.smAutoAt, clockOf(at('auto')));
       setText(el.smAutoNote, 'Set by the snap point of this file, ' + fmtFilm(cfg.snapSec) + (snapConfirmed() ? '' : ' (not confirmed yet)') + ': ' + lands('auto') + '.');
@@ -4105,9 +4436,16 @@
       if (NetTime.usable() && cfg.useNetTime) items.push([true, 'Clock checked against internet time', 'PC clock is ' + NetTime.describe(r.offsetMs) + (Math.abs(r.offsetMs) >= 20 ? ', corrected' : '')]);
       else if (NetTime.usable()) items.push([Math.abs(r.offsetMs) < 500 ? null : false, 'PC clock is ' + NetTime.describe(r.offsetMs), 'Correction is switched off in the Sync tab.']);
       else items.push([null, NetTime.busy ? 'Checking internet time…' : 'Internet time not available', 'Using the PC clock as it is. Make sure Windows shows the right time.']);
-      items.push([native.isNative ? true : null, 'The PC will not fall asleep by itself while armed', native.isNative ? 'Closing the lid or pressing the power button still puts it to sleep.' : 'Not available in the browser build.']);
+      items.push([native.isNative ? true : null, 'The PC will not fall asleep by itself while armed', native.isNative ? 'Closing the lid or pressing the power button still puts it to sleep. When it wakes up, the film goes straight back to where the clock says.' : 'Not available in the browser build.']);
+      // A three-hour film can empty a laptop battery.
+      if (Power.known) {
+        const pct = Power.percent();
+        const back = cfg.autoRestart === false ? 'Switch on “Come back by itself after a crash or a power cut” in Setup, so the app opens again after a power cut.'
+          : 'If the power goes off anyway, the app opens again when the PC is back on and picks up where the clock says.';
+        items.push(Power.onBattery() ? [false, 'Running on the battery' + (pct != null ? ' (' + pct + '%)' : ''), 'Plug the PC in for the film. ' + back] : [true, 'Plugged in', back]);
+      }
       const reh = cfg.rehearsed || {};
-      if (reh.start && reh.snap) items.push([true, 'Rehearsed', 'Auto-start and snap tests passed' + (reh.slip ? ', recovery drill too' : '') + '.']);
+      if (reh.start && reh.snap) items.push([true, 'Rehearsed', 'Auto-start and snap tests passed' + ((reh.slip || reh.late) ? ', ' + [reh.slip && 'recovery drill', reh.late && 'late start test'].filter(Boolean).join(' and ') + ' too' : '') + '.']);
       else items.push([null, 'Not rehearsed yet', 'Run the auto-start and snap tests in the Test tab.']);
       if (SubsUI.loaded) items.push([true, 'Subtitles ready', SubsUI.name + (cfg.subsOn ? '' : ' (hidden)')]);
 
@@ -4355,6 +4693,7 @@
       }
       if (e.test && state !== 'slipped') state = 'test';
       if (e.sim) label = 'SIMULATION · ' + label;
+      else if (e.test && e.mode !== 'armed') label = 'TEST RUN · ' + label;      // the late test, before JOIN NOW
       setAttr(card, 'data-state', state);
       setText(el.stLabel, label);
       setCount(el.stBig, big);
@@ -4384,11 +4723,18 @@
       const t = Engine.test;
       setText(el.thTitle, t.title);
       setText(el.thClock, cp.ampm ? cp.hms + ' ' + cp.ampm : cp.hms);
-      const end = t.endEpoch || t.eventEpoch + 20000;
-      const span = Math.max(1, end - t.t0);
-      el.thFill.style.width = (clamp((now - t.t0) / span, 0, 1) * 100).toFixed(1) + '%';
-      const mark = (t.kind === 'snap' || t.kind === 'real') && t.snapAt != null ? t.snapAt : t.eventEpoch;
-      el.thMark.style.left = (clamp((mark - t.t0) / span, 0, 1) * 100).toFixed(1) + '%';
+      if (t.kind === 'late') {
+        // The late test's bar is the film: where it should be by the clock, and the snap.
+        const dur = video.duration || 1;
+        el.thFill.style.width = (clamp(Engine.expected(now) / dur, 0, 1) * 100).toFixed(1) + '%';
+        el.thMark.style.left = (clamp(cfg.snapSec / dur, 0, 1) * 100).toFixed(1) + '%';
+      } else {
+        const end = t.endEpoch || t.eventEpoch + 20000;
+        const span = Math.max(1, end - t.t0);
+        el.thFill.style.width = (clamp((now - t.t0) / span, 0, 1) * 100).toFixed(1) + '%';
+        const mark = (t.kind === 'snap' || t.kind === 'real') && t.snapAt != null ? t.snapAt : t.eventEpoch;
+        el.thMark.style.left = (clamp((mark - t.t0) / span, 0, 1) * 100).toFixed(1) + '%';
+      }
       const left = t.eventEpoch - now;
       let note;
       // Its countdowns count to the clock second of each moment, so they change with the clock.
@@ -4399,6 +4745,13 @@
         // With a start time chosen by hand the snap and the target are two moments: the snap first if it comes first.
         const toSnapMs = t.snapAt != null ? t.snapAt - now : left;
         note = toSnapMs > 0 ? 'Snap in ' + tick(t.snapAt != null ? t.snapAt : t.eventEpoch) + ' s' : left > 0 ? targetWord(Engine.session).replace(/^m/, 'M') + ' in ' + tick(t.eventEpoch) + ' s' : 'Measuring…';
+      }
+      else if (t.kind === 'late') {
+        const snapAt = Engine.snapEpoch(t.session);
+        if (!t.joined) note = 'You are late: press JOIN NOW, Enter or Space';
+        else if (!t.lockedAt) note = 'Joining: the film goes to where the clock says it should be…';
+        else if (!t.watchSnap) note = 'Joined ' + fmtOff(t.firstDrift) + ' from the clock. Checking that it holds…';
+        else note = snapAt > now ? 'Joined. Snap in ' + tick(snapAt) + ' s' : left > 0 ? targetWord(t.session).replace(/^m/, 'M') + ' in ' + tick(t.eventEpoch) + ' s' : 'Measuring…';
       }
       else note = t.knockAt ? 'Knocked out of sync: press Recalibrate' : 'Slip coming in ' + tick(t.eventEpoch) + ' s';
       setText(el.thNote, note);
@@ -4696,7 +5049,7 @@
 
     /* mission */
     el.armBtn.addEventListener('click', () => {
-      if (Engine.test) return;
+      if (Engine.test) { if (Engine.lateWaiting()) Late.join('button'); return; }
       if (Engine.mode !== 'armed') { Engine.arm(); return; }
       if (el.armBtn.classList.contains('confirm')) { Engine.disarm(); return; }
       el.armBtn.classList.add('confirm');
@@ -4720,16 +5073,28 @@
     $$('[data-test]').forEach((b) => b.addEventListener('click', () => {
       const kind = b.dataset.test;
       if (kind === 'night') { Engine.startTest('night', 0, undefined, { at: el.tsNightAt.value }); return; }
+      if (kind === 'late') { Engine.startTest('late', 0, undefined, { by: el.tsLateBy.value }); return; }
       const lead = kind === 'start' ? +el.tsLeadStart.value : kind === 'snap' ? +el.tsLeadSnap.value : 0;
       const pick = kind === 'snap' ? el.tsStartMode.value : 'set';
       Engine.startTest(kind, lead, pick !== 'set' ? pick : undefined);
     }));
     el.thEnd.addEventListener('click', () => Engine.endTest('Stopped by you.'));
     el.nightEnd.addEventListener('click', () => Engine.endTest('Ended by you.'));
+    el.powerBtn.addEventListener('click', () => {
+      if (Engine.test) { toast('End the test run first'); return; }
+      if (Engine.mode !== 'armed') { toast('Start the countdown first: the app only comes back while it is armed'); return; }
+      if (cfg.autoRestart === false) { toast('Switch on "Come back by itself after a crash or a power cut" in Setup first'); return; }
+      if (!native.isNative) { toast('Not available in the browser build'); return; }
+      const off = +el.tsPowerOff.value || 30;
+      // Nothing is saved first: a power cut does not wait for that either.
+      Engine.logEvent('Power cut test: the app is cut off now and started again in ' + off + ' s');
+      toast('Cutting the app off… it comes back in ' + off + ' s', '', 2000);
+      setTimeout(() => native.powerCutNow(off), 700);
+    });
     el.crashBtn.addEventListener('click', () => {
       if (Engine.test) { toast('End the test run first'); return; }
       if (Engine.mode !== 'armed') { toast('Start the countdown first: recovery only works while it is armed'); return; }
-      if (cfg.autoRestart === false) { toast('Switch on "Come back by itself after a crash" in Setup first'); return; }
+      if (cfg.autoRestart === false) { toast('Switch on "Come back by itself after a crash or a power cut" in Setup first'); return; }
       saveNow();
       Engine.logEvent('Crash drill: the app is about to crash on purpose');
       toast('Crashing on purpose… it will be back in a few seconds');
@@ -5081,6 +5446,7 @@
     UI.onMode();
 
     Engine.logEvent('Player started' + (cfg.armed ? ' with the countdown armed' : ''));
+    Power.init();
     setInterval(() => { try { Engine.tick(); } catch (e) { Engine.logEvent('tick error: ' + (e && e.message)); if (!Engine.tickErr) { Engine.tickErr = true; try { console.error('tick error: ' + (e && e.stack || e)); } catch (err) { /* nothing */ } } } }, 200);
     setInterval(() => NetTime.maybeMeasure(), 60000);
     const loop = () => {
@@ -5099,6 +5465,7 @@
         Engine.logEvent('The app was restarted by the crash watchdog');
         setTimeout(() => toast('Recovered after a crash', 'good'), 1500);
       }
+      Recovery.take(info);
       el.aboutInfo.textContent = v.trim() + (info.electron ? ' · Electron ' + info.electron + ' · Chromium ' + String(info.chrome).split('.')[0] : '') +
         '. An unofficial fan-made player. It plays your own copy of the film and ships no film content.';
     }).catch(() => {});
@@ -5130,7 +5497,7 @@
   }
 
   // For the automated tests and for debugging from the developer tools.
-  window.__AP = { Engine: Engine, Clock: Clock, cfg: cfg, Media: Media, AudioTracks: AudioTracks, AudioFix: AudioFix, SnapCam: SnapCam, Late: Late, Missed: Missed, NetTime: NetTime, SubsUI: SubsUI, SubSync: SubSync, UI: UI, Celebration: Celebration, Versions: Versions, C: C, saveNow: saveNow };
+  window.__AP = { Engine: Engine, Clock: Clock, cfg: cfg, Media: Media, AudioTracks: AudioTracks, AudioFix: AudioFix, SnapCam: SnapCam, Late: Late, Missed: Missed, Power: Power, Recovery: Recovery, NetTime: NetTime, SubsUI: SubsUI, SubSync: SubSync, UI: UI, Celebration: Celebration, Versions: Versions, C: C, saveNow: saveNow };
 
   boot();
 })();
