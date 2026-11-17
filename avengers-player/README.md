@@ -5,7 +5,7 @@ for the whole two and a half hours, and lands the snap on **12:00:00 AM**: the v
 found in your own file and put on midnight to the millisecond. It works with any copy of *Avengers: Endgame* or
 *Avengers Endgame: Encore*: Remux, Blu-ray or WEB rip, 4K or 1080p, whatever its exact length.
 
-**[Download the installer](../download/Avengers-Player-Setup-1.6.0.exe)** (Windows 10 / 11, 64-bit, about 93 MB).
+**[Download the installer](../download/Avengers-Player-Setup-1.7.0.exe)** (Windows 10 / 11, 64-bit, about 93 MB).
 You bring your own copy of the movie. Nothing is uploaded anywhere.
 
 Older version, kept as it was: **[1.3.0 (legacy)](../download/Avengers-Player-Setup-1.3.0-legacy.exe)**. Only one
@@ -15,8 +15,8 @@ version is installed at a time: installing one over the other asks first, then r
 
 ## Install
 
-1. Run `Avengers-Player-Setup-1.6.0.exe`. It installs for your user only, so there is no administrator prompt.
-   If Avengers Player is already installed, Setup says so first and asks: *update it to version 1.6.0?*, *install
+1. Run `Avengers-Player-Setup-1.7.0.exe`. It installs for your user only, so there is no administrator prompt.
+   If Avengers Player is already installed, Setup says so first and asks: *update it to version 1.7.0?*, *install
    it again?* (the same version), or, when the installed one is newer, *replace it with this version?* **Yes** puts
    the new version into the folder of the old one (your settings, snap points and an armed countdown stay as they
    are); **No** leaves everything as it is and closes Setup. On a PC without it, Setup simply installs it.
@@ -58,14 +58,17 @@ the film should be. Nothing to click. (Closing the app yourself is different: it
 
 ## Rehearse first (Test tab)
 
-**Real-time test (start with this one).** Nothing is simulated: the film plays from where it has to be, with sound,
-on your PC's real clock, and the snap lands on a whole minute about a minute from now (for example 3:42:00 PM), so
-you can check it against your phone. Afterwards the app says how smoothly your PC played the film. If it says
-*Playback lagged* (frames dropped, or the film had to be re-synced, the "Recalibrated automatically" message), your
-PC struggles with that file: it would stutter and jump on the night too. Use a lighter copy (1080p instead of a 4K
-Remux) and run the test again.
+**New Year's Eve simulation (start with this one).** Exactly like the night: the app's clock is set to December 31
+at the moment you pick (9:29:00 PM to watch the movie start by itself, 11:59:00 PM to watch the snap) and runs on
+from there. The standby screen counts down, the movie starts by itself, the clock and the date run in the corner,
+the snap lands on midnight, the date rolls over and the celebration plays. No test bar, no pass or fail; your PC's
+clock and a real countdown are not touched. Press F for fullscreen and watch it as you will on the night.
 
-The other tests move the app's own clock, not your PC clock, so you can watch moments like midnight today.
+**The movie starts on the second.** The countdown reaches zero and the screen switches to the film at exactly
+9:29:28.000 PM (whatever whole second the start falls in). If the snap in your file needs a start a fraction of a
+second later, the film's first frame (black) holds for that fraction, so the snap still lands exactly on midnight.
+
+The other tests also move the app's own clock, not your PC clock.
 
 | Test | What it proves |
 |---|---|

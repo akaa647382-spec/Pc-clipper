@@ -2392,7 +2392,7 @@ const scenarios = {
       await s.page.click('#startTimeLink');
       check('“Start time · change” opens Setup', await waitFor(s.page, () => document.getElementById('pane-setup').classList.contains('on'), null, 2000));
       v = await g(s.page);
-      check('Setup shows the start times and where the snap lands with each', v.autoAt === '9:29:28.332 PM' && /2:30:31\.668: the snap lands on midnight/.test(v.autoNote) &&
+      check('Setup shows the start times and where the snap lands with each', v.autoAt === '9:29:28 PM' && /2:30:31\.668: the snap lands on midnight/.test(v.autoNote) &&
         v.classicAt === '9:29:30 PM' && /the snap lands 1\.668 s after midnight/.test(v.classicNote), JSON.stringify(v));
 
       // 9:29:30 PM.
@@ -2414,7 +2414,7 @@ const scenarios = {
       let f = await stripView(s.page);
       const clockAt = await s.page.evaluate(() => { const v = window.__AP.SnapCam.view; const i = Array.from(document.getElementById('stripRow').children).findIndex((b) => b.classList.contains('has-clock')); return i >= 0 ? v.frames[i].t : null; });
       check('it shows the frame on screen at 12:00:00 (2:30:30) and the snap point, 1.67 s later', /^The snap came 1\.6\d\d s after 12:00:00$/.test(f.title) && clockAt != null && Math.abs(clockAt - 9030) < 0.17 &&
-        f.tags.includes('now:SNAP POINT') && /This test started the movie at 9:29:30 PM\. At 12:00:00 the film was at 2:30:30\.000/.test(f.note) && /The automatic start, 9:29:28\.332 PM, puts it on 12:00:00/.test(f.note),
+        f.tags.includes('now:SNAP POINT') && /This test started the movie at 9:29:30 PM\. At 12:00:00 the film was at 2:30:30\.000/.test(f.note) && /The automatic start, 9:29:28 PM, puts it on 12:00:00/.test(f.note),
         f.title + ' | clock frame ' + clockAt + ' | ' + f.tags.join(',') + ' | ' + f.note.slice(0, 300));
       await shot(s.page, 'starttime-classic-strip');
       await s.page.keyboard.press('Escape');
@@ -2426,11 +2426,11 @@ const scenarios = {
       await s.page.fill('#smOwnInput', '9:29:29.5');
       await s.page.press('#smOwnInput', 'Enter');
       v = await g(s.page);
-      check('own time 9:29:29.5: the snap lands 1.168 s after midnight', v.mode === 'own' && v.own === 9030.5 && /Starts at 9:29:29\.500 PM: the snap lands 1\.168 s after midnight/.test(v.ownNote), JSON.stringify(v));
+      check('own time 9:29:29.5: the snap lands 1.168 s after midnight', v.mode === 'own' && v.own === 9030.5 && /Starts at 9:29:29 PM: the snap lands 1\.168 s after midnight/.test(v.ownNote), JSON.stringify(v));
       await s.page.click('#smOwnMinus1');
       await s.page.click('#smOwnPlus01');
       v = await g(s.page);
-      check('−1 s, then +0.1 s: 9:29:28.600 PM, the snap lands 0.268 s after midnight', v.own === 9031.4 && /Starts at 9:29:28\.600 PM: the snap lands 0\.268 s after midnight/.test(v.ownNote), JSON.stringify(v));
+      check('−1 s, then +0.1 s: 9:29:28.600 PM, the snap lands 0.268 s after midnight', v.own === 9031.4 && /Starts at 9:29:28 PM: the snap lands 0\.268 s after midnight/.test(v.ownNote), JSON.stringify(v));
       await s.page.fill('#smOwnInput', '11:59:50 PM');
       await s.page.press('#smOwnInput', 'Enter');
       check('a start ten seconds before midnight is refused', (await g(s.page)).own === 9031.4 && await s.page.evaluate(() => document.getElementById('smOwnInput').classList.contains('bad')));
@@ -2460,22 +2460,22 @@ const scenarios = {
       const back = await shows(s.page, 'ktSnap', /Jan 1 · 12:00:00 AM/) && await shows(s.page, 'ktStart', /Dec 31 · 9:29:28 PM/);
       v = await g(s.page);
       check('back to automatic: 9:29:28 PM, the snap on midnight', back && v.mode === 'auto' && v.landsLbl === 'The snap lands on midnight' && v.lead === 9031668, JSON.stringify(v));
-      check('one\'s own time is kept for next time', /Your time, 9:29:28\.600 PM, is kept/.test(v.ownNote), v.ownNote);
+      check('one\'s own time is kept for next time', /Your time, 9:29:28 PM, is kept/.test(v.ownNote), v.ownNote);
       await s.page.check('#smOwn');
       check('choosing it again brings it back', (await g(s.page)).mode === 'own' && (await g(s.page)).own === 9031.4);
       // A time typed but not set yet is what a nudge starts from.
       await s.page.fill('#smOwnInput', '9:29:29 PM');
       await s.page.click('#smOwnPlus01');
       v = await g(s.page);
-      check('typed 9:29:29 PM, then +0.1 s: 9:29:29.100 PM', v.own === 9030.9 && /Starts at 9:29:29\.100 PM/.test(v.ownNote), JSON.stringify(v));
+      check('typed 9:29:29 PM, then +0.1 s: 9:29:29.100 PM', v.own === 9030.9 && /Starts at 9:29:29 PM/.test(v.ownNote), JSON.stringify(v));
       await s.page.check('#smAuto');
       check('no page errors', s.errors.length === 0, s.errors.join(' | '));
     } finally { await s.close(); }
   },
 
-  async realtime() {
-    // The real-time test: no simulated clock. The film joins where it has to be and the snap lands
-    // on a whole minute of the real clock; afterwards the app says how smoothly the PC played it.
+  async night() {
+    // The New Year's Eve simulation: the app's clock on December 31, everything as on the night, no
+    // test bar and no result. The screen switches to the film on the very second the countdown ends.
     const ENDGAME = path.join(MEDIA, 'original-length.mp4');
     if (!fs.existsSync(ENDGAME)) { console.log('  note  long test clips missing: run scripts/make-test-media.sh'); return; }
     const s = await launch(newProfile());
@@ -2488,18 +2488,50 @@ const scenarios = {
       await setSnap(s.page, '2:30:31.668');
       await s.page.evaluate(() => window.__AP.Versions.confirm());
       await s.page.click('.tab[data-tab="test"]');
-      await s.page.click('[data-test="real"]');
-      const t = await s.page.evaluate(() => ({ off: window.__AP.Clock.testOffsetMs, title: window.__AP.Engine.test && window.__AP.Engine.test.title, snapAt: window.__AP.Engine.test && window.__AP.Engine.test.snapAt }));
-      check('the real-time test runs on the real clock, with the snap on a whole minute', t.off === 0 && t.snapAt % 60000 === 0 && /^Real-time test · the snap at \d+:\d\d:00 [AP]M$/.test(t.title), JSON.stringify(t));
-      check('it joins the film where it has to be and locks on', await waitSynced(s.page, 20000));
-      const pos = await state(s.page);
-      check('the film is where the real clock says it has to be: 45 to 105 s before the snap', pos.t > 8920 && pos.t < 9032, C_fmt(pos.t));
-      const first = () => s.page.evaluate(() => { const r = document.getElementById('testResults').firstChild; return r ? r.textContent : ''; });
-      check('the result: the snap frame hit that minute, and how smoothly it played', await waitFor(s.page, () => { const r = document.getElementById('testResults').firstChild; return !!r && /Real-time test/.test(r.textContent) && /The snap frame hit \d+:\d\d:00 [AP]M/.test(r.textContent) && /Playback (was smooth|lagged)/.test(r.textContent); }, null, 140000), await first());
-      check('the strip shows the frame put on that minute', await stripOpen(s.page, 30000) && /^(The snap landed on|Was that the snap\?)/.test((await stripView(s.page)).title), (await stripView(s.page) || {}).title);
-      await s.page.keyboard.press('Escape');
-      await stripClosed(s.page);
-      console.log('  info  ' + (await first()));
+      const look = () => s.page.evaluate(() => {
+        const d = new Date(window.__AP.Clock.now());
+        return { mon: d.getMonth(), day: d.getDate(), h: d.getHours(), m: d.getMinutes(), hud: !document.getElementById('testHud').hidden, mode: document.getElementById('app').dataset.mode,
+          end: !document.getElementById('nightEnd').hidden, label: document.getElementById('stLabel').textContent, results: document.getElementById('testResults').textContent };
+      });
+      check('the first choice reads “9:29:00 PM: watch it start by itself at 9:29:28 PM”', /^9:29:00 PM: watch it start by itself at 9:29:28 PM$/.test(await s.page.$eval('#tsNightAt option[value="start"]', (o) => o.textContent)));
+      await s.page.selectOption('#tsNightAt', 'start');
+      await s.page.click('[data-test="night"]');
+      let v = await look();
+      check('the app\'s clock is on December 31, 9:29 PM, with no test bar', v.mon === 11 && v.day === 31 && v.h === 21 && v.m === 29 && !v.hud && v.mode === 'armed' && v.end, JSON.stringify(v));
+      check('the standby screen counts down', await waitFor(s.page, () => !document.getElementById('standby').hidden, null, 5000));
+      // Every frame through the start.
+      const rows = await s.page.evaluate(async () => {
+        const { Clock, Engine } = window.__AP;
+        const out = [];
+        const until = Engine.session.startEpoch + 1500;
+        while (Clock.now() < until && out.length < 6000) {
+          await new Promise((r) => requestAnimationFrame(r));
+          out.push({ now: Clock.now(), standby: !document.getElementById('standby').hidden, count: document.getElementById('sbCount').textContent, phase: Engine.phase, start: Engine.session.startEpoch });
+        }
+        return out;
+      });
+      const i = rows.findIndex((r) => !r.standby);
+      const whole = rows.length ? Math.floor(rows[0].start / 1000) * 1000 : 0;
+      check('the screen switches from the countdown to the film on the very second, 9:29:28.000', i > 0 && rows[i - 1].now < whole && rows[i].now >= whole && rows[i].now - whole < 50 && rows[i - 1].count === '00:00:01',
+        i > 0 ? 'last countdown frame ' + (rows[i - 1].now - whole) + ' ms, film from ' + (rows[i].now - whole) + ' ms after 9:29:28.000, last count ' + rows[i - 1].count : 'never');
+      check('and the film runs locked to the clock', await waitSynced(s.page, 8000));
+      v = await look();
+      check('no test result, no pass or fail', /No test run yet/.test(v.results) && /^SIMULATION · /.test(v.label), v.label);
+      await s.page.click('#nightEnd');
+      check('“End the simulation” brings the real clock back', await waitFor(s.page, () => !window.__AP.Engine.test && window.__AP.Clock.testOffsetMs === 0 && window.__AP.Engine.mode === 'free', null, 4000));
+
+      // From 11:59:00 PM: the snap at midnight, the date rolls over, the celebration plays.
+      await s.page.selectOption('#tsNightAt', 'snap');
+      await s.page.click('[data-test="night"]');
+      v = await look();
+      check('the app\'s clock is on December 31, 11:59 PM', v.mon === 11 && v.day === 31 && v.h === 23 && v.m === 59 && !v.hud, JSON.stringify(v));
+      check('at midnight the target is reached, as on the night', await waitFor(s.page, () => window.__AP.Engine.events.some((e) => /Target moment reached/.test(e.text)), null, 80000));
+      v = await look();
+      check('the date has rolled over to January 1', v.mon === 0 && v.day === 1, JSON.stringify(v));
+      await sleep(1500);
+      check('no film strip and no test result after it', !(await s.page.evaluate(() => !!window.__AP.SnapCam.view)) && /No test run yet/.test((await look()).results));
+      await s.page.click('#nightEnd');
+      check('ended', await waitFor(s.page, () => !window.__AP.Engine.test && window.__AP.Clock.testOffsetMs === 0, null, 4000));
       check('no page errors', s.errors.length === 0, s.errors.join(' | '));
     } finally { await s.close(); }
   },
