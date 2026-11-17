@@ -2292,9 +2292,13 @@ const scenarios = {
       check('the start falls between two seconds', start % 1000 !== 0, String(start % 1000));
       let rows = await sample(3500);
       const waiting = (r) => r.phase === 'standby' && r.start - r.now > 1000;
-      const exact = rows.filter(waiting).every((r) => /^\d\d:\d\d:\d\d\.\d{3}$/.test(r.sb) && Math.abs(parseFloat(r.sb.slice(6)) * 1000 + (+r.sb.slice(3, 5)) * 60000 - (r.start - r.now)) < 30);
-      check('the standby countdown counts to the exact start, to the millisecond', exact, rows.filter(waiting).slice(0, 2).map((r) => r.sb + ' at ' + (r.start - r.now)).join(' | '));
-      let t = together(rows, 'ov', waiting);
+      const frac = String(start % 1000).padStart(3, '0');
+      check('the standby countdown shows the start\'s milliseconds', rows.filter(waiting).every((r) => r.sb.endsWith('.' + frac)), rows.filter(waiting).slice(0, 2).map((r) => r.sb).join(' | ') + ' (start .' + frac + ')');
+      let t = together(rows, 'sb', waiting);
+      check('and its seconds change on the same frame as the clock', ok(t, 3), JSON.stringify(t));
+      t = together(rows, 'card', waiting);
+      check('the countdown on the status card too', ok(t, 3), JSON.stringify(t));
+      t = together(rows, 'ov', waiting);
       check('and the countdown in the clock panel', ok(t, 3), JSON.stringify(t));
 
       // 2. The film starts by itself and runs locked to the clock: its time ticks with the clock.
@@ -2510,12 +2514,21 @@ const scenarios = {
       });
       const i = rows.findIndex((r) => !r.standby);
       const at = rows.length ? rows[0].start : 0;
-      check('the countdown runs to the millisecond and the movie launches at the exact start, 9:29:28.332', i > 0 && rows[i - 1].now < at && rows[i].now >= at && rows[i].now - at < 50 && /^00:00:00\.\d{3}$/.test(rows[i - 1].count) &&
-        rows.slice(0, i).every((r) => Math.abs(parseFloat(r.count.slice(6)) * 1000 + (+r.count.slice(3, 5)) * 60000 - (at - r.now)) < 30),
+      const whole = Math.floor(at / 1000) * 1000;
+      const secs = (txt) => (+txt.slice(0, 2)) * 3600 + (+txt.slice(3, 5)) * 60 + (+txt.slice(6, 8));
+      const beforeOk = rows.slice(0, i).filter((r) => r.now < whole - 20).every((r) => r.count.endsWith('.332') && Math.abs(secs(r.count) - Math.ceil((whole - r.now) / 1000)) <= 1);
+      const lastOk = rows.slice(0, i).filter((r) => r.now >= whole + 20).every((r) => secs(r.count) === 0 && Math.abs(+r.count.slice(9) - (at - r.now)) < 30);
+      check('the countdown\'s seconds go with the clock (.332 after them), the last .332 counts down live, and the movie launches at the exact start', i > 0 && rows[i - 1].now < at && rows[i].now >= at && rows[i].now - at < 50 && /^00:00:00\.\d{3}$/.test(rows[i - 1].count) && beforeOk && lastOk,
         i > 0 ? 'last countdown frame ' + (rows[i - 1].now - at) + ' ms (' + rows[i - 1].count + '), film from ' + (rows[i].now - at) + ' ms after the start' : 'never');
       check('and the film runs locked to the clock', await waitSynced(s.page, 8000));
       v = await look();
       check('no test result, no pass or fail', /No test run yet/.test(v.results) && /^SIMULATION · /.test(v.label), v.label);
+      check('the start time is shown to the millisecond', /Dec 31 · 9:29:28\.332 PM/.test(await s.page.textContent('#ktStart')), await s.page.textContent('#ktStart'));
+      await s.page.click('.tab[data-tab="display"]');
+      await s.page.click('label:has(#optMs)');
+      check('“Show milliseconds” off: 9:29:28 PM', await waitFor(s.page, () => /Dec 31 · 9:29:28 PM/.test(document.getElementById('ktStart').textContent), null, 3000), await s.page.textContent('#ktStart'));
+      await s.page.click('label:has(#optMs)');
+      await s.page.click('.tab[data-tab="test"]');
       await s.page.click('#nightEnd');
       check('“End the simulation” brings the real clock back', await waitFor(s.page, () => !window.__AP.Engine.test && window.__AP.Clock.testOffsetMs === 0 && window.__AP.Engine.mode === 'free', null, 4000));
 

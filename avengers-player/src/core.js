@@ -1065,6 +1065,22 @@
     return d > 0 ? d + 'd ' + hms : hms;
   }
 
+  /**
+   * The countdown to a start between two seconds (9:29:28.348), as it is shown: its seconds change
+   * on the same instant as the clock's seconds, counting to the clock second the start falls in.
+   * With milliseconds, they are the start's own fraction (00:00:03.348, 00:00:02.348, ...) and, from
+   * that clock second on, count down live to the start itself, reaching 00:00:00.000 at the launch.
+   * Returns the text.
+   */
+  function fmtStartCountdown(startMs, nowMs, withMs) {
+    const whole = Math.floor(startMs / 1000) * 1000;
+    if (nowMs < whole) {
+      const secs = Math.ceil((whole - nowMs) / 1000 - 1e-9);
+      return withMs ? fmtCountdownMs(secs * 1000 + (startMs - whole)) : fmtCountdown(secs * 1000);
+    }
+    return withMs ? fmtCountdownMs(startMs - nowMs) : fmtCountdown(0);
+  }
+
   /** "Thu, Dec 31 · 9:29:28.348 PM" (no milliseconds when there are none). */
   function fmtDateTimeMs(epochMs, use24) {
     if (!isFinite(epochMs)) return '—';
@@ -1206,7 +1222,7 @@
     percentile: percentile, speechScore: speechScore, cueTimeline: cueTimeline, speechPlan: speechPlan, alignCues: alignCues, SUB_SCALES: SUB_SCALES, betterFit: betterFit, ALIGN: ALIGN,
     MONTHS: MONTHS, MONTHS_LONG: MONTHS_LONG, DAYS: DAYS, DAYS_LONG: DAYS_LONG,
     clamp: clamp, pad: pad, median: median, untilClockSecond: untilClockSecond, filmSecondOnClock: filmSecondOnClock, FILM_SPAN: FILM_SPAN,
-    fmtClockMs: fmtClockMs, parseClockTime: parseClockTime, leadForStartTime: leadForStartTime, fmtCountdownMs: fmtCountdownMs, fmtDateTimeMs: fmtDateTimeMs,
+    fmtClockMs: fmtClockMs, parseClockTime: parseClockTime, leadForStartTime: leadForStartTime, fmtCountdownMs: fmtCountdownMs, fmtDateTimeMs: fmtDateTimeMs, fmtStartCountdown: fmtStartCountdown,
     fmtDuration: fmtDuration, parseDuration: parseDuration,
     countdownParts: countdownParts, fmtCountdown: fmtCountdown,
     clockParts: clockParts, fmtClock: fmtClock, fmtDateTime: fmtDateTime, dateKey: dateKey,

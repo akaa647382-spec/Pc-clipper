@@ -79,6 +79,7 @@
     startMode: 'auto',          // auto: set by the snap in the file · classic: 9:29:30 PM · own: startOwnSec
     startOwnSec: C.DEFAULT_SNAP_SEC,   // the user's own start, as seconds before the target
     startOwnSet: false,         // true once the user has set an own start time (it is then kept)
+    showMs: true,               // start times and the countdown to the start with milliseconds
     use24h: false,
     showOverlay: true, showClock: true, showDate: true, showCount: true, showSyncBadge: false, finalTen: true,
     overlayPos: 'tl', overlaySize: 'm',
@@ -243,8 +244,10 @@
   const landsText = (s) => 'the snap lands ' + (onTarget(s) ? 'on ' : lateText(snapLate(s)) + ' ') + targetWord(s) +
     (snapConfirmed() || (!Media.info && !!cfg.snapConfirmedFor && cfg.snapConfirmedFor.endsWith('|' + cfg.snapSec.toFixed(3))) ? '' : ' (if the snap point is right: it has not been checked yet)');
   /** A start time as shown: to the millisecond ("9:29:28.348 PM"), the instant the movie launches. */
-  const clockOf = (epoch) => C.fmtClockMs(epoch, cfg.use24h);
-  const dateTimeOf = (epoch) => C.fmtDateTimeMs(epoch, cfg.use24h);
+  const clockOf = (epoch) => (cfg.showMs ? C.fmtClockMs(epoch, cfg.use24h) : C.fmtClock(new Date(epoch), cfg.use24h));
+  const dateTimeOf = (epoch) => (cfg.showMs ? C.fmtDateTimeMs(epoch, cfg.use24h) : C.fmtDateTime(epoch, cfg.use24h));
+  /** The countdown to the start: seconds with the clock, milliseconds (if shown) to the launch. */
+  const startCountdown = (s, now) => C.fmtStartCountdown(s.startEpoch, now, cfg.showMs);
   /** "midnight", or the clock time of another target. */
   const targetWord = (s) => (!s ? 'the target' : isNewYearMoment(s.targetEpoch) ? 'midnight' : C.fmtClock(new Date(s.targetEpoch), cfg.use24h));
   /** A start time choice in words: "automatic", "9:29:30 PM", "your own time (9:29:29.500 PM)". */
@@ -1953,7 +1956,7 @@
       setHidden(el.latePill, !((pos != null && dismissed && !quiet) || soon));
       // (Every time on screen is counted on the clock's seconds, so it ticks with the clock.)
       const onClock = s ? Math.max(0, C.filmSecondOnClock(s, now)) : 0;
-      if (soon) setText(el.latePill, 'NOT ARMED · the movie has to start in ' + C.fmtCountdownMs(s.startEpoch - now) + ' · click to start the countdown');
+      if (soon) setText(el.latePill, 'NOT ARMED · the movie has to start in ' + startCountdown(s, now) + ' · click to start the countdown');
       else if (pos != null && dismissed) setText(el.latePill, 'LATE · the movie should be at ' + C.fmtDuration(onClock, { forceHours: true }) + ' · click to join');
       if (!box) return;
       const toSnap = s.targetEpoch - now;
@@ -3945,6 +3948,7 @@
       el.optDate.checked = cfg.showDate;
       el.optCount.checked = cfg.showCount;
       el.optFinal.checked = cfg.finalTen;
+      el.optMs.checked = cfg.showMs !== false;
       el.optSyncBadge.checked = cfg.showSyncBadge;
       el.optPanel.value = cfg.panelSide === 'right' ? 'right' : 'left';
       el.app.dataset.panel = cfg.panelSide === 'right' ? 'right' : 'left';
@@ -4077,7 +4081,7 @@
         setText(el.imClock, cp.ampm ? cp.hms + ' ' + cp.ampm : cp.hms);
         setText(el.imDate, dateLine);
         if (s) {
-          setText(el.imToStart, toStart > 0 ? C.fmtCountdownMs(toStart) : 'RUNNING');
+          setText(el.imToStart, toStart > 0 ? startCountdown(s, now) : 'RUNNING');
           setText(el.imStartAt, dateTimeOf(s.startEpoch));
           setText(el.imToSnap, toSnap > 0 ? C.fmtCountdown(C.untilClockSecond(s.targetEpoch, now)) : 'NOW');
           setText(el.imSnapAt, C.fmtDateTime(s.targetEpoch, cfg.use24h));
@@ -4165,7 +4169,7 @@
         (Engine.phase === 'standby' || ((Engine.phase === 'synced' || Engine.phase === 'cueing') && s.startEpoch - now < 2000 && !el.standby.hidden));
       setHidden(el.standby, !standby);
       if (standby) {
-        setText(el.sbCount, C.fmtCountdownMs(s.startEpoch - now));      // to the very millisecond the movie launches
+        setText(el.sbCount, startCountdown(s, now));      // seconds with the clock, reaching zero as the movie launches
         setText(el.sbLine, 'Starts by itself at ' + clockOf(s.startEpoch) + ' · ' +
           C.DAYS_LONG[new Date(s.startEpoch).getDay()] + ', ' + C.MONTHS_LONG[new Date(s.startEpoch).getMonth()] + ' ' + new Date(s.startEpoch).getDate());
         setText(el.sbClock, 'Now ' + (cp.ampm ? cp.hms + ' ' + cp.ampm : cp.hms));
@@ -4270,20 +4274,19 @@
       let big;
       let sub;
       const exp = e.expected(now);
-      const cdStart = s.startEpoch - now;      // to the very millisecond the movie launches
       const cdSnap = C.untilClockSecond(s.targetEpoch, now);
       if (e.mode !== 'armed') {
-        if (toStart > 0) { label = 'READY · NOT ARMED'; big = C.fmtCountdownMs(cdStart); sub = 'until the movie has to start'; }
+        if (toStart > 0) { label = 'READY · NOT ARMED'; big = startCountdown(s, now); sub = 'until the movie has to start'; }
         else if (newYear && toSnap <= 0) { label = 'MISSED · NOT ARMED'; big = 'HAPPY NEW YEAR'; sub = 'The countdown did not run this time. Better luck next year.'; }
         else if (Late.position(now) != null) { state = 'slipped'; label = 'LATE · NOT ARMED'; big = C.fmtDuration(Math.max(0, C.filmSecondOnClock(s, now)), { forceHours: true }); sub = 'is where the movie should be now. Press JOIN NOW to jump in.'; }
-        else { label = 'READY · NOT ARMED'; big = C.fmtCountdownMs(Math.max(0, cdStart)); sub = 'until the movie has to start'; }
+        else { label = 'READY · NOT ARMED'; big = startCountdown(s, now); sub = 'until the movie has to start'; }
       } else if (e.phase === 'slipped' || e.phase === 'blocked') {
         state = 'slipped'; label = 'OUT OF SYNC';
-        big = exp < 0 ? C.fmtCountdownMs(cdStart) : fmtOff(video.currentTime - exp);
+        big = exp < 0 ? startCountdown(s, now) : fmtOff(video.currentTime - exp);
         sub = exp < 0 ? 'until the start. Press Recalibrate.' : (video.currentTime < exp ? 'behind the clock. Press Recalibrate.' : 'ahead of the clock. Press Recalibrate.');
       } else if (toStart > 0) {
         state = e.test ? 'test' : 'standby'; label = e.test ? 'TEST RUN · WAITING FOR THE START' : 'ARMED · THE MOVIE STARTS IN';
-        big = C.fmtCountdownMs(cdStart); sub = 'It starts by itself. Nothing to press.';
+        big = startCountdown(s, now); sub = 'It starts by itself. Nothing to press.';
       } else if (toSnap > 0) {
         state = e.test ? 'test' : 'synced'; label = (e.test ? 'TEST RUN · ' : 'PLAYING IN SYNC · ') + (newYear ? 'NEW YEAR IN' : onTarget(s) ? 'THE SNAP IN' : 'THE TARGET IN');
         big = C.fmtCountdown(cdSnap); sub = this.syncState().short;
@@ -4666,6 +4669,7 @@
     bindToggle(el.optClock, 'showClock');
     bindToggle(el.optDate, 'showDate');
     bindToggle(el.optCount, 'showCount');
+    bindToggle(el.optMs, 'showMs', () => { UI.renderSettings(); UI.dirty.all = true; UI.dirty.preflight = true; });
     bindToggle(el.optFinal, 'finalTen', () => { if (cfg.finalTen && !cfg.showOverlay) setCfg('showOverlay', true); });
     bindToggle(el.optSyncBadge, 'showSyncBadge');
     bindToggle(el.optStandby, 'standbyScreen');
