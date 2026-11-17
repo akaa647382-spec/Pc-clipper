@@ -2764,8 +2764,8 @@ const scenarios = {
       // Had the PC kept running (the app ended from Task Manager), it would not say the PC went off.
       const killedText = await s.page.evaluate(() => {
         const R = window.__AP.Recovery;
-        const keep = { info: R.info, told: R.told };
-        R.info = { ended: 'killed', lastAlive: Date.now() - 5000 }; R.told = false;
+        const keep = { claimed: R.claimed, said: R.said };
+        R.claimed = { ended: 'killed', lastAlive: Date.now() - 5000 }; R.said = false;
         R.resumed({ pos: 61 });
         Object.assign(R, keep);
         const t = Array.from(document.querySelectorAll('#toasts .toast')).map((x) => x.textContent);
@@ -2818,7 +2818,7 @@ const scenarios = {
       })();
       check('it stayed off for the 10 s chosen', offFor >= 9.5 && offFor < 11.5, offFor.toFixed(1) + ' s');
       check('the new instance imported the movie and resumed on the clock', /Movie loaded: movie\.mp4/.test(tail) && /In sync at [\d:]+ \(resume\)/.test(tail));
-      check('the power cut test passed: back on the clock', /Power cut test passed: The app was cut off at .* with nothing saved on the way out, and started again 1\d s later the way Windows starts it when the PC is back on\. It imported the movie by itself and put it at 0:0\d:\d\d\.\d{3}, .*the clock: \d+ s after the cut the film was running on the clock again\./.test(tail), (tail.match(/Power cut test (passed|failed)[^\n]*/) || ['no result'])[0]);
+      check('the power cut test passed: back on the clock', /Power cut test passed: The app was cut off at .* with nothing saved on the way out, and started again 1\d s later the way Windows starts it when the PC is back on\. It imported the movie by itself and put it at 0:0\d:\d\d\.\d{3}, .*the clock: \d+ s after the cut the film was running on the clock again; three seconds on it was [+−±]\d+ ms from the clock\./.test(tail), (tail.match(/Power cut test (passed|failed)[^\n]*/) || ['no result'])[0]);
       drillPid = +(/ pid (\d+)\n/.exec(tail.slice(tail.indexOf('the PC is "back on"'))) || [])[1] || null;
       check('no page errors', s.errors.length === 0, s.errors.join(' | '));
     } finally {

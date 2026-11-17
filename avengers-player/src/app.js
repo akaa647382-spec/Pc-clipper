@@ -450,7 +450,7 @@
       Engine.logEvent('Movie loaded: ' + info.name + ' (' + video.videoWidth + '×' + video.videoHeight + ', ' + C.fmtDuration(video.duration) + ')');
 
       // Resume an armed countdown straight away: timing first, inspection afterwards.
-      if (cfg.armed && !opts.noResume) await Engine.arm({ restore: true });
+      if (cfg.armed && !opts.noResume) await Engine.arm({ restore: true, reload: !!opts.afterError });
       this.inspect(token);
       SubsUI.autoLoad(token);
       return true;
@@ -1121,6 +1121,7 @@
     async arm(opts) {
       opts = opts || {};
       if (!Media.ready || this.test) return;
+      if (opts.restore) Recovery.claim();
       if (!opts.restore) {
         // A fresh start of the countdown: stop the mistakes that would only show at midnight.
         const len = video.duration;
@@ -1229,8 +1230,9 @@
       UI.onMode();
       // Resumed with the film due to be running (a crash, a power cut, the PC switched off and on
       // again): it goes straight to where the clock says, and says so.
-      const resuming = !!opts.restore && Clock.now() >= s.startEpoch;
-      if (opts.restore && !resuming) Recovery.stillArmed(s);
+      // (A reload after a video error is no comeback: it goes back quietly, as before.)
+      const resuming = !!opts.restore && !opts.reload && Clock.now() >= s.startEpoch;
+      if (opts.restore && !resuming && !opts.reload) Recovery.stillArmed(s);
       // Not awaited: before the start time this only finishes when the film starts, and whoever
       // armed (startup, the button) has other things to do meanwhile.
       this.recalibrate(joining ? 'late' : resuming ? 'resume' : 'arm').catch((e) => this.logEvent('Recalibration failed: ' + (e && e.message)));
@@ -1476,7 +1478,8 @@
     onWake() {
       this.logEvent('The PC woke up');
       if (this.mode !== 'armed' || !Media.ready || !this.session) return;
-      if (this.phase === 'slipped' && this.st.slipHold) return;          // out of sync on purpose: left alone
+      // Out of sync on purpose, or "Recalibrate by itself" switched off: the slip waits for the user.
+      if (this.phase === 'slipped' && (this.st.slipHold || !cfg.autoRecover)) return;
       const exp = this.expected(Clock.now());
       // While it waits for the start the wait itself notices a missed start, so only a running film is re-cued.
       if (['synced', 'slipped', 'blocked', 'cueing'].includes(this.phase) && exp > 0 && exp < video.duration - 0.3) this.recalibrate('wake');
@@ -2176,18 +2179,31 @@
    */
   const Recovery = {
     info: null,          // how the last run ended, from the main process (see readLastRun in main.js)
-    told: false,
+    claimed: null,       // that, taken by the first restore after this start (see claim)
+    taken: false,
+    said: false,
+    reported: false,
 
     take(appInfo) {
       const lr = appInfo && appInfo.lastRun;
       // (After a crash the watchdog's own message says so: see boot.)
       if (!lr || lr.ended === 'clean' || lr.ended === 'watchdog' || !cfg.armed) return;
       this.info = Object.assign({ startedAt: appInfo.startedAt }, lr);
-      const when = lr.lastAlive ? ' (last seen running at ' + C.fmtClock(new Date(lr.lastAlive), cfg.use24h) + ')' : '';
+      const when = lr.lastAlive ? ' (last seen running at ' + C.fmtClock(new Date(lr.lastAlive + Clock.netOffsetMs), cfg.use24h) + ')' : '';
       Engine.logEvent((lr.ended === 'shutdown' ? 'Windows was shut down, restarted or signed out with the countdown armed'
         : lr.drill ? 'Power cut test: the app was cut off'
           : lr.ended === 'killed' ? 'The app was closed without warning while the PC kept running'
             : 'The PC went off without warning (a power cut, an empty battery, the power button)') + when + ': picking up where the clock says');
+    },
+
+    /**
+     * Taken by the first restore after the app started, whatever comes of it. A later restore (a
+     * reload after a video error, the film taken back) must not report an old power cut as new.
+     */
+    claim() {
+      this.claimed = this.taken ? null : this.info;
+      this.taken = true;
+      return this.claimed;
     },
 
     /** Why the app was gone, in a few words, for the messages below. */
@@ -2196,11 +2212,18 @@
         : lr.ended === 'killed' ? 'the app was closed without warning' : 'the PC went off';
     },
 
+    // (The main process wrote its times with the PC clock: spans are measured on that clock too,
+    // and shown on the app's clock, which is the PC clock corrected by internet time.)
+    cutAt(lr) { return clockOf(lr.drill.at + Clock.netOffsetMs); },
+    startedLater(lr) {
+      return Number.isFinite(lr.startedAt) ? fmtSpan((lr.startedAt - lr.drill.at) / 1000) + ' later' : 'later';
+    },
+
     /** Back before the movie had to start: the countdown simply carries on. Said once. */
     stillArmed(s) {
-      const lr = this.info;
-      if (!lr || this.told) return;
-      this.told = true;
+      const lr = this.claimed;
+      if (!lr || this.said) return;
+      this.said = true;
       const text = 'Back after ' + this.why(lr) + ': the countdown is still armed and the movie starts at ' + clockOf(s.startEpoch) + '.';
       toast(text, 'good', 9000);
       Engine.logEvent(text);
@@ -2209,7 +2232,7 @@
         this.reported = true;
         const r = {
           ok: true, title: 'Power cut test',
-          text: 'The app was cut off at ' + clockOf(lr.drill.at) + ' with nothing saved on the way out, and started again ' + this.startedLater(lr) +
+          text: 'The app was cut off at ' + this.cutAt(lr) + ' with nothing saved on the way out, and started again ' + this.startedLater(lr) +
             ' the way Windows starts it when the PC is back on. The countdown came back armed: the movie still starts at ' + clockOf(s.startEpoch) +
             '. (Cut the power while the movie plays to see the film put back on the clock.)'
         };
@@ -2218,22 +2241,20 @@
       }
     },
 
-    startedLater(lr) {
-      return Number.isFinite(lr.startedAt) ? fmtSpan((lr.startedAt - lr.drill.at) / 1000) + ' later' : 'later';
-    },
-
     /** The armed countdown has just put the film back where the clock says (after a restart). */
     resumed(mark) {
       const pos = 'the movie is at ' + C.fmtDuration(Math.max(0, mark ? mark.pos : Engine.expected()), { forceHours: true }) + ', where the clock says';
-      const lr = this.info;
-      if (!lr || this.told) { toast('Back in the movie: ' + pos, 'good', 5000); return; }
-      this.told = true;
-      const now = Clock.now();
-      const off = lr.lastAlive ? (now - lr.lastAlive) / 1000 : null;
+      const lr = this.claimed;
+      if (!lr || this.said) { toast('Back in the movie: ' + pos, 'good', 5000); return; }
+      this.said = true;
+      const raw = Date.now();
+      const off = lr.lastAlive ? (raw - lr.lastAlive) / 1000 : null;
       const s = Engine.session;
-      const missed = s && lr.lastAlive && lr.lastAlive < s.targetEpoch && now >= s.targetEpoch ? ' ' + (isNewYearMoment(s.targetEpoch) ? 'Midnight' : 'The target moment') + ' came while it was off.' : '';
+      const now = Clock.now();
+      const gone = lr.lastAlive ? lr.lastAlive + Clock.netOffsetMs : null;
+      const missed = s && gone != null && gone < s.targetEpoch && now >= s.targetEpoch ? ' ' + (isNewYearMoment(s.targetEpoch) ? 'Midnight' : 'The target moment') + ' came while it was off.' : '';
       let text;
-      if (lr.drill) text = 'Power cut test: the app is back ' + fmtSpan((now - lr.drill.at) / 1000) + ' after it was cut off, and ' + pos + '.';
+      if (lr.drill) text = 'Power cut test: the app is back ' + fmtSpan((raw - lr.drill.at) / 1000) + ' after it was cut off, and ' + pos + '.';
       else if (lr.ended === 'shutdown') text = 'Back after Windows was shut down, restarted or signed out' + (off != null && off >= 60 ? ' (' + fmtLate(off) + ' ago)' : '') + ': ' + pos + '.' + missed;
       else if (lr.ended === 'killed') text = 'Back after the app was closed without warning: ' + pos + '.' + missed;
       else text = 'Back after the PC went off' + (off != null && off >= 20 ? ' for about ' + fmtLate(off) : '') + ' (a power cut, an empty battery or the power button): ' + pos + '.' + missed;
@@ -2241,24 +2262,33 @@
       Engine.logEvent(text);
     },
 
-    /** The first measurement after the restart: the power cut test's result. */
+    /**
+     * The first measurement after the restart. The power cut test is graded three seconds later,
+     * like the late start test: the first sample of a decoder that was just started is noisy, and
+     * what counts is that the film is held on the clock.
+     */
     locked(m) {
-      const lr = this.info;
+      const lr = this.claimed;
       if (!lr || !lr.drill || this.reported) return;
       this.reported = true;
-      const d = m.firstDrift;
-      const now = Clock.now();
-      const started = this.startedLater(lr);
-      const r = {
-        ok: Math.abs(d) <= 0.06,
-        title: 'Power cut test',
-        text: 'The app was cut off at ' + clockOf(lr.drill.at) + ' with nothing saved on the way out, and started again ' + started +
-          ' the way Windows starts it when the PC is back on. It imported the movie by itself and put it at ' + fmtFilm(m.pos) + ', ' +
-          (Math.abs(d) < 0.001 ? 'right on the clock' : fmtOff(d) + (d > 0 ? ' ahead of' : ' behind') + ' the clock') +
-          ': ' + fmtSpan((now - lr.drill.at) / 1000) + ' after the cut the film was running on the clock again.'
-      };
-      UI.addTestResult(r);
-      Engine.logEvent('Power cut test ' + (r.ok ? 'passed' : 'failed') + ': ' + r.text);
+      const first = m.firstDrift;
+      const pos = m.pos;
+      const back = Date.now();
+      setTimeout(() => {
+        const d = Engine.st.drift;
+        const held = Engine.mode === 'armed' && Engine.phase === 'synced' && d != null;
+        const r = {
+          ok: held && Math.abs(d) <= 0.06,
+          title: 'Power cut test',
+          text: 'The app was cut off at ' + this.cutAt(lr) + ' with nothing saved on the way out, and started again ' + this.startedLater(lr) +
+            ' the way Windows starts it when the PC is back on. It imported the movie by itself and put it at ' + fmtFilm(pos) + ', ' +
+            (Math.abs(first) < 0.001 ? 'right on the clock' : fmtOff(first) + (first > 0 ? ' ahead of' : ' behind') + ' the clock') +
+            ': ' + fmtSpan((back - lr.drill.at) / 1000) + ' after the cut the film was running on the clock again' +
+            (held ? '; three seconds on it was ' + fmtMs(d) + ' from the clock.' : ', but three seconds on it was not in sync (' + Engine.phase + ').')
+        };
+        UI.addTestResult(r);
+        Engine.logEvent('Power cut test ' + (r.ok ? 'passed' : 'failed') + ': ' + r.text);
+      }, 3000);
     }
   };
 
@@ -2311,7 +2341,10 @@
     },
 
     unpluggedText(pct) {
-      return 'The PC is running on its battery' + (pct != null ? ' (' + pct + '%)' : '') + ': plug it in for the film. If the battery runs out, the app opens again when the PC is back on and picks up where the clock says.';
+      return 'The PC is running on its battery' + (pct != null ? ' (' + pct + '%)' : '') + ': plug it in for the film.' +
+        (cfg.autoRestart === false
+          ? ' If the battery runs out the film stops, and with “Come back by itself after a crash or a power cut” switched off in Setup the app stays closed.'
+          : ' If the battery runs out, the app opens again when the PC is back on and picks up where the clock says.');
     },
 
     /** Said when the countdown is armed (or resumed) on a battery; not more than every ten minutes. */
