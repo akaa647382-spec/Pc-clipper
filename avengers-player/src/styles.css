@@ -18,13 +18,12 @@ html, html[data-theme="arc"] {
   --acc: #5fe3ff; --acc2: #1e9bff; --acc-text: #021018; --hot: #f6c453;
   --glow: rgba(95, 227, 255, .35);
 }
-/* TVA: the Time Variance Authority's amber light, burnt orange, mustard and walnut brown */
-html[data-theme="tva"] {
-  --bg: #0b0703; --bg2: #120c06; --card: #1d130a; --card2: #281b0e;
-  --line: rgba(244, 162, 60, .16); --line2: rgba(244, 162, 60, .36);
-  --text: #f7ead3; --muted: #c4aa83; --dim: #87714f;
-  --acc: #f4a23c; --acc2: #c8622a; --acc-text: #1a0d02; --hot: #e9c64a;
-  --glow: rgba(244, 162, 60, .32);
+html[data-theme="hotrod"] {
+  --bg: #0b0405; --bg2: #120608; --card: #1b0a0d; --card2: #260f13;
+  --line: rgba(255, 170, 90, .16); --line2: rgba(255, 170, 90, .36);
+  --text: #fff1e6; --muted: #cba592; --dim: #8a6558;
+  --acc: #ffc24a; --acc2: #e02b35; --acc-text: #1a0a00; --hot: #ff5a4a;
+  --glow: rgba(255, 150, 60, .35);
 }
 html[data-theme="infinity"] {
   --bg: #07040f; --bg2: #0c0718; --card: #140d26; --card2: #1c1335;
