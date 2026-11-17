@@ -4792,8 +4792,8 @@
       }
       else if (t.kind === 'late') {
         const snapAt = Engine.snapEpoch(t.session);
-        if (!t.joined) note = Late.showing ? 'You are late: press JOIN NOW, Enter or Space' : 'You are late: click the LATE bar at the top, or JOIN THE MOVIE NOW, to join';
-        else if (!t.lockedAt) note = 'Joining: the film goes to where the clock says it should be…';
+        if (!t.joined) note = Late.showing ? 'Late: press JOIN NOW' : 'Late: click the LATE bar to join';
+        else if (!t.lockedAt) note = 'Joining: to where the clock says…';
         else if (!t.watchSnap) note = 'Joined ' + fmtOff(t.firstDrift) + ' from the clock. Checking that it holds…';
         else note = snapAt > now ? 'Joined. Snap in ' + tick(snapAt) + ' s' : left > 0 ? targetWord(t.session).replace(/^m/, 'M') + ' in ' + tick(t.eventEpoch) + ' s' : 'Measuring…';
       }
