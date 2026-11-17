@@ -39,7 +39,8 @@ html[data-theme="gamma"] {
   --acc: #5cff9a; --acc2: #12b85a; --acc-text: #02140a; --hot: #d8ff5a;
   --glow: rgba(92, 255, 154, .32);
 }
-html[data-theme="stealth"] {
+/* War Machine: the greys that were the Stealth theme, under his name */
+html[data-theme="warmachine"] {
   --bg: #060607; --bg2: #0b0b0d; --card: #131316; --card2: #1b1b20;
   --line: rgba(255, 255, 255, .1); --line2: rgba(255, 255, 255, .26);
   --text: #f2f2f4; --muted: #9b9ba3; --dim: #66666e;
@@ -217,9 +218,13 @@ kbd {
 }
 .standby.leaving { animation: fadeout .28s ease both; }
 .sb-label { font: 600 calc(var(--u) * 1.9) var(--display); letter-spacing: .5em; color: var(--acc); padding-left: .5em; }
-/* (No glow behind the numbers: on a big screen it showed as a halo, and cut off at the edges of
-   the box, as a rectangle.) */
-.sb-count { max-width: 100%; white-space: nowrap; font: 500 calc(var(--u) * 15) var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.02em; line-height: 1; color: #fff; }
+/* The numbers glow like neon: a glow that hugs the strokes, in em so it scales with the digits.
+   Nothing clips it (cut off at the edges of the box, a wide glow drew rectangles behind the
+   numbers) and it is too tight to form blobs around them. */
+.sb-count {
+  max-width: 100%; white-space: nowrap; font: 500 calc(var(--u) * 15) var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.02em; line-height: 1; color: #fff;
+  text-shadow: 0 0 .04em rgba(255, 255, 255, .55), 0 0 .1em var(--glow), 0 0 .18em var(--glow);
+}
 .sb-line { font: 500 calc(var(--u) * 2.3) var(--sans); color: rgba(255, 255, 255, .72); }
 .sb-clock { font: 500 calc(var(--u) * 2) var(--mono); color: rgba(255, 255, 255, .45); font-variant-numeric: tabular-nums; }
 @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
@@ -338,6 +343,8 @@ kbd {
 .slip-btn { width: 100%; padding: 14px; font: 700 15px/1 var(--display); letter-spacing: .2em; }
 .slip-auto { color: var(--muted); font-size: 12px; margin-top: 10px; font-variant-numeric: tabular-nums; }
 .slip-stay { background: none; border: 0; color: var(--dim); font-size: 12px; text-decoration: underline; text-underline-offset: 3px; margin-top: 6px; }
+.slip-hold { margin-top: 8px; }
+.mission-recal { margin-bottom: 10px; }
 .slip-stay:hover { color: var(--text); }
 .slip-pill {
   position: absolute; z-index: 12; top: 14px; left: 50%; translate: -50% 0; border-radius: 999px; padding: 8px 16px;

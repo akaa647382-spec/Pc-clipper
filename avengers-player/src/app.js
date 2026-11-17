@@ -115,6 +115,7 @@
     }
     if (!(c.snapSec > 0 && c.snapSec < 86400)) c.snapSec = DEFAULTS.snapSec;
     if (c.theme === 'midnight') c.theme = 'tva';        // Midnight Gold became the TVA theme (1.10.1)
+    if (c.theme === 'stealth') c.theme = 'warmachine';  // Stealth became the War Machine theme (1.10.2)
     if (!['auto', 'classic', 'own'].includes(c.startMode)) c.startMode = 'auto';
     if (!(c.startOwnSec >= 60 && c.startOwnSec <= 6 * 3600)) c.startOwnSec = DEFAULTS.startOwnSec;
     if (!(c.volume >= 0 && c.volume <= 1)) c.volume = 1;
@@ -3980,7 +3981,7 @@
     { id: 'hotrod', name: 'Hot Rod', c: ['#1b0a0d', '#e02b35', '#ffc24a'] },
     { id: 'infinity', name: 'Infinity', c: ['#140d26', '#6b3df0', '#c19cff'] },
     { id: 'gamma', name: 'Gamma', c: ['#0a1b11', '#12b85a', '#d8ff5a'] },
-    { id: 'stealth', name: 'Stealth', c: ['#131316', '#a0a0ac', '#f2f2f4'] },
+    { id: 'warmachine', name: 'War Machine', c: ['#131316', '#a0a0ac', '#f2f2f4'] },
     { id: 'tva', name: 'TVA', c: ['#1d130a', '#c8622a', '#f4a23c'] },
     { id: 'doom', name: 'Doom', c: ['#0d1610', '#1f7a47', '#c4ccd2'] }
   ];
@@ -4132,10 +4133,12 @@
       el.armBtn.classList.remove('confirm');
       this.renderArmButton();
       this.renderStartTime();            // the start time can be changed only while nothing is armed
+      this.renderRecal();
     },
 
     onPhase() {
       el.app.dataset.phase = Engine.phase;
+      this.renderRecal();
       this.dirty.all = true;
       this.wake();
     },
@@ -4163,6 +4166,11 @@
         ? 'Armed. You can go fullscreen and walk away: the movie starts itself. Click the button twice to stop the countdown.'
         : this.lateNow ? 'The movie should already be playing. Press the button: the film jumps to where the clock says it should be and stays locked to it.'
           : 'Press it any day: the movie waits for the start time and starts itself. Use the Test tab to rehearse right now.');
+    },
+
+    /** RECALIBRATE in the Mission tab, whenever the film is out of sync while armed. */
+    renderRecal() {
+      setHidden(el.missionRecal, !(Engine.mode === 'armed' && (Engine.phase === 'slipped' || Engine.phase === 'blocked')));
     },
 
     showSlip() {
@@ -5345,10 +5353,15 @@
     el.slipPill.addEventListener('click', () => Engine.recover('button'));
     el.blocked.addEventListener('click', () => Engine.recover('click'));
     el.slipStay.addEventListener('click', () => {
+      // Out of sync on purpose: nothing plays or recalibrates by itself until RECALIBRATE is pressed
+      // (here, the pill at the top, R, or the button in the Mission tab).
       Engine.st.slipHold = true;
       setHidden(el.slip, true);
       setHidden(el.slipPill, false);
+      Engine.logEvent('Staying out of sync until RECALIBRATE is pressed');
+      UI.renderRecal();
     });
+    el.missionRecal.addEventListener('click', () => Engine.recover('mission'));
 
     /* transport */
     el.btnPlay.addEventListener('click', () => Engine.userTogglePlay());

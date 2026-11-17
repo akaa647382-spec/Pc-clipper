@@ -5,7 +5,7 @@ for the whole two and a half hours, and lands the snap on **12:00:00 AM**: the v
 found in your own file and put on midnight to the millisecond. It works with any copy of *Avengers: Endgame* or
 *Avengers Endgame: Encore*: Remux, Blu-ray or WEB rip, 4K or 1080p, whatever its exact length.
 
-**[Download the installer](../download/Avengers-Player-Setup-1.10.1.exe)** (Windows 10 / 11, 64-bit, about 93 MB).
+**[Download the installer](../download/Avengers-Player-Setup-1.10.2.exe)** (Windows 10 / 11, 64-bit, about 93 MB).
 You bring your own copy of the movie. Nothing is uploaded anywhere.
 
 Older version, kept as it was: **[1.3.0 (legacy)](../download/Avengers-Player-Setup-1.3.0-legacy.exe)**. Only one
@@ -15,8 +15,8 @@ version is installed at a time: installing one over the other asks first, then r
 
 ## Install
 
-1. Run `Avengers-Player-Setup-1.10.1.exe`. It installs for your user only, so there is no administrator prompt.
-   If Avengers Player is already installed, Setup says so first and asks: *update it to version 1.10.1?*, *install
+1. Run `Avengers-Player-Setup-1.10.2.exe`. It installs for your user only, so there is no administrator prompt.
+   If Avengers Player is already installed, Setup says so first and asks: *update it to version 1.10.2?*, *install
    it again?* (the same version), or, when the installed one is newer, *replace it with this version?* **Yes** puts
    the new version into the folder of the old one (your settings, snap points and an armed countdown stay as they
    are); **No** leaves everything as it is and closes Setup. On a PC without it, Setup simply installs it.
@@ -194,10 +194,15 @@ If midnight comes and the countdown is not running (never started, or late and n
 While the countdown is armed, a pause or a click on the timeline does not ruin the night. A small box appears in the
 middle of the screen (in fullscreen too):
 
-> **You slipped** · The movie is 12.4 s behind the clock · **RECALIBRATE**
+> **You paused the movie** · The movie is 12.4 s behind the clock · **RECALIBRATE** · **STAY OUT OF SYNC**
 
-Click it, or press **R**, **Enter** or **Space**. The film jumps back to where the clock says it should be. If nobody
-reacts, it recalibrates by itself after 10 seconds (changeable in Setup). Stalls, a sleeping PC and decoder hiccups are
+Click **RECALIBRATE**, or press **R**, **Enter** or **Space**: the film jumps back to where the clock says it should be.
+If nobody reacts, it recalibrates by itself after 10 seconds (changeable in Setup, or switched off there).
+
+Paused on purpose and coming back later? Press **STAY OUT OF SYNC**: the film stays exactly where you left it and
+nothing plays or recalibrates by itself. Space plays and pauses it freely. When you are ready, press **RECALIBRATE**
+in the Mission tab (it is there whenever the film is out of sync), click the *OUT OF SYNC* bar at the top, or press
+**R**: the film jumps to where the clock says and stays locked to it. Stalls, a sleeping PC and decoder hiccups are
 corrected automatically, without a box. If a stretch of the file is damaged, playback resumes by itself as soon as the
 clock is past it. **L** locks the controls so a slip cannot happen at all.
 
@@ -229,7 +234,7 @@ where the film really is, so you can see that it is off; it ticks with the clock
 | **L** | Lock the controls |
 | **Space**, **←** **→**, **↑** **↓**, **M** | Play/pause, skip 10 s, volume, mute |
 
-Position, size, 12/24-hour clock, seven app themes (Arc Reactor, Hot Rod, Infinity, Gamma, Stealth, TVA, Doom) and which side the control panel sits on are in the **Display** tab.
+Position, size, 12/24-hour clock, seven app themes (Arc Reactor, Hot Rod, Infinity, Gamma, War Machine, TVA, Doom) and which side the control panel sits on are in the **Display** tab.
 
 ## Subtitles
 

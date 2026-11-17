@@ -339,15 +339,29 @@ const scenarios = {
       await s.page.keyboard.press('Enter');
       check('Enter recalibrates', await waitSynced(s.page, 8000));
 
-      // 4. "Stay out of sync" keeps the popup away until asked.
+      // 4. "Stay out of sync": paused on purpose, the film waits until RECALIBRATE is pressed.
+      await s.page.keyboard.press('Space');
+      await waitPhase(s.page, 'slipped', 2000);
+      check('the popup offers STAY OUT OF SYNC as a button next to RECALIBRATE', await s.page.evaluate(() => {
+        const b = document.getElementById('slipStay');
+        const r = b.getBoundingClientRect();
+        return b.textContent === 'STAY OUT OF SYNC' && b.classList.contains('btn') && r.width > 200 && r.height > 30;
+      }));
+      await s.page.click('#slipStay');
+      check('stay out of sync shows the small pill instead', await s.page.isHidden('#slip') && await s.page.isVisible('#slipPill'));
+      check('and the Mission tab offers RECALIBRATE', await s.page.isVisible('#missionRecal'));
+      const heldAt = (await state(s.page)).t;
+      await sleep(12000);
+      st = await state(s.page);
+      check('nothing plays or recovers on its own, even past the automatic recalibration', st.phase === 'slipped' && st.paused && Math.abs(st.t - heldAt) < 0.05, 'paused at ' + heldAt.toFixed(2) + ', now ' + st.t.toFixed(2));
+      await s.page.click('#missionRecal');
+      check('RECALIBRATE in the Mission tab brings it back on the clock', await waitSynced(s.page, 8000));
+      check('and the button goes away again', await waitFor(s.page, () => document.getElementById('missionRecal').hidden, null, 2000));
       await s.page.keyboard.press('Space');
       await waitPhase(s.page, 'slipped', 2000);
       await s.page.click('#slipStay');
-      check('stay out of sync shows the small pill instead', await s.page.isHidden('#slip') && await s.page.isVisible('#slipPill'));
-      await sleep(6000);
-      check('and nothing recovers on its own', (await state(s.page)).phase === 'slipped');
       await s.page.click('#slipPill');
-      check('the pill recalibrates', await waitSynced(s.page, 8000));
+      check('the pill recalibrates too', await waitSynced(s.page, 8000));
 
       // 5. Locked controls: space and the timeline do nothing.
       await s.page.keyboard.press('l');
@@ -2193,7 +2207,7 @@ const scenarios = {
       await loadMovie(s.page, MOVIE);
       await s.page.click('.tab[data-tab="display"]');
       const themes = await s.page.$$eval('#themeGrid .theme', (n) => n.map((b) => b.dataset.id));
-      check('seven app themes are offered, TVA in place of Midnight Gold, Doom among them', themes.join(',') === 'arc,hotrod,infinity,gamma,stealth,tva,doom', themes.join(','));
+      check('seven app themes are offered: War Machine in place of Stealth, TVA in place of Midnight Gold, Doom', themes.join(',') === 'arc,hotrod,infinity,gamma,warmachine,tva,doom', themes.join(','));
       for (const id of themes) {
         await s.page.click('#themeGrid .theme[data-id="' + id + '"]');
         await sleep(250);
@@ -2251,6 +2265,14 @@ const scenarios = {
       s = await launch(profile);
       check('a saved Midnight Gold theme opens as TVA', await s.page.evaluate(() => document.documentElement.dataset.theme === 'tva' && window.__AP.cfg.theme === 'tva' &&
         getComputedStyle(document.documentElement).getPropertyValue('--acc2').trim() === '#c8622a'));
+      // Stealth became War Machine: a saved Stealth choice opens as War Machine.
+      await s.close();
+      const saved2 = JSON.parse(fs.readFileSync(file, 'utf8'));
+      saved2.renderer.theme = 'stealth';
+      fs.writeFileSync(file, JSON.stringify(saved2));
+      s = await launch(profile);
+      check('a saved Stealth theme opens as War Machine, in the same greys', await s.page.evaluate(() => document.documentElement.dataset.theme === 'warmachine' && window.__AP.cfg.theme === 'warmachine' &&
+        getComputedStyle(document.documentElement).getPropertyValue('--acc2').trim() === '#a0a0ac' && getComputedStyle(document.documentElement).getPropertyValue('--card').trim() === '#131316'));
       check('no page errors', s.errors.length === 0, s.errors.join(' | '));
     } finally { await s.close(); }
   },
@@ -2276,7 +2298,7 @@ const scenarios = {
       await sleep(600);
       let v = await look();
       check('days and milliseconds, e.g. “44d 01:12:21.815”', /^\d+d \d\d:\d\d:\d\d\.\d{3}$/.test(v.text) && v.ms, v.text);
-      check('no glow and no box behind the numbers', v.shadow === 'none' && v.overflow === 'visible', JSON.stringify(v));
+      check('the numbers glow, and nothing cuts the glow off into a box', /rgba?\(/.test(v.shadow) && v.overflow === 'visible', JSON.stringify(v));
       check('it fits the screen', v.fits && v.inside, JSON.stringify(v));
       await s.app.evaluate(({ BrowserWindow }) => { const w = BrowserWindow.getAllWindows()[0]; w.unmaximize(); w.setSize(1024, 640); });
       await sleep(1500);
