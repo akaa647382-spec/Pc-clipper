@@ -17,7 +17,8 @@ const TIMES = [150, 900, 1700, 2500, 5000, 8000, 9600, 10600, 12000];
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto(url);
     await page.addStyleTag({ content: '#bar{display:none}' });
-    for (const style of ['stark', 'fireworks']) {
+    const styles = await page.evaluate(() => APFx.styles());
+    for (const style of styles) {
       await page.evaluate((style) => { demo.fx.play({ style, title: 'HAPPY NEW YEAR', year: '2027', seed: 7 }); }, style);
       for (const t of TIMES) {
         await page.evaluate((t) => demo.fx.renderAt(t), t);
@@ -40,7 +41,7 @@ const TIMES = [150, 900, 1700, 2500, 5000, 8000, 9600, 10600, 12000];
       await page.evaluate(() => demo.fx.stop());
     }
     if (process.argv.includes('--perf') && w === 1920) {
-      for (const style of ['stark', 'fireworks']) {
+      for (const style of await page.evaluate(() => APFx.styles())) {
         const r = await page.evaluate((style) => new Promise((res) => {
           const times = [];
           let last = performance.now();
