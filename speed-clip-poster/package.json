@@ -1,0 +1,25 @@
+{
+  "name": "speed-clip-poster",
+  "productName": "Speed Clip Poster",
+  "version": "1.0.0",
+  "description": "Tells you when to post your clip in the Speed Discord clips channel, and whether it breaks the rules.",
+  "main": "main/main.cjs",
+  "private": true,
+  "license": "MIT",
+  "author": "Speed Clip Poster",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test --test-concurrency=1 tests/unit/*.test.cjs",
+    "test:e2e": "node tests/e2e/run.mjs",
+    "media": "bash scripts/make-test-media.sh",
+    "build:win": "node scripts/build-win.mjs"
+  },
+  "dependencies": {
+    "@tesseract.js-data/eng": "1.0.0",
+    "tesseract.js": "5.1.1"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "electron": "45.3.2"
+  }
+}

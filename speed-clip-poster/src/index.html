@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Speed Clip Poster</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><span class="logo">⚡</span> Speed Clip Poster</div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="now" class="active">When to post</button>
+      <button role="tab" data-tab="check">Check a clip</button>
+      <button role="tab" data-tab="log">Lock log</button>
+      <button role="tab" data-tab="accuracy">Accuracy</button>
+      <button role="tab" data-tab="settings">Settings</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="tab-now" class="tab active"></section>
+    <section id="tab-check" class="tab"></section>
+    <section id="tab-log" class="tab"></section>
+    <section id="tab-accuracy" class="tab"></section>
+    <section id="tab-settings" class="tab"></section>
+  </main>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>

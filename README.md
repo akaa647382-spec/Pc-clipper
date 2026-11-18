@@ -98,3 +98,8 @@ How it works, and why each FFmpeg flag is there: [SPEC.md](SPEC.md) and the rese
 **[Avengers Player](avengers-player/README.md)**: a separate Windows app that starts *Avengers: Endgame* by itself at
 9:29:30 PM on December 31 and keeps it locked to the clock so the snap lands on midnight.
 [Download the installer](download/Avengers-Player-Setup-1.0.0.exe).
+
+**[Speed Clip Poster](speed-clip-poster/README.md)**: tells you when to post your clip in the Speed Discord clips
+channel (learned from his past stream times and the clip locks you log) and checks the clip against the server rules first.
+It never logs in to Discord or posts for you.
+[Download the installer](download/Speed-Clip-Poster-Setup-1.0.0.exe).
