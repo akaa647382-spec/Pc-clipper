@@ -4171,7 +4171,7 @@
     { id: 'doom', name: 'Doom', c: ['#0d1610', '#1f7a47', '#c4ccd2'] }
   ];
   /** The animations, in the order of the Display tab (the H key goes through them). */
-  const CELEB_ORDER = ['stark', 'fireworks', 'arc', 'hotrod', 'infinity', 'gamma', 'warmachine', 'tva', 'doom', 'minimal', 'off'];
+  const CELEB_ORDER = ['stark', 'arc', 'hotrod', 'infinity', 'gamma', 'warmachine', 'tva', 'doom', 'fireworks', 'minimal', 'off'];
   const CELEB_NAMES = { stark: 'Stark', fireworks: 'Fireworks', arc: 'Arc Reactor', hotrod: 'Hot Rod', infinity: 'Infinity', gamma: 'Gamma', warmachine: 'War Machine', tva: 'TVA', doom: 'Doom', minimal: 'Minimal', off: 'Off' };
   const celebName = (id) => CELEB_NAMES[id] || id;
   const CELEB_HINT = {

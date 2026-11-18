@@ -240,7 +240,7 @@ where the film really is, so you can see that it is off; it ticks with the clock
 | **O** | Show or hide the whole overlay (hide it if everyone has a phone out anyway) |
 | **N** | Countdown mode on or off |
 | **T** | The 10 · 9 · 8 animation in the clock panel for the last ten seconds, on or off |
-| **H** | Happy New Year animation: Stark (gold dust forms the words, then blows away), Fireworks, Arc Reactor, Gamma, War Machine, TVA, Doom, Minimal, Off |
+| **H** | Happy New Year animation: Stark (gold dust forms the words, then blows away), Arc Reactor, Hot Rod, Infinity, Gamma, War Machine, TVA, Doom, Fireworks, Minimal, Off |
 | **A** | Sound language: switches between the sound tracks of the movie |
 | **C** | Subtitles on or off |
 | **Z** / **X** | Subtitles earlier / later |
