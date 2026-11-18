@@ -6,7 +6,8 @@ Where things stand, so the next session can carry on without the chat history.
 
 - Branch `ccr-be54cccc-rzsvel`. Commits `c5139d5` and `8469f50` hold the builders' finished work:
   letter-by-letter word reveals in Arc Reactor, Gamma, War Machine, TVA, Doom; new Hot Rod and
-  Infinity animations; themed 10 · 9 · 8 countdowns for the seven themes with a Preview button.
+  Infinity animations; themed 10 · 9 · 8 countdowns for the seven themes with a Preview button (the mode is now called
+  "Final Countdown" in the app).
 - None of that has been through its independent review (the reviews stopped at the usage limit), and
   the full end-to-end suite has not been run on it.
 - Hot Rod and Infinity are not loaded by the app yet (`src/index.html` has no script tags for

@@ -206,10 +206,10 @@ async function tenPreviews(s, themes) {
   };
   const keys = ['showOverlay', 'showClock', 'showDate', 'showCount', 'finalTen', 'theme', 'overlayPos', 'overlaySize', 'celebration'];
   const settings = () => page.evaluate((keys) => JSON.stringify(keys.map((k) => window.__AP.cfg[k])), keys);
-  check('the Display tab has "Preview 10 · 9 · 8" next to the 10 · 9 · 8 switch', await page.evaluate(() => {
+  check('the Display tab has "Preview the Final Countdown" next to its switch', await page.evaluate(() => {
     const b = document.getElementById('previewTen');
     const sw = document.getElementById('optFinal').closest('label');
-    return !!b && b.offsetWidth > 0 && /Preview 10 · 9 · 8/.test(b.textContent) && sw.nextElementSibling === b;
+    return !!b && b.offsetWidth > 0 && /Preview the Final Countdown/.test(b.textContent) && sw.nextElementSibling === b;
   }));
 
   for (const id of themes) {
@@ -246,11 +246,11 @@ async function tenPreviews(s, themes) {
       await page.click('#previewTen');
       await noFinal();
       const x = await look();
-      check(`${id}: clicked again, the preview stops and the panel is as it was`, !x.pv && !x.final && x.btn === 'Preview 10 · 9 · 8' && !/^\d+$/.test(x.n) && x.lbl === 'NEW YEAR IN', JSON.stringify({ pv: x.pv, final: x.final, n: x.n, btn: x.btn }));
+      check(`${id}: clicked again, the preview stops and the panel is as it was`, !x.pv && !x.final && x.btn === 'Preview the Final Countdown' && !/^\d+$/.test(x.n) && x.lbl === 'NEW YEAR IN', JSON.stringify({ pv: x.pv, final: x.final, n: x.n, btn: x.btn }));
     } else {
       const ended = await waitFor(page, () => !window.__AP.UI.tenPv && !document.getElementById('overlay').classList.contains('final'), null, 10000);
       const x = await look();
-      check(`${id}: the preview stops by itself after 1, and the panel is as it was`, ended && x.btn === 'Preview 10 · 9 · 8' && !/^\d+$/.test(x.n) && x.lbl === 'NEW YEAR IN' && x.anims.length === 0, JSON.stringify({ n: x.n, lbl: x.lbl, btn: x.btn, anims: x.anims }));
+      check(`${id}: the preview stops by itself after 1, and the panel is as it was`, ended && x.btn === 'Preview the Final Countdown' && !/^\d+$/.test(x.n) && x.lbl === 'NEW YEAR IN' && x.anims.length === 0, JSON.stringify({ n: x.n, lbl: x.lbl, btn: x.btn, anims: x.anims }));
     }
     check(`${id}: the preview changed no setting`, (await settings()) === before, await settings());
   }
@@ -275,7 +275,7 @@ async function tenPreviews(s, themes) {
   await page.click('#previewTen');
   await sleep(400);
   const t = await look();
-  check('during a test run Preview 10 · 9 · 8 is refused and says why', !t.pv && !t.final && /Not during a test run/.test(t.toasts), JSON.stringify({ pv: t.pv, final: t.final, toasts: t.toasts }));
+  check('during a test run the Final Countdown preview is refused and says why', !t.pv && !t.final && /Not during a test run/.test(t.toasts), JSON.stringify({ pv: t.pv, final: t.final, toasts: t.toasts }));
   await page.evaluate(() => window.__AP.Engine.endTest('Stopped by the test.'));
   await waitFor(page, () => !window.__AP.Engine.test && document.getElementById('video').paused, null, 4000);
 }

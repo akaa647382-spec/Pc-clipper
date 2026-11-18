@@ -225,7 +225,7 @@ date rolls over from December 31 to January 1.
 Each app theme ticks the 10, 9, 8 its own way, inside the panel (Arc Reactor: a spinning cyan ring and a shockwave;
 Hot Rod: molten gold and sparks; Infinity: stardust and an orbiting comet; Gamma: a jolt and a crack of lightning;
 War Machine: brackets that lock on in red; TVA: an old television switching on; Doom: green fire cooling to steel),
-and 3, 2, 1 hit harder. **Display → Preview 10 · 9 · 8** plays the last ten seconds there right now, in the current
+and 3, 2, 1 hit harder. **Display → Preview the Final Countdown** plays the last ten seconds there right now, in the current
 theme (not during a test run or the countdown's last minute; click it again to stop).
 
 **Everything ticks with the clock.** Every countdown (overlay, standby screen, Mission tab, the late box) and the
@@ -239,7 +239,7 @@ where the film really is, so you can see that it is off; it ticks with the clock
 |---|---|
 | **O** | Show or hide the whole overlay (hide it if everyone has a phone out anyway) |
 | **N** | Countdown mode on or off |
-| **T** | The 10 · 9 · 8 animation in the clock panel for the last ten seconds, on or off |
+| **T** | The Final Countdown (10, 9, 8 … in the clock panel for the last ten seconds), on or off |
 | **H** | Happy New Year animation: Stark (gold dust forms the words, then blows away), Arc Reactor, Hot Rod, Infinity, Gamma, War Machine, TVA, Doom, Fireworks, Minimal, Off |
 | **A** | Sound language: switches between the sound tracks of the movie |
 | **C** | Subtitles on or off |

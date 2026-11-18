@@ -4740,7 +4740,7 @@
     tenPreviewBlock(now) {
       if (Engine.test) return 'Not during a test run: the preview would change what the test shows';
       const s = Engine.session;
-      if (Engine.mode === 'armed' && s && s.targetEpoch - now > 0 && s.targetEpoch - now <= 60000) return 'The countdown is in its last minute: the real 10 · 9 · 8 is on its way';
+      if (Engine.mode === 'armed' && s && s.targetEpoch - now > 0 && s.targetEpoch - now <= 60000) return 'The countdown is in its last minute: the real Final Countdown is on its way';
       return '';
     },
 
@@ -4756,7 +4756,7 @@
       if (next - now < 300) next += 1000;
       this.tenPv = next + 9000;
       this.renderTenButton();
-      if (!cfg.finalTen) toast('The 10 · 9 · 8 animation is switched off: this is how it would look');
+      if (!cfg.finalTen) toast('The Final Countdown is switched off: this is how it would look');
     },
 
     stopTenPreview() {
@@ -4766,7 +4766,7 @@
     },
 
     renderTenButton() {
-      setText(el.previewTen, this.tenPv ? 'Stop the preview' : 'Preview 10 · 9 · 8');
+      setText(el.previewTen, this.tenPv ? 'Stop the preview' : 'Preview the Final Countdown');
       el.previewTen.classList.toggle('on', !!this.tenPv);
     },
 
@@ -5766,7 +5766,7 @@
         case 'ArrowDown': e.preventDefault(); cfg.volume = clamp(Math.round((cfg.volume - 0.05) * 100) / 100, 0, 1); save(); applyVolume(); UI.renderSettings(); toast('Volume ' + Math.round(cfg.volume * 100) + '%'); break;
         case 'm': cfg.muted = !cfg.muted; save(); applyVolume(); toast(cfg.muted ? 'Muted' : 'Sound on'); break;
         case 'o': setCfg('showOverlay', !cfg.showOverlay); toast(cfg.showOverlay ? 'Clock overlay on' : 'Clock overlay hidden'); break;
-        case 't': setCfg('finalTen', !cfg.finalTen); if (cfg.finalTen && !cfg.showOverlay) setCfg('showOverlay', true); toast(cfg.finalTen ? '10 · 9 · 8 animation on' : '10 · 9 · 8 animation off'); break;
+        case 't': setCfg('finalTen', !cfg.finalTen); if (cfg.finalTen && !cfg.showOverlay) setCfg('showOverlay', true); toast(cfg.finalTen ? 'Final Countdown on' : 'Final Countdown off'); break;
         case 'n': setCfg('showCount', !cfg.showCount); if (cfg.showCount && !cfg.showOverlay) setCfg('showOverlay', true); toast(cfg.showCount ? 'Countdown mode on' : 'Countdown mode off'); break;
         case 'a': AudioTracks.cycle(); break;
         case 'c': SubsUI.toggle(); break;
