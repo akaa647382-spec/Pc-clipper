@@ -36,7 +36,12 @@ Where things stand, so the next session can carry on without the chat history.
    | Doom | Cinzel | scratched steel, glossy green outline (like the Doomsday logo) |
    | Stark, Fireworks, Minimal | unchanged | unchanged |
 
-   Each theme's 10 · 9 · 8 uses the same font and look. Fonts ship inside the app (offline): take the
+   **The Final Countdown follows the chosen New Year animation, not the app theme** (the user's
+   decision): choosing Arc Reactor gives the Arc Reactor countdown, and so on, in that animation's font
+   and look. Stark, Fireworks and Minimal get countdowns of their own (Stark: gold with a shimmer of
+   dust; Fireworks: a colourful burst; Minimal: a plain fade). With the animation Off, the app theme's
+   countdown is used. In the CSS, key the countdown styles on a `data-ten` attribute set from
+   `cfg.celebration` instead of `html[data-theme]`, and make the e2e checks pick animations, not themes. Fonts ship inside the app (offline): take the
    woff2 files from the `@fontsource/*` npm packages and keep their licence files (OFL / Apache).
    The engine needs a per-style font (`APFx.register(id, { font })`) used by the layout, the words
    picture, the letters and Stark's dust sampling, and the fonts must be loaded before `prime()`.
