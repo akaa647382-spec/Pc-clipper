@@ -1,0 +1,261 @@
+{
+ "note": "Speed's normal YouTube live streams from 2026-07-31 to 2026-11-16, read from his channel's Live tab with vidIQ on 2026-11-18. start = when the video was published, which is when he went live for streams that were not scheduled ahead; end = start + length. Left out: the World Cup tour (Jul 11-20) and the Minecraft/Kai Cenat marathon (Aug 8-21), which do not follow his normal pattern. Real YouTube times replace these by video id once an API key is set.",
+ "streams": [
+  {
+   "id": "20P6kQk6zII",
+   "title": "HITTING 60 MILLION SUBS RIGHT NOWWW!",
+   "start": 1785522113000,
+   "end": 1785525719000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "VvOQJTRVedA",
+   "title": "HAPPY SATURDAY + RETURN STREAM!",
+   "start": 1785622334000,
+   "end": 1785638896000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "hOoL8p8vFgs",
+   "title": "NOT ENDING UNTIL I BEAT THE HARDEST GAME ON ROBLOX",
+   "start": 1785715564000,
+   "end": 1785738284000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "qCPMuBhsCs0",
+   "title": "i love mondays",
+   "start": 1785790340000,
+   "end": 1785801809000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "vAArDM97NyM",
+   "title": "CLICK THIS STREAM IF YOUR BORED",
+   "start": 1786999997000,
+   "end": 1787011151000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "kLcyJ9zCinw",
+   "title": "I LAUGH THIS STREAM ENDS",
+   "start": 1787081363000,
+   "end": 1787093065000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "uYdHaoJulcc",
+   "title": "PICK UP THE BLOCK WIN 10,000 $$$",
+   "start": 1787600423000,
+   "end": 1787609263000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "2mNCKDXA1O4",
+   "title": "WHO IS THE BEST GAMER? ft. JYNXZI",
+   "start": 1787696438000,
+   "end": 1787713329000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "miGclAow9KI",
+   "title": "REACTING TO THE NEW GTA 6 TRAILER! LIVE",
+   "start": 1787859772000,
+   "end": 1787863146000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "gYzuuGvuvyE",
+   "title": "Minecraft, But Chat Controls My Game..",
+   "start": 1788029207000,
+   "end": 1788033530000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "glOhY5hiOwI",
+   "title": "JOIN THIS STREM MESSI RETIRED",
+   "start": 1788463184000,
+   "end": 1788474509000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "4zVFht1KbnY",
+   "title": "WORLD TALENT SHOW",
+   "start": 1788555039000,
+   "end": 1788566644000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "5CPAtEmHAio",
+   "title": "REVEALING THE NEW iPHONE!",
+   "start": 1788981477000,
+   "end": 1788989178000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "WwZx1LvNwas",
+   "title": "LIT STREAM + IRL OHIO STATE VS TEXAS",
+   "start": 1789248715000,
+   "end": 1789255411000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "dV0OgeSbYPM",
+   "title": "I GOT FC27 EARLY!",
+   "start": 1789593414000,
+   "end": 1789605891000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "drXRrB4wFRg",
+   "title": "BUYING THE NEW iPHONE 18!",
+   "start": 1789846899000,
+   "end": 1789857008000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "GfCnZ8cAYvQ",
+   "title": "JOIN THIS STREAM, WIN AN IPHONE 18!",
+   "start": 1790028252000,
+   "end": 1790042078000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "o1_FvfJD8fg",
+   "title": "I GOT A JOB AT KFC!",
+   "start": 1790534919000,
+   "end": 1790545952000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "SOW3qCJJSlQ",
+   "title": "RONALDO RETIRED??? + SPEED VS EKITIKE",
+   "start": 1791059296000,
+   "end": 1791070419000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "RJzspH1rAbc",
+   "title": "GOING BACK TO SCHOOL!",
+   "start": 1791323469000,
+   "end": 1791338179000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "MBod0tK46Js",
+   "title": "Sunday Stream + Speed Vs. Kvaratskhelia",
+   "start": 1791748119000,
+   "end": 1791758310000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "l8MO4SLaLU8",
+   "title": "TIME TO LOCK IN + Speed Vs. Eze",
+   "start": 1792013163000,
+   "end": 1792028443000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "L6S9Vb3RLy4",
+   "title": "LET'S HAVE FUN + Speed Vs. Cole Palmer",
+   "start": 1792095449000,
+   "end": 1792101274000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "KliV-V6SSF0",
+   "title": "BUYING THE NEW iPHONE DUO!",
+   "start": 1792792177000,
+   "end": 1792801505000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "uQlACpbi4WM",
+   "title": "SPENDING THE NIGHT IN THE WORLD'S SCARIEST HAUNTED HOUSE!",
+   "start": 1793064827000,
+   "end": 1793073395000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "G36NRLWdjzE",
+   "title": "FIND ME WIN MONEY $250,000 - Going To My Movie Premiere!",
+   "start": 1793225464000,
+   "end": 1793239309000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "IkhjzYsvCmw",
+   "title": "HALLOWEEN SPIDER-MAN SPEED-VERSE IRL STREAM",
+   "start": 1793489889000,
+   "end": 1793496809000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "9aPR9UXI1kY",
+   "title": "REACTING TO RONALDO RETIREMENT & PLAYING ZELDA FOR THE FIRST TIME",
+   "start": 1793934097000,
+   "end": 1793961431000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "Kyv61l2vF6M",
+   "title": "ONE PIECE IS IN FORTNITE! + Speed Vs. Dele Alli",
+   "start": 1793996094000,
+   "end": 1794006485000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "Kush1FqnhbU",
+   "title": "REVEALING MY NEW FORTNITE ICON SKIN!",
+   "start": 1794621581000,
+   "end": 1794631363000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "o0UeucVxYCA",
+   "title": "I JUST MET WITH PRESIDENT OBAMA",
+   "start": 1794859975000,
+   "end": 1794870276000,
+   "approx": true,
+   "source": "vidiq"
+  },
+  {
+   "id": "qSyo5d-dVzA",
+   "title": "PLAYING GTA 6 EARLY ACCESS GAMEPLAY",
+   "start": 1794868466000,
+   "end": null,
+   "approx": true,
+   "source": "vidiq"
+  }
+ ]
+}
