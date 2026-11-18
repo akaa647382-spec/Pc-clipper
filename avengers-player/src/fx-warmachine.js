@@ -11,11 +11,12 @@
  *             in a quick staccato; it snaps onto each letter in turn and a scan line renders that
  *             letter in brushed steel, top to bottom (HAPPY NEW YEAR by 1.5 s). The reticle opens
  *             where the letters cross it, each as it arrives.
- *   1.5 s     the seeker opens the year's readout: its digits power on as a counter, scrambling (it
- *             never shows the year that is ending), and lock one by one, left to right, each with a
- *             target box, a red blink and a tick of the reticle. The last lock (2.55 s) locks the
- *             whole display: corner brackets snap round the words and a red ring pulses out.
- *             (A title without a year locks at 1.8 s.)
+ *   1.5 s     the seeker opens the year's readout, a counter: each digit powers on as a drum that
+ *             rolls at full speed (the year that is ending is never shown) and stops dead on its
+ *             digit, one by one, left to right, each lock with a white flash, a red double blink, a
+ *             target box and a tick of the reticle. The last lock (2.55 s) locks the whole display:
+ *             corner brackets snap round the words and a red ring pulses out. (A title without a
+ *             year locks at 1.8 s; a year that is not a number is acquired like the title.)
  *   2.8-9 s   five salvoes: red-hot tracers fire from both lower corners, arc upward and burst into
  *             silver-white flak above the words, each burst marked by the display, with showers of
  *             sparks; a sheen runs across the steel letters.
@@ -48,6 +49,8 @@
   const SHEEN = { stops: [[0, '#ffffff'], [1, '#f6f8ff']], halo: '' };
   // A digit of the year in red, without a halo: laid over the steel as it locks (the lock blink).
   const REDFILL = { stops: [[0, '#ff9a9d'], [1, '#ff5a5f']], halo: '' };
+  // The steel without its halo: the smear of a digit on a drum that is rolling fast.
+  const BLUR = { stops: FILL.stops, halo: '' };
 
   const WHITE = '#ffffff';
   const SILVER = '#e6e8ee';
@@ -223,9 +226,9 @@
 
     // Every letter of both lines: { g (from fx.js), arr (it starts to render), out (it starts to be
     // wiped out), det (the boot's scan finds it), b (its target box) }; the year's digits also have
-    // lock (when the counter stops on it), slot, scr (what it shows while it scrambles) and rate.
+    // lock (when the counter stops on it), slot, and their drum: seq (its digits), run and speed.
     const DPR = env.dpr;
-    const LET = env.glyphs().map((g) => ({ g: g, arr: 0, out: 0, det: 0, lock: -1, slot: -1, scr: null, rate: 60, b: null }));
+    const LET = env.glyphs().map((g) => ({ g: g, arr: 0, out: 0, det: 0, lock: -1, slot: -1, seq: null, run: 0, speed: 0, b: null }));
     const NL = LET.length;
     const TITLE = LET.filter((e) => e.g.line === 0);
     const YEAR = LET.filter((e) => e.g.line === 1);
@@ -255,7 +258,7 @@
     let T_OUT0 = Infinity;
     for (const e of LET) T_OUT0 = Math.min(T_OUT0, e.out);
     // From here until the first one goes, the words are one picture.
-    let T_SETTLED = T_LOCK + 640;
+    let T_SETTLED = T_LOCK + 440;
     for (const e of ACQ) T_SETTLED = Math.max(T_SETTLED, e.arr + SCAN_T + 300);
     // The boot's two scan lines leave a contact mark on each letter as they pass its line.
     const scanPass = (y) => {
@@ -526,6 +529,27 @@
     for (let i = 0; i < 512; i++) NOISE[i] = rnd();
     const nPts = wp.pts.length / 2;
 
+    // The counter: each digit is a drum that rolls at full speed (the units fastest) and stops dead
+    // on its digit at its lock: it never slows down on a digit it does not stop on. Wherever the
+    // year that is ending differs from the new one, the drum leaves that digit out, so the year
+    // that is ending can never be read, not even for a moment.
+    const OLD = nC ? String(Number(L.year) - 1) : '';
+    for (const e of COUNTER) {
+      const target = L.year.charCodeAt(e.slot) - 48;
+      const old = OLD.length === nC ? OLD.charCodeAt(e.slot) - 48 : -1;
+      const first = Math.floor(rnd() * 10);
+      const seq = [];
+      for (let i = 0; i < 10; i++) { const d = (first + i) % 10; if (d !== old || old === target) seq.push(d); }
+      e.seq = seq;
+      const span = Math.max(1, e.lock - e.arr);
+      const want = span / Math.max(40, 74 - e.slot * 9);    // digits it would roll at its own pace
+      let n = -1;
+      for (let m = 2; m < want + 12; m++) if (seq[m % seq.length] === target && (n < 0 || Math.abs(m - want) < Math.abs(n - want))) n = m;
+      e.speed = n / span;                                    // digits a ms: it is on its digit exactly at the lock
+    }
+    /** Where a drum is at t, in digits rolled since it powered on. */
+    const drumAt = (e, t) => Math.max(0, Math.min(t, e.lock) - e.arr) * e.speed;
+
     let count = 0;
 
     /* --- helpers ----------------------------------------------------------- */
@@ -562,9 +586,10 @@
     function drawBoot(t) {
       if (t > T_SPLIT1 + 700) return;
       ctx.globalCompositeOperation = 'lighter';
-      // A faint flash over the whole frame, well under a quarter of full brightness.
-      if (t < 420) {
-        ctx.globalAlpha = 0.16 * Math.pow(1 - t / 420, 1.7);
+      // A faint flash over the whole frame, well under a quarter of full brightness (its last few
+      // per cent go a little early: a whole-frame fill is the dearest thing drawn in these frames).
+      if (t < 290) {
+        ctx.globalAlpha = 0.16 * Math.pow(1 - t / 420, 1.7) * (1 - smooth(190, 290, t));
         ctx.fillStyle = flashGrad;
         ctx.fillRect(0, 0, W, H);
         count++;
@@ -1144,50 +1169,123 @@
       count++;
     }
 
-    function drawWords(t, lo) {
-      if (t < T_REVEAL0) return;
-      const scanY = lerp(inkY0 - TS * 0.5, inkY1 + TS * 0.5, smooth(T_REVEAL0, T_REVEAL1, t));
-      const scanning = t < T_REVEAL1;
-      // The power-down: the words squash into a line, then the line shrinks to a point.
-      const sy = 1 - 0.985 * easeIn(smooth(T_DOWN + 250, T_DOWN + 720, t));
-      const sx = 1 - 0.995 * easeIn(smooth(T_DOWN + 700, T_DOWN + 1020, t));
-      const wa = 1 - smooth(T_DOWN + 650, T_DOWN + 760, t);
-      if (wa > 0.004) {
-        ctx.save();
-        if (scanning) {
-          ctx.beginPath();
-          ctx.rect(0, 0, W, scanY);
-          ctx.clip();
+    /* --- the letters, acquired --------------------------------------------- */
+
+    const TFX = { crop: [0, 0, 1, 1], op: 'source-over', dx: 0, dy: 0 };     // reused: env.glyph reads it at once
+    /** Rows v0..v1 of a letter's picture: `src` is the picture, `at` the letter it stands in for (moved down by dy). */
+    function part(src, at, fill, a, v0, v1, op, dy) {
+      if (v1 <= v0 + 0.001 || a <= 0.004) return;
+      TFX.crop[1] = v0;
+      TFX.crop[3] = v1;
+      TFX.op = op || 'source-over';
+      TFX.dx = at.cx - src.cx;
+      TFX.dy = dy || 0;
+      env.glyph(src, a > 1 ? 1 : a, fill, TFX);
+      count++;
+    }
+    /** The rows of a letter's picture, moved down by dy, that show between y0 and y1 on the screen. */
+    function band(src, at, fill, pad, a, dy, y0, y1, op) {
+      if (y1 > y0) part(src, at, fill, a, cropAt(at, y0 - dy, pad), cropAt(at, y1 - dy, pad), op, dy);
+    }
+    /** A digit of the counter while its drum rolls: the digit going out at the top and the next one
+     *  coming in from below, both seen through the counter's window (and, while it powers on, only
+     *  above the scan line that renders it). */
+    function drawDrum(e, t, lo) {
+      const g = e.g;
+      const pos = drumAt(e, t);
+      const i = Math.floor(pos);
+      const f = pos - i;
+      const pitch = g.size;
+      const wy0 = g.cy - pitch / 2;
+      let wy1 = g.cy + pitch / 2;
+      const p = (t - e.arr) / SCAN_T;
+      const sy = p < 1 ? scanY(g, Math.min(1, p / 0.8)) : Infinity;
+      if (sy < wy1) wy1 = sy;
+      // A drum at full speed smears its digits: two fainter copies (without the dark halo) where
+      // they were a moment ago. It stops dead at its lock, crisp.
+      const smear = Math.min(pitch * 0.5, (pos - drumAt(e, t - 16)) * pitch);
+      for (let s = 0; s < 2; s++) {
+        const src = DIG[e.seq[(i + s) % e.seq.length]];
+        const dy = (s - f) * pitch;
+        if (smear > pitch * 0.03) {
+          band(src, g, BLUR, PAD_BARE, 0.16, dy + smear * 0.9, wy0, wy1);
+          band(src, g, BLUR, PAD_BARE, 0.34, dy + smear * 0.45, wy0, wy1);
         }
-        if (sy < 1) {
-          ctx.translate(BX, BY);
-          ctx.scale(1, sy);
-          ctx.translate(-BX, -BY);
-        }
-        env.words(wa, FILL, 1);
-        ctx.restore();
+        band(src, g, FILL, PAD_HALO, 0.88, dy, wy0, wy1);
+        if (p < 1) band(src, g, SHEEN, PAD_BARE, 0.9, dy, Math.max(wy0, sy - g.size * 0.3), wy1, 'lighter');
+      }
+      if (p < 0.8) scanLine(g, sy, (1 - smooth(0.64, 0.8, p)) * Math.min(1, p * 10), lo);
+    }
+    /** The scan line across one letter at y: a white hairline in its glow. */
+    function scanLine(g, y, a, lo) {
+      if (a <= 0.01) return;
+      const s = Math.sqrt(g.size / TS);           // the year's digits are bigger
+      const x0 = g.x0 - g.size * 0.16;
+      const w = g.x1 - g.x0 + g.size * 0.32;
+      ctx.globalCompositeOperation = 'lighter';
+      if (!lo) {
+        const bh = 10 * k * s;
+        ctx.globalAlpha = 0.6 * a;
+        ctx.drawImage(tex.band, x0 - g.size * 0.08, y - bh, w + g.size * 0.16, bh * 2);
         count++;
+      }
+      ctx.fillStyle = WHITE;
+      ctx.globalAlpha = a;
+      ctx.fillRect(x0, y - 0.75 * k * s, w, Math.max(1, 1.5 * k * s));
+      count++;
+    }
+    // Where the scan line is when it has gone p of the way over a letter (from just above to just below).
+    const scanY = (g, p) => g.top - g.size * 0.12 + (g.bottom - g.top + g.size * 0.24) * p;
+    /** A letter rendering in: steel above the scan line, the ink just above the line white-hot. The
+     *  last fifth of the time the line, faded, takes the rest of the letter's dark halo down with it. */
+    function scanIn(src, at, p, a, lo) {
+      const q = p / 0.8;
+      const y = q < 1 ? scanY(at, q) : lerp(scanY(at, 1), at.cy + at.size * 0.62 + PAD_HALO, (p - 0.8) / 0.2);
+      part(src, at, FILL, a, 0, cropAt(at, y, PAD_HALO));
+      if (q < 1) {
+        part(src, at, SHEEN, 0.9 * a, cropAt(at, y - at.size * 0.3, PAD_BARE), cropAt(at, y, PAD_BARE), 'lighter');
+        scanLine(at, y, (1 - smooth(0.8, 1, q)) * Math.min(1, q * 8), lo);
+      }
+    }
+    /** A letter wiped out: the scan line runs down it again and takes the steel away above it. */
+    function scanOut(g, p, lo) {
+      const y = scanY(g, p);
+      const a = 1 - smooth(0.75, 1, p);
+      part(g, g, FILL, a, cropAt(g, y, PAD_HALO), 1);
+      part(g, g, SHEEN, 0.9 * a, cropAt(g, y, PAD_BARE), cropAt(g, y + g.size * 0.3, PAD_BARE), 'lighter');
+      scanLine(g, y, (1 - smooth(0.85, 1, p)) * Math.min(1, p * 8), lo);
+    }
+
+    function drawLetters(t, lo) {
+      if (t >= T_SETTLED && t < T_OUT0) {
+        // every letter in place, nothing moving: the words in one picture (the same pixels)
+        env.words(1, FILL, 1);
+        count++;
+      } else {
+        for (const e of LET) {
+          const d = t - e.arr;
+          if (d < 0 || t >= e.out + SCAN_T) continue;
+          const g = e.g;
+          if (t >= e.out) { scanOut(g, (t - e.out) / SCAN_T, lo); continue; }
+          if (e.lock >= 0 && t < e.lock) { drawDrum(e, t, lo); continue; }
+          if (e.lock < 0) {
+            if (d < SCAN_T) scanIn(g, g, d / SCAN_T, 1, lo);
+            else part(g, g, FILL, 1, 0, 1);
+            // just rendered: white-hot for a moment
+            const da = d - SCAN_T * 0.8;
+            if (da > 0 && da < 300) part(g, g, SHEEN, 0.6 * (1 - smooth(0, 300, da)), 0, 1, 'lighter');
+          } else {
+            // locked: the drum clicks into place, the digit flashes white, then blinks red twice
+            const dl = t - e.lock;
+            const dy = dl < 200 ? -0.1 * g.size * Math.sin(dl / 22) * Math.exp(-dl / 45) : 0;
+            part(g, g, FILL, 1, 0, 1, null, dy);
+            if (dl < 80) part(g, g, SHEEN, 0.8 * (1 - dl / 80), 0, 1, 'lighter', dy);
+            const red = dl < 50 ? 0 : dl < 115 ? 1 : dl < 165 ? 0 : dl < 235 ? 1 : 1 - smooth(235, 420, dl);
+            if (red > 0.01) part(g, g, REDFILL, 0.92 * red, 0, 1, null, dy);
+          }
+        }
       }
       ctx.globalCompositeOperation = 'lighter';
-      // The scan line that renders them, and the letters glowing just behind it.
-      if (scanning) {
-        const a = smooth(T_REVEAL0, T_REVEAL0 + 80, t);
-        const x0 = inkX0 - TS * 0.9;
-        const x1 = inkX1 + TS * 0.9;
-        ctx.globalAlpha = 0.75 * a;
-        ctx.drawImage(tex.band, x0, scanY - 14 * k, x1 - x0, 28 * k);
-        ctx.fillStyle = WHITE;
-        ctx.globalAlpha = 0.9 * a;
-        ctx.fillRect(x0, scanY - 0.8 * k, x1 - x0, 1.6 * k);
-        count += 2;
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(0, scanY - TS * 0.6, W, TS * 0.6);
-        ctx.clip();
-        env.words(0.85 * a, SHEEN, 1);
-        ctx.restore();
-        count++;
-      }
       // The sheen across the steel.
       if (t < T_DOWN) {
         for (const sh of SHEENS) {
@@ -1203,7 +1301,7 @@
         }
       }
       // Glints that come and go on the letters while they hold.
-      const ga = smooth(T_REVEAL1 + 200, T_REVEAL1 + 700, t) * (1 - smooth(T_DOWN, T_DOWN + 250, t));
+      const ga = smooth(T_LOCK + 200, T_LOCK + 700, t) * (1 - smooth(T_DOWN - 200, T_DOWN, t));
       if (ga > 0.01 && nPts > 0) {
         const slot = Math.floor(t / 150);
         const within = (t - slot * 150) / 150;
@@ -1216,16 +1314,104 @@
           stamp(tex.star, wp.pts[p], wp.pts[p + 1], (18 + 16 * r) * k, a);
         }
       }
-      // The collapsed words: a line of light that shrinks to a point.
-      const la = smooth(T_DOWN + 420, T_DOWN + 700, t) * (1 - smooth(T_DOWN + 980, T_DOWN + 1150, t));
-      if (la > 0.004) {
-        const len = (inkX1 - inkX0) * sx;
-        ctx.globalAlpha = la;
-        ctx.drawImage(tex.streak, BX - len * 0.6, BY - 22 * k, len * 1.2, 44 * k);
-        ctx.fillStyle = WHITE;
-        ctx.globalAlpha = la * 0.9;
-        ctx.fillRect(BX - len / 2, BY - 1 * k, len, 2 * k);
-        count += 2;
+    }
+
+    /* --- the marks of the acquisition: contacts, the seeker, its boxes ------ */
+
+    const SA = [0, 0, 0, 0];
+    const SB = [0, 0, 0, 0];
+    const WHITE_RGB = [255, 255, 255];
+    const armOf = (b) => clamp(Math.min(b[2] - b[0], b[3] - b[1]) * 0.28, 3, TS * 0.5);
+    let MARKS_END = Math.max(T_CONTACTS_END, SEEK_END, T_ACQ_END + HOLD + 340);
+    for (const e of COUNTER) MARKS_END = Math.max(MARKS_END, e.lock + 440);
+    /** Four corner brackets round the box b = [x0, y0, x1, y1], grown by `grow` (queued for hudFlush). */
+    function corners(b, grow, arm, w, a) {
+      if (a <= 0.01) return;
+      const x0 = b[0] - grow;
+      const y0 = b[1] - grow;
+      const x1 = b[2] + grow;
+      const y1 = b[3] + grow;
+      hudBracket(x0, y0, arm, arm, w, a);
+      hudBracket(x1, y0, -arm, arm, w, a);
+      hudBracket(x0, y1, arm, -arm, w, a);
+      hudBracket(x1, y1, -arm, -arm, w, a);
+    }
+    /** The seeker's home: a small box on the reticle's centre, wherever the reticle is at t. */
+    function stopBox(s, t, out) {
+      if (s.b) { out[0] = s.b[0]; out[1] = s.b[1]; out[2] = s.b[2]; out[3] = s.b[3]; return; }
+      const u = smooth(T_SLIDE0, T_SLIDE1, t);
+      const v = u * u * (3 - 2 * u);
+      const x = lerp(W / 2, BX, v);
+      const y = lerp(H / 2, BY, v);
+      const hs = TS * 0.24;
+      out[0] = x - hs; out[1] = y - hs; out[2] = x + hs; out[3] = y + hs;
+    }
+
+    function drawMarks(t) {
+      if (t < T_SPLIT0 || t > MARKS_END) return;
+      const wThin = Math.max(1, 1.2 * k);
+      const wBox = Math.max(1.3, 2 * k);
+      // Contacts: where the boot's scan lines found a letter, flickering on, until it is acquired.
+      if (t < T_CONTACTS_END) {
+        for (const e of LET) {
+          const d = t - e.det;
+          if (d < 0) continue;
+          const a = 0.5 * (d < 150 ? ((((d / 38) | 0) % 2) ? 0.3 : 1) : 1) * (1 - smooth(e.arr - 60, e.arr, t));
+          corners(e.b, -e.g.size * 0.05, e.g.size * 0.11, wThin, a);
+        }
+      }
+      // The box the seeker leaves on each letter as it hops on, fading.
+      for (const e of ACQ) {
+        const d = t - e.arr - HOLD;
+        if (d < 0 || d > 320) continue;
+        const u = d / 320;
+        corners(e.b, -TS * 0.04 * u, armOf(e.b), wBox, 0.85 * (1 - u) * (1 - u));
+      }
+      hudFlush(HUD_CSS);
+      // The counter's digits: a box snaps onto each as it locks, red, white-hot at the lock.
+      for (const e of COUNTER) {
+        const d = t - e.lock;
+        if (d < -90 || d > 420) continue;
+        const grow = e.g.size * 0.3 * (1 - backOut(smooth(-90, 10, d)));
+        const hot = smooth(-25, 5, d) * (1 - smooth(60, 220, d));
+        corners(e.b, grow, armOf(e.b), wBox, smooth(-90, -60, d) * (1 - smooth(200, 420, d)));
+        hudFlush(css(mix(RED_RGB, WHITE_RGB, hot)));
+      }
+      // The seeker: out of the reticle, along the letters, then onto the year's readout (or home).
+      if (t >= T_SEEK - 100 && t < SEEK_END) {
+        let j = 0;
+        while (j + 1 < STOPS.length && t >= STOPS[j + 1].at) j++;
+        const A = STOPS[j];
+        const B = STOPS[j + 1];
+        stopBox(A, t, SA);
+        let grow = 0;
+        let hot = 0;
+        let a = smooth(T_SEEK - 100, T_SEEK - 40, t);
+        if (j === 0 && t < T_SEEK) a *= ((t / 30) | 0) % 2 ? 0.4 : 1;   // it flickers on in the reticle
+        if (B) {
+          const dep = A.at + Math.min(HOLD, (B.at - A.at) * 0.35);
+          if (t > dep) {
+            const u = smooth(dep, B.at, t);
+            stopBox(B, t, SB);
+            for (let i = 0; i < 4; i++) SA[i] = lerp(SA[i], SB[i], u);
+            grow = TS * 0.14 * Math.sin(Math.PI * u);
+            if (!B.b) a *= 1 - smooth(0.5, 1, u);                         // home again, into the reticle
+          }
+        }
+        if (j > 0 && A.b) {
+          const d = t - A.at;
+          hot = 1 - smooth(15, 95, d);
+          grow -= TS * 0.06 * Math.sin(Math.PI * clamp(d / 90, 0, 1));    // it clamps down on the letter
+        }
+        if (A === LAST && nC) {
+          // the readout's gate: it pulses with each lock and lets go at the last
+          for (const e of COUNTER) { const d = t - e.lock; if (d >= 0 && d < 140) hot = Math.max(hot, 0.8 * (1 - d / 140)); }
+          const go = smooth(T_LOCK, T_LOCK + 250, t);
+          grow += TS * 0.35 * go;
+          a *= 1 - go;
+        }
+        corners(SA, grow, armOf(SA), Math.max(1.5, 2.4 * k), a);
+        hudFlush(css(mix(RED_RGB, WHITE_RGB, hot)));
       }
     }
 
@@ -1246,8 +1432,16 @@
       const lo = env.low();
       const fadeAll = 1 - smooth(FADE_FROM, DURATION - 200, t);
       pose(t);
-      gapLimit = t < T_REVEAL0 ? -Infinity : lerp(inkY0 - TS * 0.5, inkY1 + TS * 0.5, smooth(T_REVEAL0, T_REVEAL1, t));
-      gapSquash = 1 - easeIn(smooth(T_DOWN + 250, T_DOWN + 720, t));
+      // which letters are on the screen (the reticle is open round them)
+      let anyT = false;
+      let anyY = false;
+      for (let i = 0; i < NL; i++) {
+        const e = LET[i];
+        const on = t >= e.arr && t < e.out + SCAN_T * 0.5;
+        ON[i] = on ? 1 : 0;
+        if (on) { if (e.g.line === 0) anyT = true; else anyY = true; }
+      }
+      midOn = anyT && anyY && MID !== null;
       ctx.save();
       drawBoot(t);
       drawVScan(t);
@@ -1255,7 +1449,8 @@
       drawReticle(t, lo);
       drawBrackets(t);
       drawSalvo(t, lo, fadeAll);
-      drawWords(t, lo);
+      drawLetters(t, lo);
+      drawMarks(t);
       drawPoint(t);
       ctx.restore();
       return count;
@@ -1264,16 +1459,47 @@
     return {
       step: function () { /* every frame is drawn from t alone */ },
       draw: draw,
+      /**
+       * Before midnight: fx.js makes the words' picture and every letter's, in each fill and for the
+       * counter's other digits, and keeps them; each is also drawn once, faintly, into one pixel that
+       * is wiped at once, with every texture, so the first frames at midnight have nothing left to
+       * make or upload.
+       */
       prime: function () {
-        // fx.js draws the words in this fill once and keeps the picture: make it now, clipped to
-        // nothing so the canvas stays clear, instead of on the animation's first frame.
+        env.warm(FILL);
+        env.warm(SHEEN);
+        if (nC) {
+          env.warm(REDFILL, L.year, 1);
+          env.warm(FILL, '0123456789', 1);
+          env.warm(SHEEN, '0123456789', 1);
+          env.warm(BLUR, '0123456789', 1);
+        }
+        const px = clamp(Math.floor(BX * DPR), 0, Math.max(0, ctx.canvas.width - 1));
+        const py = clamp(Math.floor((TITLE[0] ? TITLE[0].g.cy : BY) * DPR), 0, Math.max(0, ctx.canvas.height - 1));
         ctx.save();
-        ctx.beginPath();
-        ctx.rect(-4, -4, 1, 1);
-        ctx.clip();
-        env.words(1, FILL, 1);
-        env.words(1, SHEEN, 1);
-        ctx.restore();
+        try {
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.beginPath();
+          ctx.rect(px, py, 1, 1);
+          ctx.clip();
+          ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+          env.words(0.01, FILL, 1);
+          env.words(0.01, SHEEN, 1);
+          const onPx = (g) => ({ dx: (px + 0.5) / DPR - g.cx, dy: (py + 0.5) / DPR - g.cy });
+          const pics = [];
+          for (const e of [TITLE[0], YEAR[0]]) if (e) pics.push([e.g, FILL], [e.g, SHEEN]);
+          if (nC) pics.push([YEAR[0].g, REDFILL], [DIG[0], FILL], [DIG[0], SHEEN], [DIG[0], BLUR]);
+          for (const pc of pics) env.glyph(pc[0], 0.01, pc[1], onPx(pc[0]));
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.globalAlpha = 0.01;
+          for (const img of [tex.glow, tex.red, tex.band, tex.vband, tex.streak, tex.vstreak, tex.star, tex.haze, sprW, sprIce, sprRed]) ctx.drawImage(img, px, py, 1, 1);
+        } finally {
+          ctx.restore();
+          ctx.save();
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.clearRect(px - 1, py - 1, 3, 3);
+          ctx.restore();
+        }
       }
     };
   }

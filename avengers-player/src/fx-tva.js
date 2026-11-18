@@ -26,9 +26,10 @@
  *   5.6 s     a surge: the door flares and a wave of light runs out through the whole tree.
  *   7.9 s     the branches are pruned back, the youngest first, into the single line, and the line
  *             is reeled back into the door; the hands wind back to midnight.
- *   10.35 s   the door closes to a vertical slit, which collapses and winks out. The cursor comes back
- *             and erases the title from its end, every letter collapsing into a line and a dot, and
- *             the year's flaps flip over to blank, right to left; the cursor goes out at 11.4 s.
+ *   10.35 s   the door closes to a vertical slit, which collapses and winks out. At 10.45 s the cursor
+ *             comes back and erases the title from its end, every letter collapsing on the cursor into
+ *             a line and a dot, and the year's flaps flip over to blank, right to left; the cursor goes
+ *             out at 11.5 s.
  *   11.3 s    whatever is left fades; nothing is drawn from 12.58 s.
  *
  * Only light is added over the film, and every frame is a function of the seed and t alone (nothing
@@ -1533,8 +1534,12 @@
 
     function drawWords(t, fa, lo) {
       drawYear(t, fa, lo);
+      // Typing, the cursor is ahead of the letters; erasing, it sits on the letter it takes away,
+      // which collapses on top of it (as a terminal shows the character under a block cursor).
+      const erasing = t >= T_ERASE;
+      if (erasing) drawCursor(t, fa);
       drawTitle(t, fa, lo);
-      drawCursor(t, fa);
+      if (!erasing) drawCursor(t, fa);
       // the shimmer: a band of brighter lines rolling down the words, once they are all there
       const M = P.mask;
       if (!M || t < T_TYPED + 200 || t > T_ERASE) return;

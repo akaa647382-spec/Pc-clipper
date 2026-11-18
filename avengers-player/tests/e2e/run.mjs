@@ -149,7 +149,7 @@ async function tenPreviews(s, themes) {
   // Clicks the button early in a second of the clock, so its 10 is followed by 9 at that second's end;
   // returns the frames from just before the click.
   const startPreview = async () => {
-    await page.waitForFunction(() => { const p = window.__AP.Clock.now() % 1000; return p > 60 && p < 330; }, null, { polling: 'raf', timeout: 3000 });
+    await page.waitForFunction(() => { const p = window.__AP.Clock.now() % 1000; return p > 30 && p < 250; }, null, { polling: 'raf', timeout: 3000 });
     const seen = frames(2400);
     await page.click('#previewTen');
     return seen;
@@ -220,7 +220,7 @@ async function tenPreviews(s, themes) {
     const i9 = rows.findIndex((r, i) => i > i10 && r.n === '9');
     const i8 = rows.findIndex((r, i) => i > i9 && r.n === '8');
     check(`${id}: the preview puts 10 in the clock panel at once, then 9 as the clock's second turns`,
-      i10 >= 0 && i10 < 12 && i9 > i10 && rows[i9].t - rows[i10].t <= 1100 && rows[i9].clock !== rows[i9 - 1].clock && rows.slice(i10, i9).every((r) => r.final && r.n === '10'),
+      i10 >= 0 && rows[i10].t - rows[0].t < 700 && i9 > i10 && rows[i9].t - rows[i10].t <= 1100 && rows[i9].clock !== rows[i9 - 1].clock && rows.slice(i10, i9).every((r) => r.final && r.n === '10'),
       i9 > 0 ? `10 for ${Math.round(rows[i9].t - rows[i10].t)} ms, clock ${rows[i9 - 1].clock} -> ${rows[i9].clock}` : JSON.stringify(rows.slice(0, 3)));
     const boxes = new Set(rows.slice(i10).filter((r) => r.final).map((r) => r.box));
     check(`${id}: the panel does not move or change size from one second to the next`, i8 > i9 && boxes.size === 1, [...boxes].join(' | '));

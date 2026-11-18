@@ -297,11 +297,11 @@ html[data-theme="arc"] .overlay.final .ov-count .val {
   color: #effcff;
   text-shadow: 0 0 .05em #c8f6ff, 0 0 .18em rgba(95, 227, 255, .8), 0 0 .42em rgba(30, 155, 255, .5);
 }
-html[data-theme="arc"] .overlay.final .ov-count .val.pop { animation: ten-arc .9s cubic-bezier(.2, .8, .3, 1) both; }
+html[data-theme="arc"] .overlay.final .ov-count .val.pop { animation: ten-arc .2s cubic-bezier(.2, .8, .3, 1) both; }
 @keyframes ten-arc {
   0% { transform: scale(.84); opacity: .5; }
-  9% { transform: scale(1.05); opacity: 1; }
-  22%, 100% { transform: none; opacity: 1; }
+  41% { transform: scale(1.05); opacity: 1; }
+  100% { transform: none; opacity: 1; }
 }
 html[data-theme="arc"] .overlay.final .ov-count .val::after {
   content: attr(data-n); color: #fff; opacity: 0;
@@ -337,19 +337,19 @@ html[data-theme="hotrod"] .overlay.final .ov-count .val {
   color: #ffc444;
   text-shadow: 0 0 .04em #ff8a3a, 0 0 .16em rgba(224, 43, 53, .75), 0 0 .4em rgba(224, 43, 53, .4);
 }
-html[data-theme="hotrod"] .overlay.final .ov-count .val.pop { animation: ten-hotrod .9s linear both; }
+html[data-theme="hotrod"] .overlay.final .ov-count .val.pop { animation: ten-hotrod .23s linear both; }
 html[data-theme="hotrod"] .overlay.final .ov-count .val.last.pop { animation-name: ten-hotrod-last; }
 @keyframes ten-hotrod {
-  0% { transform: translateY(-.1em) scale(1.24); opacity: .65; animation-timing-function: cubic-bezier(.55, 0, .9, .55); }
-  10% { transform: translateY(.012em) scale(1.03, .95); opacity: 1; animation-timing-function: ease-out; }
-  17% { transform: translateY(-.006em) scale(.99, 1.02); animation-timing-function: ease-in-out; }
-  26%, 100% { transform: none; opacity: 1; }
+  0% { transform: translateY(-.05em) scale(1.22); opacity: .65; animation-timing-function: cubic-bezier(.55, 0, .9, .55); }
+  39% { transform: translateY(.012em) scale(1.03, .95); opacity: 1; animation-timing-function: ease-out; }
+  66% { transform: translateY(-.006em) scale(.99, 1.02); animation-timing-function: ease-in-out; }
+  100% { transform: none; opacity: 1; }
 }
 @keyframes ten-hotrod-last {
-  0% { transform: translateY(-.12em) scale(1.32); opacity: .65; animation-timing-function: cubic-bezier(.55, 0, .9, .55); }
-  10% { transform: translateY(.016em) scale(1.05, .92); opacity: 1; animation-timing-function: ease-out; }
-  17% { transform: translateY(-.008em) scale(.98, 1.03); animation-timing-function: ease-in-out; }
-  26%, 100% { transform: none; opacity: 1; }
+  0% { transform: translateY(-.06em) scale(1.3); opacity: .65; animation-timing-function: cubic-bezier(.55, 0, .9, .55); }
+  39% { transform: translateY(.016em) scale(1.05, .92); opacity: 1; animation-timing-function: ease-out; }
+  66% { transform: translateY(-.008em) scale(.98, 1.03); animation-timing-function: ease-in-out; }
+  100% { transform: none; opacity: 1; }
 }
 /* red heat behind it, cooling */
 html[data-theme="hotrod"] .overlay.final .ov-count .val::before {
@@ -368,8 +368,8 @@ html[data-theme="hotrod"] .overlay.final .ov-count .val::after {
     linear-gradient(180deg, #fff4cf 20%, #ffd256 35%, #f5a21b 50%, #ffd66a 62%, #c0570f 80%);
   -webkit-background-clip: text; background-clip: text;
 }
-html[data-theme="hotrod"] .overlay.final .ov-count .val.pop::after { animation: ten-hotrod-sheen .9s linear both; }
-@keyframes ten-hotrod-sheen { 0%, 15% { background-position: 95% 0, 0 0; } 62%, 100% { background-position: 5% 0, 0 0; } }
+html[data-theme="hotrod"] .overlay.final .ov-count .val.pop::after { animation: ten-hotrod-sheen .42s linear .13s both; }
+@keyframes ten-hotrod-sheen { from { background-position: 95% 0, 0 0; } to { background-position: 5% 0, 0 0; } }
 /* sparks from the impact, and its streak of light */
 html[data-theme="hotrod"] .overlay.final .ov-count .ten-fx::before {
   content: ''; inset: 0; transform-origin: 50% 78%; opacity: 0;
@@ -385,13 +385,13 @@ html[data-theme="hotrod"] .overlay.final .ov-count .ten-fx::before {
 }
 html[data-theme="hotrod"] .overlay.final .ov-count .val.pop + .ten-fx::before { animation: ten-hotrod-sparks .62s cubic-bezier(.1, .7, .35, 1) .08s both; }
 html[data-theme="hotrod"] .overlay.final .ov-count .val.last.pop + .ten-fx::before { animation-duration: .78s; }
-@keyframes ten-hotrod-sparks { 0% { transform: scale(.1); opacity: 1; } 65% { opacity: .85; } 100% { transform: translateY(.05em) scale(1); opacity: 0; } }
+@keyframes ten-hotrod-sparks { 0% { transform: scale(.1); opacity: 0; } 2% { opacity: 1; } 65% { opacity: .85; } 100% { transform: translateY(.05em) scale(1); opacity: 0; } }
 html[data-theme="hotrod"] .overlay.final .ov-count .ten-fx::after {
   content: ''; z-index: -1; left: 6%; right: 6%; top: 73%; height: .11em; opacity: 0;
   background: radial-gradient(closest-side, rgba(255, 246, 214, .95), rgba(255, 194, 74, .7) 30%, rgba(224, 43, 53, .45) 62%, transparent);
 }
 html[data-theme="hotrod"] .overlay.final .ov-count .val.pop + .ten-fx::after { animation: ten-hotrod-impact .5s ease-out .085s both; }
-@keyframes ten-hotrod-impact { 0% { transform: scaleX(.25); opacity: 1; } 100% { transform: scaleX(1.08); opacity: 0; } }
+@keyframes ten-hotrod-impact { 0% { transform: scaleX(.25); opacity: 0; } 3% { opacity: 1; } 100% { transform: scaleX(1.08); opacity: 0; } }
 
 /* Infinity: the number condenses out of violet stardust while a comet of light orbits it, once a
    second. 3, 2, 1: the comet burns gold. */
@@ -399,12 +399,19 @@ html[data-theme="infinity"] .overlay.final .ov-count .val {
   color: #f8f3ff;
   text-shadow: 0 0 .05em #e9dcff, 0 0 .2em rgba(193, 156, 255, .85), 0 0 .48em rgba(107, 61, 240, .6);
 }
-html[data-theme="infinity"] .overlay.final .ov-count .val.pop { animation: ten-infinity .9s cubic-bezier(.2, .75, .3, 1) both; }
+html[data-theme="infinity"] .overlay.final .ov-count .val.pop { animation: ten-infinity .23s cubic-bezier(.2, .75, .3, 1) both; }
 @keyframes ten-infinity {
-  0% { transform: scale(1.2); opacity: .3; filter: blur(.045em); }
-  11% { transform: scale(1.03); opacity: 1; filter: blur(0); }
-  26%, 100% { transform: none; opacity: 1; filter: none; }
+  0% { transform: scale(1.2); opacity: .3; }
+  42% { transform: scale(1.03); opacity: 1; }
+  100% { transform: none; opacity: 1; }
 }
+/* the haze it condenses out of: a blurred copy, fading (a blur that changes would be drawn anew every frame) */
+html[data-theme="infinity"] .overlay.final .ov-count .val::after {
+  content: attr(data-n); color: transparent; opacity: 0;
+  text-shadow: 0 0 .03em #f1e8ff, 0 0 .09em #c19cff, 0 0 .2em #6b3df0;
+}
+html[data-theme="infinity"] .overlay.final .ov-count .val.pop::after { animation: ten-infinity-haze .3s ease-out both; }
+@keyframes ten-infinity-haze { 0% { opacity: 1; transform: scale(1.1); } 100% { opacity: 0; transform: none; } }
 /* the orbit, tilted and seen edge-on; a tick takes the comet once round */
 html[data-theme="infinity"] .overlay.final .ov-count .ten-fx::before {
   content: ''; --d: 1.5em; z-index: -1; left: 50%; top: 50%; width: var(--d); height: var(--d); margin: calc(var(--d) / -2) 0 0 calc(var(--d) / -2); border-radius: 50%;
@@ -452,26 +459,26 @@ html[data-theme="gamma"] .overlay.final .ov-count .val {
   color: #edfff2;
   text-shadow: 0 0 .05em #b9ffd2, 0 0 .18em rgba(92, 255, 154, .85), 0 0 .44em rgba(18, 184, 90, .6);
 }
-html[data-theme="gamma"] .overlay.final .ov-count .val.pop { animation: ten-gamma .9s linear both; }
-html[data-theme="gamma"] .overlay.final .ov-count .val.last.pop { animation-name: ten-gamma-last; }
+html[data-theme="gamma"] .overlay.final .ov-count .val.pop { animation: ten-gamma .29s linear both; }
+html[data-theme="gamma"] .overlay.final .ov-count .val.last.pop { animation: ten-gamma-last .34s linear both; }
 @keyframes ten-gamma {
   0% { transform: scale(1.16); opacity: .7; }
-  5% { transform: translate(-.035em, .012em) scale(1.03); opacity: 1; }
-  10% { transform: translate(.03em, -.01em) scale(1.01); }
-  15% { transform: translate(-.022em, .006em); }
-  20% { transform: translate(.014em, -.004em); }
-  26% { transform: translate(-.006em, 0); }
-  32%, 100% { transform: none; opacity: 1; }
+  15.6% { transform: translate(-.035em, .012em) scale(1.03); opacity: 1; }
+  31.3% { transform: translate(.03em, -.01em) scale(1.01); }
+  46.9% { transform: translate(-.022em, .006em); }
+  62.5% { transform: translate(.014em, -.004em); }
+  81.3% { transform: translate(-.006em, 0); }
+  100% { transform: none; opacity: 1; }
 }
 @keyframes ten-gamma-last {
   0% { transform: scale(1.24); opacity: .7; }
-  5% { transform: translate(-.05em, .018em) scale(1.05); opacity: 1; }
-  10% { transform: translate(.045em, -.016em) scale(1.02); }
-  15% { transform: translate(-.034em, .01em); }
-  20% { transform: translate(.024em, -.006em); }
-  26% { transform: translate(-.012em, .003em); }
-  32% { transform: translate(.005em, 0); }
-  38%, 100% { transform: none; opacity: 1; }
+  13.2% { transform: translate(-.05em, .018em) scale(1.05); opacity: 1; }
+  26.3% { transform: translate(.045em, -.016em) scale(1.02); }
+  39.5% { transform: translate(-.034em, .01em); }
+  52.6% { transform: translate(.024em, -.006em); }
+  68.4% { transform: translate(-.012em, .003em); }
+  84.2% { transform: translate(.005em, 0); }
+  100% { transform: none; opacity: 1; }
 }
 html[data-theme="gamma"] .overlay.final .ov-count .val::after {
   content: attr(data-n); color: #f4ffd6; opacity: 0;
@@ -505,7 +512,7 @@ html[data-theme="gamma"] .overlay.final .ov-count .ten-fx::before {
 }
 html[data-theme="gamma"] .overlay.final .ov-count .val.pop + .ten-fx::before { animation: ten-gamma-ring .55s cubic-bezier(.1, .65, .35, 1) .03s both; }
 html[data-theme="gamma"] .overlay.final .ov-count .val.last.pop + .ten-fx::before { border-width: .028em; animation-duration: .7s; }
-@keyframes ten-gamma-ring { 0% { transform: scale(.15); opacity: 1; } 100% { transform: none; opacity: 0; } }
+@keyframes ten-gamma-ring { 0% { transform: scale(.15); opacity: 0; } 3% { opacity: 1; } 100% { transform: none; opacity: 0; } }
 
 /* War Machine: corner brackets snap shut around the number and blink red as they lock on, while a
    scan line wipes the number in, in steel. 3, 2, 1: the lock stays red. */
@@ -514,14 +521,14 @@ html[data-theme="warmachine"] .overlay.final .ov-count .val {
   text-shadow: 0 0 .04em rgba(255, 255, 255, .6), 0 0 .18em rgba(160, 160, 172, .55);
 }
 html[data-theme="warmachine"] .overlay.final .ov-count .val.last { text-shadow: 0 0 .04em rgba(255, 255, 255, .6), 0 0 .2em rgba(255, 90, 95, .6); }
-html[data-theme="warmachine"] .overlay.final .ov-count .val.pop { animation: ten-wm .9s linear both; }
+html[data-theme="warmachine"] .overlay.final .ov-count .val.pop { animation: ten-wm .1s linear both; }
 @keyframes ten-wm {
   0% { clip-path: inset(-.3em -.3em calc(100% - .14em) -.3em); }
-  11% { clip-path: inset(-.3em -.3em calc(100% - 1.08em) -.3em); }
-  11.1%, 100% { clip-path: inset(-.3em); }
+  99% { clip-path: inset(-.3em -.3em calc(100% - 1.08em) -.3em); }
+  100% { clip-path: inset(-.3em); }
 }
 html[data-theme="warmachine"] .overlay.final .ov-count .ten-fx::before {
-  content: ''; inset: .07em .12em; color: #a0a0ac; --b: .024em; --l: .2em;
+  content: ''; inset: .07em .12em; color: #ff5a5f; filter: grayscale(1) brightness(1.3); --b: .024em; --l: .2em;
   background:
     linear-gradient(currentColor 0 0) left top / var(--l) var(--b), linear-gradient(currentColor 0 0) left top / var(--b) var(--l),
     linear-gradient(currentColor 0 0) right top / var(--l) var(--b), linear-gradient(currentColor 0 0) right top / var(--b) var(--l),
@@ -529,22 +536,22 @@ html[data-theme="warmachine"] .overlay.final .ov-count .ten-fx::before {
     linear-gradient(currentColor 0 0) right bottom / var(--l) var(--b), linear-gradient(currentColor 0 0) right bottom / var(--b) var(--l);
   background-repeat: no-repeat;
 }
-html[data-theme="warmachine"] .overlay.final .ov-count .val.pop + .ten-fx::before { animation: ten-wm-lock .9s linear both; }
-html[data-theme="warmachine"] .overlay.final .ov-count .val.last.pop + .ten-fx::before { animation-name: ten-wm-lock-last; }
+html[data-theme="warmachine"] .overlay.final .ov-count .val.pop + .ten-fx::before { animation: ten-wm-lock .33s linear both; }
+html[data-theme="warmachine"] .overlay.final .ov-count .val.last.pop + .ten-fx::before { animation: ten-wm-lock-last .225s linear both; }
 @keyframes ten-wm-lock {
-  0% { transform: scale(1.24); opacity: .25; color: #a0a0ac; animation-timing-function: cubic-bezier(.6, 0, .9, .5); }
-  13% { transform: scale(.97); opacity: 1; color: #ff5a5f; animation-timing-function: ease-out; }
-  17% { transform: none; color: #ff5a5f; animation-timing-function: steps(1, end); }
-  23% { color: #a0a0ac; animation-timing-function: steps(1, end); }
-  29% { color: #ff5a5f; animation-timing-function: steps(1, end); }
-  37%, 100% { transform: none; opacity: 1; color: #a0a0ac; }
+  0% { transform: scale(1.24); opacity: .25; filter: grayscale(1) brightness(1.3); animation-timing-function: cubic-bezier(.6, 0, .9, .5); }
+  35% { transform: scale(.97); opacity: 1; filter: grayscale(0) brightness(1); animation-timing-function: ease-out; }
+  46% { transform: none; filter: grayscale(0) brightness(1); animation-timing-function: steps(1, end); }
+  62% { filter: grayscale(1) brightness(1.3); animation-timing-function: steps(1, end); }
+  78% { filter: grayscale(0) brightness(1); animation-timing-function: steps(1, end); }
+  100% { transform: none; opacity: 1; filter: grayscale(1) brightness(1.3); }
 }
 @keyframes ten-wm-lock-last {
-  0% { transform: scale(1.24); opacity: .25; color: #a0a0ac; animation-timing-function: cubic-bezier(.6, 0, .9, .5); }
-  13% { transform: scale(.97); opacity: 1; color: #ff5a5f; animation-timing-function: ease-out; }
-  17% { transform: none; color: #ff5a5f; animation-timing-function: steps(1, end); }
-  21% { color: #ffffff; animation-timing-function: steps(1, end); }
-  25%, 100% { transform: none; opacity: 1; color: #ff5a5f; }
+  0% { transform: scale(1.24); opacity: .25; filter: grayscale(1) brightness(1.3); animation-timing-function: cubic-bezier(.6, 0, .9, .5); }
+  52% { transform: scale(.97); opacity: 1; filter: grayscale(0) brightness(1); animation-timing-function: ease-out; }
+  68% { transform: none; filter: grayscale(0) brightness(1); animation-timing-function: steps(1, end); }
+  84% { filter: grayscale(0) brightness(1.6); animation-timing-function: steps(1, end); }
+  100% { transform: none; opacity: 1; filter: grayscale(0) brightness(1); }
 }
 /* the scan line, at the edge of the wipe */
 html[data-theme="warmachine"] .overlay.final .ov-count .ten-fx::after {
@@ -552,11 +559,11 @@ html[data-theme="warmachine"] .overlay.final .ov-count .ten-fx::after {
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .9) 12%, #fff 50%, rgba(255, 255, 255, .9) 88%, transparent);
   box-shadow: 0 0 .04em #fff, 0 0 .1em rgba(255, 90, 95, .55);
 }
-html[data-theme="warmachine"] .overlay.final .ov-count .val.pop + .ten-fx::after { animation: ten-wm-scan .9s linear both; }
+html[data-theme="warmachine"] .overlay.final .ov-count .val.pop + .ten-fx::after { animation: ten-wm-scan .18s linear both; }
 @keyframes ten-wm-scan {
   0% { transform: none; opacity: 1; }
-  11% { transform: translateY(.94em); opacity: 1; }
-  20%, 100% { transform: translateY(.94em); opacity: 0; }
+  55% { transform: translateY(.94em); opacity: 1; }
+  100% { transform: translateY(.94em); opacity: 0; }
 }
 
 /* TVA: the number switches on like an old television, a bright line opening up, behind amber
@@ -565,37 +572,37 @@ html[data-theme="tva"] .overlay.final .ov-count .val {
   color: #ffc86e;
   text-shadow: 0 0 .05em #ffdca0, 0 0 .18em rgba(244, 162, 60, .85), 0 0 .44em rgba(200, 98, 42, .55);
 }
-html[data-theme="tva"] .overlay.final .ov-count .val.pop { animation: ten-tva .9s linear both; }
-html[data-theme="tva"] .overlay.final .ov-count .val.last.pop { animation-name: ten-tva-last; }
+html[data-theme="tva"] .overlay.final .ov-count .val.pop { animation: ten-tva .18s linear both; }
+html[data-theme="tva"] .overlay.final .ov-count .val.last.pop { animation: ten-tva-last .245s linear both; }
 @keyframes ten-tva {
   0% { transform: scale(1.2, .025); filter: brightness(2.6); }
-  4% { transform: scale(1.12, .1); }
-  8% { transform: scale(.98, 1.08); filter: brightness(1.7); }
-  12% { transform: scale(1.01, .98); }
-  20%, 100% { transform: none; filter: none; }
+  20% { transform: scale(1.12, .1); }
+  40% { transform: scale(.98, 1.08); filter: brightness(1.7); }
+  60% { transform: scale(1.01, .98); }
+  100% { transform: none; filter: none; }
 }
 @keyframes ten-tva-last {
   0% { transform: scale(1.2, .025); filter: brightness(2.6); }
-  4% { transform: scale(1.12, .1); }
-  8% { transform: scale(.98, 1.08); filter: brightness(1.7); }
-  12% { transform: scale(1.01, .98); filter: brightness(1.3); }
-  20% { transform: none; filter: brightness(1); opacity: 1; animation-timing-function: steps(1, end); }
-  24% { opacity: .35; filter: brightness(1.8); animation-timing-function: steps(1, end); }
-  27%, 100% { transform: none; filter: none; opacity: 1; }
+  15% { transform: scale(1.12, .1); }
+  30% { transform: scale(.98, 1.08); filter: brightness(1.7); }
+  44% { transform: scale(1.01, .98); filter: brightness(1.3); }
+  74% { transform: none; filter: brightness(1); opacity: 1; animation-timing-function: steps(1, end); }
+  89% { opacity: .35; filter: brightness(1.8); animation-timing-function: steps(1, end); }
+  100% { transform: none; filter: none; opacity: 1; }
 }
 /* the screen's glow behind it, and its scanlines over it */
 html[data-theme="tva"] .overlay.final .ov-count .val::before {
   content: ''; z-index: -1; inset: .06em .1em; border-radius: .14em; opacity: .4;
   background: radial-gradient(closest-side, rgba(244, 162, 60, .32), rgba(200, 98, 42, .1) 70%, transparent);
 }
-html[data-theme="tva"] .overlay.final .ov-count .val.pop::before { animation: ten-tva-screen .9s ease-out both; }
-@keyframes ten-tva-screen { 0%, 8% { opacity: 1; } 100% { opacity: .4; } }
+html[data-theme="tva"] .overlay.final .ov-count .val.pop::before { animation: ten-tva-screen .6s ease-out both; }
+@keyframes ten-tva-screen { 0%, 12% { opacity: 1; } 100% { opacity: .4; } }
 html[data-theme="tva"] .overlay.final .ov-count .val::after {
   content: ''; opacity: .6;
   background: repeating-linear-gradient(180deg, rgba(14, 7, 0, .5) 0 1px, transparent 1px 3px);
 }
-html[data-theme="tva"] .overlay.final .ov-count .val.pop::after { animation: ten-tva-scan .9s steps(1, end) both; }
-@keyframes ten-tva-scan { 0% { opacity: 1; } 10% { opacity: .4; } 16% { opacity: .8; } 24%, 100% { opacity: .6; } }
+html[data-theme="tva"] .overlay.final .ov-count .val.pop::after { animation: ten-tva-scan .215s steps(1, end) both; }
+@keyframes ten-tva-scan { 0% { opacity: 1; } 46% { opacity: .4; } 74% { opacity: .8; } 100% { opacity: .6; } }
 /* the dial: 60 marks, a tick moves it on by five, like a clock */
 html[data-theme="tva"] .overlay.final .ov-count .ten-fx::before {
   content: ''; --d: 1.18em; z-index: -1; left: 50%; top: 50%; width: var(--d); height: var(--d); margin: calc(var(--d) / -2) 0 0 calc(var(--d) / -2); border-radius: 50%;
@@ -606,19 +613,15 @@ html[data-theme="tva"] .overlay.final .ov-count .ten-fx::before {
   mask: radial-gradient(closest-side, transparent 82%, #000 83%);
   opacity: .75;
 }
-html[data-theme="tva"] .overlay.final .ov-count .val.pop + .ten-fx::before { animation: ten-tva-dial .9s linear both; }
-@keyframes ten-tva-dial {
-  0% { transform: rotate(-30deg); opacity: .95; animation-timing-function: cubic-bezier(.5, 0, .25, 1.45); }
-  16% { transform: none; }
-  100% { transform: none; opacity: .75; }
-}
+html[data-theme="tva"] .overlay.final .ov-count .val.pop + .ten-fx::before { animation: ten-tva-dial .15s cubic-bezier(.5, 0, .25, 1.45) both; }
+@keyframes ten-tva-dial { 0% { transform: rotate(-30deg); opacity: .95; } 100% { transform: none; opacity: .75; } }
 /* the pointer the dial ticks under */
 html[data-theme="tva"] .overlay.final .ov-count .ten-fx::after {
   content: ''; left: 50%; top: calc(50% - .57em); width: .09em; height: .075em; margin-left: -.045em;
   background: linear-gradient(#ffe2a6, #f4a23c); clip-path: polygon(0 0, 100% 0, 50% 100%); opacity: .8;
 }
-html[data-theme="tva"] .overlay.final .ov-count .val.pop + .ten-fx::after { animation: ten-tva-pointer .9s ease-out both; }
-@keyframes ten-tva-pointer { 0%, 14% { opacity: 1; } 100% { opacity: .8; } }
+html[data-theme="tva"] .overlay.final .ov-count .val.pop + .ten-fx::after { animation: ten-tva-pointer .4s ease-out both; }
+@keyframes ten-tva-pointer { 0%, 30% { opacity: 1; } 100% { opacity: .8; } }
 
 /* Doom: the number burns in green fire and cools to polished steel, inside a turning ring of dashes
    and dots. 3, 2, 1: the fire burns longer and the ring turns faster. */
@@ -626,8 +629,8 @@ html[data-theme="doom"] .overlay.final .ov-count .val {
   color: #c9d1d7;
   text-shadow: 0 .015em .01em rgba(0, 0, 0, .6), 0 0 .2em rgba(69, 224, 138, .28);
 }
-html[data-theme="doom"] .overlay.final .ov-count .val.pop { animation: ten-doom .9s cubic-bezier(.2, .8, .3, 1) both; }
-@keyframes ten-doom { 0% { transform: scale(1.1); } 16%, 100% { transform: none; } }
+html[data-theme="doom"] .overlay.final .ov-count .val.pop { animation: ten-doom .15s cubic-bezier(.2, .8, .3, 1) both; }
+@keyframes ten-doom { 0% { transform: scale(1.1); } 100% { transform: none; } }
 /* polished steel over the plain text, and the green fire over both, cooling away */
 html[data-theme="doom"] .overlay.final .ov-count .val::before {
   content: attr(data-n); color: transparent; text-shadow: none;
@@ -653,16 +656,15 @@ html[data-theme="doom"] .overlay.final .ov-count .val.pop + .ten-fx::before { an
 html[data-theme="doom"] .overlay.final .ov-count .val.last.pop + .ten-fx::before { animation-name: ten-doom-ring-last; animation-timing-function: cubic-bezier(.2, .7, .4, 1); }
 @keyframes ten-doom-ring { from { transform: none; } to { transform: rotate(20deg); } }
 @keyframes ten-doom-ring-last { from { transform: none; } to { transform: rotate(60deg); } }
-/* green fire round the ring, dying down */
+/* green fire round the ring, dying down (a plain gradient: no mask to draw every frame) */
 html[data-theme="doom"] .overlay.final .ov-count .ten-fx::after {
   content: ''; --d: 1.24em; z-index: -1; left: 50%; top: 50%; width: var(--d); height: var(--d); margin: calc(var(--d) / -2) 0 0 calc(var(--d) / -2); border-radius: 50%;
-  background: conic-gradient(from 10deg, rgba(69, 224, 138, .9), rgba(31, 122, 71, .45), rgba(69, 224, 138, .95), rgba(140, 255, 190, .55), rgba(31, 122, 71, .45), rgba(69, 224, 138, .9));
-  mask: radial-gradient(closest-side, transparent 76%, rgba(0, 0, 0, .55) 85%, #000 91%, rgba(0, 0, 0, .5) 96%, transparent 100%);
+  background: radial-gradient(closest-side, transparent 76%, rgba(31, 122, 71, .5) 84%, rgba(69, 224, 138, .95) 90%, rgba(140, 255, 190, .6) 93%, rgba(31, 122, 71, .4) 97%, transparent 100%);
   opacity: 0;
 }
 html[data-theme="doom"] .overlay.final .ov-count .val.pop + .ten-fx::after { animation: ten-doom-fire .8s ease-out both; }
 html[data-theme="doom"] .overlay.final .ov-count .val.last.pop + .ten-fx::after { animation-duration: .95s; }
-@keyframes ten-doom-fire { 0% { transform: scale(.92); opacity: .95; } 100% { transform: rotate(-40deg); opacity: 0; } }
+@keyframes ten-doom-fire { 0% { transform: scale(.92); opacity: .95; } 100% { transform: none; opacity: 0; } }
 
 /* Less motion asked for: the number just fades in. */
 @media (prefers-reduced-motion: reduce) {

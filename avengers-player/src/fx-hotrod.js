@@ -57,10 +57,17 @@
   const SHEENS = [3300, 6150, 8850];    // a polished sheen sweeps across the words
   const WAVES = [4500, 7450];           // a wave of heat runs through the metal, shimmering
   const SHEEN_DUR = 1150;
+  // The light across the sheen's band: [distance from its middle (1 = its half-width), light].
+  const SHEEN_PROFILE = [[0, 0.62], [0.08, 0.57], [0.18, 0.44], [0.32, 0.29], [0.48, 0.18], [0.66, 0.09], [0.83, 0.035], [1, 0]];
   const T_COOL0 = 10250;                // the metal cools from gold to bronze ...
   const T_COOL1 = 11000;
   const T_OUT0 = 10600;                 // ... and the letters go out, title first,
   const LETTER_OUT = 520;               // each over this long
+  // The weld's front: the metal comes in over this much of the title's height behind the torch,
+  // along a soft (smoothstep) edge.
+  const FEATHER = 0.42;
+  const WIPE = [[0, 'rgba(0,0,0,0)'], [0.2, 'rgba(0,0,0,0.1)'], [0.4, 'rgba(0,0,0,0.35)'], [0.6, 'rgba(0,0,0,0.65)'],
+    [0.8, 'rgba(0,0,0,0.9)'], [1, 'rgba(0,0,0,1)']];
 
   // Hot Rod's red and gold.
   const RED = '#e02b35';
@@ -168,6 +175,10 @@
   const FLASH_STOPS = [[0, 'rgba(255,250,236,0.95)'], [0.1, 'rgba(255,232,170,0.75)'], [0.28, 'rgba(255,176,80,0.38)'],
     [0.5, 'rgba(236,84,44,0.14)'], [0.75, 'rgba(200,40,40,0.04)'], [1, 'rgba(160,20,30,0)']];
   const STILLS = new Map();             // kept for the page, by size (prime() makes the ones a size needs)
+  // The letters in plain white without their halo, in device pixels, and a buffer as big: the
+  // sheen's light is kept to the metal by it. Made from the letters themselves for one size and
+  // words (prime() makes it), kept for the page: { key, x, y, c, buf, g }.
+  let MASK = null;
 
   function still(px, stops) {
     const d = Math.max(2, Math.round(px));
@@ -236,13 +247,12 @@
 
     /* -- the timeline of the letters -- */
 
-    // The digits are struck one after the other ...
+    // The digits are struck one after the other. The last strike (without a year: the crossing)
+    // throws a molten bead that arcs over to the start of the title and lights the torch where it
+    // lands; the weld then runs along the title: across a letter at one speed, from one letter to
+    // the next three times as fast (the torch lifted).
     const HIT = new Float64Array(nY);
     for (let i = 0; i < nY; i++) HIT[i] = nY > 1 ? HIT0 + (HIT_LAST - HIT0) * i / (nY - 1) : HIT0;
-    // ... then the weld runs along the title: across a letter at one speed, from one letter to the
-    // next three times as fast (the torch lifted).
-    // The last strike (without a year: the crossing) throws a molten bead that arcs over to the start
-    // of the title and lights the torch where it lands.
     const B0 = nY ? HIT[nY - 1] + 20 : T_CROSS + 30;
     const FLY = nY ? BEAD : BEAD - 70;
     const B1 = B0 + FLY;
@@ -250,35 +260,38 @@
     const W1 = nY ? WELD_END : 2150;
     const WS = new Float64Array(nT);
     const WE = new Float64Array(nT);
+    let vWeld = 1;                                            // px per ms while welding
     {
       let work = 0;
       for (let j = 0; j < nT; j++) {
         work += Math.max(1, TL[j].x1 - TL[j].x0);
         if (j < nT - 1) work += Math.max(0, TL[j + 1].x0 - TL[j].x1) / 3;
       }
-      const v = work / Math.max(1, W1 - W0);                // px per ms while welding
+      vWeld = work / Math.max(1, W1 - W0);
       let tc = W0;
       for (let j = 0; j < nT; j++) {
         WS[j] = tc;
-        tc += Math.max(1, TL[j].x1 - TL[j].x0) / v;
+        tc += Math.max(1, TL[j].x1 - TL[j].x0) / vWeld;
         WE[j] = tc;
-        if (j < nT - 1) tc += Math.max(0, TL[j + 1].x0 - TL[j].x1) / (v * 3);
+        if (j < nT - 1) tc += Math.max(0, TL[j + 1].x0 - TL[j].x1) / (vWeld * 3);
       }
     }
     function weldX(t) {
       if (!nT) return L.cx;
-      if (t <= WS[0]) return TL[0].x0;
+      // lit on the edge of the first letter's halo, it runs onto the letter as the weld begins
+      if (t <= WS[0]) return TL[0].x0 - TL[0].size * 0.6 * (1 - clamp((t - (W0 - 100)) / 100, 0, 1));
       for (let j = 0; j < nT; j++) {
         if (t < WE[j]) return lerp(TL[j].x0, TL[j].x1, (t - WS[j]) / (WE[j] - WS[j]));
         if (j < nT - 1 && t < WS[j + 1]) return lerp(TL[j].x1, TL[j + 1].x0, (t - WE[j]) / Math.max(1e-3, WS[j + 1] - WE[j]));
       }
-      return TL[nT - 1].x1;
+      // past the last letter the torch lifts away to the right (and the clip uncovers its halo)
+      return TL[nT - 1].x1 + (t - WE[nT - 1]) * vWeld * 1.5;
     }
     // The torch weaves up and down the letters as it goes.
     const weldY = (t) => L.titleY + TS * 0.26 * Math.sin(TAU * (t - W0) / 115);
     const bead = nT ? {
       x0: nY ? YL[nY - 1].cx : L.cx, y0: nY ? YL[nY - 1].top : L.titleY,
-      x1: TL[0].x0, y1: weldY(W0 - 100), apex: Math.max(TS * 1.2, H * 0.12)
+      x1: weldX(W0 - 100), y1: weldY(W0 - 100), apex: Math.max(TS * 1.2, H * 0.12)
     } : null;
     /** Where the bead is at t (sets AX, AY). */
     function beadAt(t) {
@@ -776,26 +789,25 @@
       }
     }
 
-    /** The title: revealed behind the torch as it passes, white-hot, cooling to polished gold. */
+    /**
+     * The title: welded on behind the torch as it passes, white-hot, cooling to polished gold. The
+     * letters are drawn first in the frame, whole, and what lies ahead of the weld is wiped off again
+     * with a soft edge just behind the torch, so no letter or halo is ever cut by a straight line.
+     */
     function drawTitle(t, lo, cool) {
-      if (!nT || t < W0) return;
-      const welding = t < W1 + 60;
-      const xw = weldX(t);
+      if (!nT || t < W0 - 100) return;
+      const welding = t < W1 + 90;
+      const feather = TS * FEATHER;
+      const front = welding ? weldX(t) + feather * 0.3 : Infinity;
+      let reach = -Infinity;                                  // the right edge of what is drawn
       for (let j = 0; j < nT; j++) {
         const g = TL[j];
+        if (g.x0 - g.size * 0.8 >= front) break;              // the weld has not reached its halo yet
         const tau = t - WS[j];
-        if (tau < 0) break;
         const out = outOf(j, t);
         const end = lastGlow(j, t);
         if (out <= 0.004 && end <= 0.004) continue;
-        const clip = welding && xw < g.x1 + g.size * 0.7;
-        if (clip) {
-          const left = g.x0 - g.size * 1.5;
-          ctx.save();
-          ctx.beginPath();
-          ctx.rect(left, g.cy - g.size * 1.6, xw - left, g.size * 3.2);
-          ctx.clip();
-        }
+        reach = g.x1 + g.size * 1.2;
         const dy = -g.size * 0.06 * (1 - out);
         letter(g, out, GOLDF, 'source-over', 0, dy, 1, 1, undefined);
         if (cool > 0.004) letter(g, cool * out, BRONZEF, 'source-over', 0, dy, 1, 1, undefined);
@@ -805,7 +817,17 @@
         const amp = S * (wave * 3.2 + (tau < 1800 ? 2.2 * Math.exp(-tau / 700) : 0));
         glow(g, Math.max((heatOf(tau) + wave) * (1 - cool) * out, end) * (1 - 0.85 * hot), HEAT, amp, t, 0, dy, 1, 1, lo);
         letter(g, hot * out, HOT, 'lighter', 0, dy, 1, 1, undefined);
-        if (clip) ctx.restore();
+      }
+      if (reach > front - feather) {
+        // ahead of the weld: wiped off, fading in over `feather` behind the torch
+        const gr = ctx.createLinearGradient(front - feather, 0, front, 0);
+        for (const s of WIPE) gr.addColorStop(s[0], s[1]);
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = gr;
+        ctx.fillRect(front - feather, L.titleY - TS * 1.8, reach - front + feather, TS * 3.6);
+        ctx.globalCompositeOperation = 'source-over';
+        count++;
       }
     }
 
@@ -820,8 +842,8 @@
         beam(tex.tail, bx, by, AX, AY, TS * 0.32, vis);
         stamp(slugPic, AX, AY, 0.8 * vis);
       }
-      if (!nT || t < W0 - 140 || t > W1 + 180) return;
-      const on = smooth(W0 - 140, W0 - 70, t) * (1 - smooth(W1 + 30, W1 + 180, t));
+      if (!nT || t < W0 - 100 || t > W1 + 180) return;
+      const on = smooth(W0 - 100, W0 - 50, t) * (1 - smooth(W1 + 30, W1 + 180, t));
       const x = weldX(t);
       const y = weldY(t);
       const fl = 0.78 + 0.22 * Math.sin(t * 0.083) * Math.sin(t * 0.051 + 1.3);
@@ -831,6 +853,35 @@
       stamp(torchPic, x, y, on * fl);
       blit(tex.white, x, y, TS * 0.7, on);
       if (!lo) blitWH(tex.flare, x, y, TS * 5, TS * 0.2, 0.85 * on * fl);
+    }
+
+    const maskKey = W + 'x' + H + '@' + dpr + '|' + L.title + '|' + L.year;
+    /**
+     * The mask of the letters for the sheen: every letter drawn in white (no halo) with env.glyph
+     * onto the canvas, copied off into a picture of its own, and the canvas cleared again. Only
+     * called while the canvas is empty: from prime(), or at the start of a frame.
+     */
+    function buildMask() {
+      const cv = ctx.canvas;
+      const x0 = clamp(Math.floor((minX - TS * 0.5) * dpr), 0, cv.width);
+      const x1 = clamp(Math.ceil((maxX + TS * 0.5) * dpr), 0, cv.width);
+      const y0 = clamp(Math.floor((L.top - TS * 0.5) * dpr), 0, cv.height);
+      const y1 = clamp(Math.ceil((L.bottom + TS * 0.5) * dpr), 0, cv.height);
+      const c = canvas(x1 - x0, y1 - y0);
+      const buf = canvas(x1 - x0, y1 - y0);
+      ctx.save();
+      try {
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+        for (const g of glyphs) env.glyph(g, 1, SHEEN);
+        c.getContext('2d').drawImage(cv, x0, y0, c.width, c.height, 0, 0, c.width, c.height);
+      } finally {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, cv.width, cv.height);
+        ctx.restore();
+      }
+      MASK = { key: maskKey, x: x0, y: y0, c: c, buf: buf, g: buf.getContext('2d') };
     }
 
     /** A band of polished light sweeping across the metal, glinting at the letters' corners. */
@@ -844,23 +895,45 @@
         const slant = (bot - top) * 0.36;
         const bw = Math.max(14, (maxX - minX) * 0.075);
         const bx = lerp(minX - bw - slant, maxX + bw + slant, e);
-        // three bands inside each other: a soft edge, a brighter middle and a hot line in it
-        for (const ly of [[1, 0.13], [0.55, 0.17], [0.2, 0.32]]) {
-          const w = bw * ly[0];
-          ctx.save();
-          ctx.beginPath();
-          ctx.moveTo(bx - w + slant, top);
-          ctx.lineTo(bx + w + slant, top);
-          ctx.lineTo(bx + w - slant, bot);
-          ctx.lineTo(bx - w - slant, bot);
-          ctx.closePath();
-          ctx.clip();
-          for (let k = 0; k < glyphs.length; k++) {
-            const g = glyphs[k];
-            if (g.x1 < bx - w - slant - 4 || g.x0 > bx + w + slant + 4) continue;
-            letter(g, ly[1] * outOf(k, t) * (1 - cool), SHEEN, 'lighter', 0, 0, 1, 1, undefined);
+        // the band: light rising smoothly across it to a hot line in the middle, kept to the
+        // letters by their mask (made in a buffer of its own, then added to the frame)
+        const m = MASK;
+        if (m && m.key === maskKey) {
+          const sx = clamp(Math.floor((bx - bw - slant) * dpr) - m.x, 0, m.c.width);
+          const ex = clamp(Math.ceil((bx + bw + slant) * dpr) - m.x, 0, m.c.width);
+          if (ex - sx >= 1) {
+            const dyl = bot - top;
+            const len = Math.sqrt(4 * slant * slant + dyl * dyl);
+            const r = bw * dyl / len;                              // the band's half-width across it
+            const nx = dyl / len * r * dpr;
+            const ny = 2 * slant / len * r * dpr;
+            const mx = bx * dpr - m.x;
+            const my = (top + bot) / 2 * dpr - m.y;
+            const gr = m.g.createLinearGradient(mx - nx, my - ny, mx + nx, my + ny);
+            for (const s of SHEEN_PROFILE) {
+              const col = 'rgba(255,251,238,' + s[1] + ')';
+              gr.addColorStop(0.5 - s[0] / 2, col);
+              if (s[0] > 0) gr.addColorStop(0.5 + s[0] / 2, col);
+            }
+            const b = m.g;
+            b.save();
+            b.beginPath();
+            b.rect(sx, 0, ex - sx, m.c.height);
+            b.clip();
+            b.globalCompositeOperation = 'copy';
+            b.drawImage(m.c, 0, 0);
+            b.globalCompositeOperation = 'source-in';
+            b.fillStyle = gr;
+            b.fillRect(sx, 0, ex - sx, m.c.height);
+            b.restore();
+            ctx.save();
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.globalAlpha = 1 - cool;
+            ctx.drawImage(m.buf, sx, 0, ex - sx, m.c.height, m.x + sx, m.y, ex - sx, m.c.height);
+            ctx.restore();
+            count++;
           }
-          ctx.restore();
         }
         // glints where the band crosses the top corners of the letters
         ctx.save();
@@ -943,18 +1016,24 @@
     function draw(t) {
       count = 0;
       if (!(t >= 0) || t >= GONE_AT || !glyphs.length) return 0;
+      // The sheen's mask: prime() makes it; after a change of size it is made here, while the
+      // canvas is still empty (fx.js clears it before every frame).
+      if (t >= SHEENS[0] - 400 && t < SHEENS[SHEENS.length - 1] + SHEEN_DUR && (!MASK || MASK.key !== maskKey)) buildMask();
       const lo = env.low();
       const cool = 0.55 * smooth(T_COOL0, T_COOL1, t);
       ctx.save();
-      // behind the words: the thrusters and their crossing
+      // the title first, on the empty canvas: what the weld has not reached is wiped off again
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+      drawTitle(t, lo, cool);
+      // the thrusters and their crossing (gone before the title's middle is welded)
       ctx.globalCompositeOperation = 'lighter';
       drawThrusters(t, lo);
       drawCrossing(t, lo);
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = 1;
-      // the words, as far as they are made
+      // the year, as far as it is struck, and the sheen on the metal
       drawYear(t, lo, cool);
-      drawTitle(t, lo, cool);
       drawSheen(t, cool);
       // in front: the strikes, the torch, sparks and embers
       ctx.globalCompositeOperation = 'lighter';
@@ -977,6 +1056,7 @@
       prime: function () {
         const fills = [GOLDF, HOT, HEAT, SHEEN, BRONZEF];
         for (const f of fills) env.warm(f);
+        if (!MASK || MASK.key !== maskKey) buildMask();      // the canvas is empty before midnight
         const px = Math.floor(L.cx * dpr);
         const py = Math.floor(L.titleY * dpr);
         ctx.save();
@@ -986,7 +1066,8 @@
           ctx.rect(px, py, 1, 1);
           ctx.clip();
           ctx.globalAlpha = 0.01;
-          for (const pic of [tex.white, tex.flare, tex.star, tex.tail].concat(emberPics, stills)) ctx.drawImage(pic, px, py, 1, 1);
+          const pics = [tex.white, tex.flare, tex.star, tex.tail].concat(emberPics, stills, MASK ? [MASK.c, MASK.buf] : []);
+          for (const pic of pics) ctx.drawImage(pic, px, py, 1, 1);
           ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
           const firsts = [TL[0], YL[0]].filter(Boolean);
           for (const f of fills) {

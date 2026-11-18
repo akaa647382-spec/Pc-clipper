@@ -7,24 +7,31 @@
  *             Stars switch on as the wave of the flare passes them.
  *   0.05 s    the pens shed stardust that runs back down the loop into the crossing and gathers
  *             there in a swirling knot.
- *   0.3-1.8 s the knot pours its dust into the year, digit by digit: each stream fans out into the
- *             digit's shape and condenses into it, and the digit brightens out of the dust.
- *   1.15-2.8 s dust riding the loop peels off it and flows down into the title, letter by letter,
- *             left to right. (With no year the title is built from the knot instead.)
- *   2.8-10.4 s the loop flows on behind the words: stardust streams round it, comets of light run
+ *   0.3-1.8 s the knot pours its dust into the year, digit by digit: each stream fans out into a
+ *             blown-up copy of the digit and pulls in. The grains land one by one and draw the digit
+ *             in dust first, in a violet haze that gathers and tightens round it; once a third of them
+ *             are down, the digit's shape glows lilac between them, burns white as the last ones land
+ *             and cools into its colours while the grains melt into it.
+ *   1.15-2.9 s dust riding the loop peels off it and flows down into the title, letter by letter,
+ *             left to right, each letter condensing the same way. (With no year the title is built
+ *             from the knot instead.)
+ *   2.9-10.4 s the loop flows on behind the words: stardust streams round it, comets of light run
  *             along it and its light shifts through violet, lilac, rose and ice blue; slow ripples
  *             run out from the crossing (the stars brighten and the letters glint as they pass) and
  *             now and then a grain peels off the loop and settles on a letter.
- *   10.4 s    the words dissolve back into stardust, letter by letter, which is drawn into the loop;
+ *   10.4 s    the words break back into stardust, letter by letter: each flares, loses its colours,
+ *             and its light thins out as its dust lifts off and is drawn into the loop;
  *   11.15 s   the loop closes into its crossing, a point, which winks out at 12.3 s.
  *
- * Only light is added over the film (the letters keep their own dark halo), and every frame is a
- * function of the seed and t alone, so renderAt(t), a resize in the middle and the live animation
- * all draw the same picture. Nothing is stroked per frame: the loop is drawn once into a picture per
- * lobe and look, the letters come from env.glyph() (one small copy each: lilac light, then white-hot,
- * then the letter in its colours), and the grains of dust are gathered into one path per colour and
- * brightness, so a frame is a few hundred draws at most. The dust, the stars and the pictures are made
- * once per size and seed (prime() does it before midnight), so play() has nothing slow to do.
+ * Only light is added over the film, but for small dark shadows: the letters keep their own dark
+ * halo, and the grains that build them cast a little one too (on their way to a letter and off it),
+ * so the dust can be seen pouring in over a bright picture as well. Every frame is a function of the
+ * seed and t alone, so renderAt(t), a resize in the middle and the live animation all draw the same
+ * picture. Nothing is stroked per frame: the loop is drawn once into a picture per lobe and look, the
+ * letters come from env.glyph() (one small copy each: lilac light, white-hot light and the letter in
+ * its colours), and the grains of dust are gathered into one path per colour and brightness, so a
+ * frame is a few hundred draws at most. The dust, the stars and the pictures are made once per size
+ * and seed (prime() does it before midnight), so play() has nothing slow to do.
  * The year is only ever the one it is given: no old year is shown first.
  */
 (function (root) {
@@ -82,6 +89,7 @@
   const DUST = [WHITE, PALE, LILAC, VIOLET, ROSE, ICE, GOLD];
   const DUST_W = [0.2, 0.27, 0.26, 0.15, 0.05, 0.05, 0.02];
   const STAR_COLS = ['#ffffff', '#e2d6ff', '#cfe6ff'];
+  const SHADOW = '#0c0620';     // the deep violet of the letters' halo, under the grains that build them
   const COMET_COLS = [PALE, ROSE, ICE, LILAC, GOLD, WHITE];
   const LEVELS = 6;             // grains are drawn at this many brightnesses (one path each)
 
@@ -125,6 +133,20 @@
     gr.addColorStop(0.18, 'rgba(206,176,255,0.55)');
     gr.addColorStop(0.4, 'rgba(140,100,255,0.2)');
     gr.addColorStop(0.7, 'rgba(100,60,240,0.06)');
+    gr.addColorStop(1, 'rgba(90,50,230,0)');
+    g.fillStyle = gr;
+    g.fillRect(0, 0, 128, 128);
+    return c;
+  }
+
+  /** A soft violet haze with no bright core: the cloud of dust a letter condenses out of. */
+  function hazeSprite() {
+    const c = canvas(128, 128);
+    const g = c.getContext('2d');
+    const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gr.addColorStop(0, 'rgba(176,140,255,0.55)');
+    gr.addColorStop(0.3, 'rgba(146,104,255,0.36)');
+    gr.addColorStop(0.62, 'rgba(112,72,240,0.12)');
     gr.addColorStop(1, 'rgba(90,50,230,0)');
     g.fillStyle = gr;
     g.fillRect(0, 0, 128, 128);
@@ -249,6 +271,7 @@
       B: [lobePicture(G, 0, PASS_B, dpr, s), lobePicture(G, 1, PASS_B, dpr, s)],
       C: [lobePicture(G, 0, PASS_C, dpr, s), lobePicture(G, 1, PASS_C, dpr, s)],
       glow: glowSprite(),
+      haze: hazeSprite(),
       glint: glintSprite(),
       streak: streakSprite()
     };
@@ -490,7 +513,9 @@
         // the way out: off the letter at `out`, to the loop at `back`
         out: new Float32Array(NP), back: new Float32Array(NP), uq: new Float32Array(NP),
         ox1: new Float32Array(NP), oy1: new Float32Array(NP), ox2: new Float32Array(NP), oy2: new Float32Array(NP),
-        size: new Float32Array(NP), col: new Uint8Array(NP), ph: new Float32Array(NP)
+        size: new Float32Array(NP), col: new Uint8Array(NP), ph: new Float32Array(NP),
+        // the letter it builds, and when that letter has formed (its last grain has landed)
+        lt: new Int32Array(NP), lf: new Float32Array(NP)
       };
       for (let i = 0; i < NP; i++) {
         const it = list[i];
@@ -558,6 +583,7 @@
         }
         if (D.land[i] < e.la0) e.la0 = D.land[i];
         if (D.land[i] > e.la1) e.la1 = D.land[i];
+        D.lt[i] = e.k;
         // The way out: lifted off the letter, back to the loop (title) or the knot (year).
         const out = e.d0 + rnd() * 300;
         D.out[i] = out;
@@ -577,6 +603,13 @@
           D.oy2[i] = Y[k] - TY[k] * 60 * s;
         }
       }
+      // A letter too thin to get any grain (a very small screen) still condenses, on the same beat.
+      for (const e of LET) {
+        if (e.la1 > 0) continue;
+        e.la0 = e.t0 + FLY0;
+        e.la1 = e.t0 + (e.knot ? REL_SPAN : PEEL_SPAN) + FLY1;
+      }
+      for (let i = 0; i < NP; i++) D.lf[i] = LET[D.lt[i]].la1;
       const D_ORDER = byColour(D.col, NP);
 
       // A grain now and then peels off the loop during the hold and settles on a letter.
@@ -629,15 +662,24 @@
 
     let n = 0;
     // A batch of grains of one colour: where they are, how big and how bright (in LEVELS steps).
-    const MAXB = Math.max(NS, NP, 64) + 8;
+    const MAXB = Math.max(NS, NP, ST_BY[0].length + ST_BY[1].length + ST_BY[2].length, 64) + 8;
     const BX = new Float32Array(MAXB);
     const BY = new Float32Array(MAXB);
     const BS = new Float32Array(MAXB);
     const BL = new Uint8Array(MAXB);
     let nb = 0;
+    // The words' dust in this frame: place, size, brightness, glow, which grain, colour.
+    const GX = new Float32Array(NP + 1);
+    const GY = new Float32Array(NP + 1);
+    const GZ = new Float32Array(NP + 1);
+    const GA = new Float32Array(NP + 1);
+    const GG = new Float32Array(NP + 1);
+    const GI = new Int32Array(NP + 1);
+    const GC = new Uint8Array(NP + 1);
+    const GD = new Float32Array(NP + 1);
     function add(x, y, size, a) {
       const lv = Math.round((a > 1 ? 1 : a) * LEVELS);
-      if (lv <= 0) return;
+      if (lv <= 0 || nb >= MAXB) return;
       BX[nb] = x;
       BY[nb] = y;
       BS[nb] = size;
@@ -717,10 +759,15 @@
           const pa = P.A[j];
           ctx.globalAlpha = clamp(base * (0.55 + 0.45 * sc), 0, 1);
           ctx.drawImage(pa.c, pa.ox / dpr, pa.oy / dpr, pa.c.width / dpr, pa.c.height / dpr);
-          const pb = P.B[j];
-          ctx.globalAlpha = clamp(base * 0.85 * (1 - sc), 0, 1);
-          if (ctx.globalAlpha > 0.004) ctx.drawImage(pb.c, pb.ox / dpr, pb.oy / dpr, pb.c.width / dpr, pb.c.height / dpr);
-          n += 2;
+          n++;
+          // (the white-hot look only once the loop has shrunk a little: a large scaled copy is slow)
+          const wb = base * 0.85 * smooth(0.1, 0.55, 1 - sc);
+          if (wb > 0.01) {
+            const pb = P.B[j];
+            ctx.globalAlpha = wb > 1 ? 1 : wb;
+            ctx.drawImage(pb.c, pb.ox / dpr, pb.oy / dpr, pb.c.width / dpr, pb.c.height / dpr);
+            n++;
+          }
         }
         ctx.restore();
         return;
@@ -906,9 +953,11 @@
     let PY = 0;
     let PS = 1;
     let PG = 0;                                 // how much glow it carries
+    let PD = 0;                                 // how dark a shadow it casts (only on its way to and from a letter)
     function grain(i, t, drawn, sc) {
       PS = 1;
       PG = 0;
+      PD = 0;
       if (t < D.rel[i]) {
         if (D.knot[i]) {
           if (t < D.tb[i]) return 0;
@@ -918,8 +967,8 @@
             const k = kOf(D.lobe[i] * 0.5 + D.ub[i] * (1 - easeIn(f)));
             PX = X[k];
             PY = Y[k];
-            PG = 0.5;
-            return 0.95 * smooth(0, 0.15, f);
+            PG = 0.5 * (1 - smooth(0.75, 1, f));
+            return 0.85 * smooth(0, 0.15, f);
           }
           // swirling in the knot
           const age = t - D.ta[i];
@@ -951,18 +1000,22 @@
         PX = b0 * D.x0[i] + b1 * D.x1[i] + b2 * D.x2[i] + b3 * D.tx[i];
         PY = b0 * D.y0[i] + b1 * D.y1[i] + b2 * D.y2[i] + b3 * D.ty[i];
         PS = 1 + 0.4 * bump(f, 0.45, 0.5);
-        PG = 1;
-        return 1;
+        PG = smooth(0, 0.15, f);
+        PD = smooth(0, 0.1, f);
+        return 0.85 + 0.15 * smooth(0, 0.2, f);
       }
       if (t < D.out[i]) {
-        // landed: a flash, then it melts into the letter
+        // landed: a flash, then it stays, one grain of the letter in dust, until the letter has formed
+        // round it; then it melts into the letter
+        const lf = D.lf[i];
+        if (t > lf + 560) return 0;
         const since = t - D.land[i];
-        if (since > 700) return 0;
         PX = D.tx[i];
         PY = D.ty[i];
         PS = 1 + 0.8 * (1 - smooth(0, 180, since));
         PG = 1 - smooth(0, 220, since);
-        return 1 - smooth(120, 700, since);
+        PD = 1 - smooth(lf - 60, lf + 120, t);     // (the letter's own halo takes over)
+        return (0.72 + 0.28 * (1 - smooth(0, 260, since))) * (1 - smooth(lf + 60, lf + 560, t));
       }
       if (t < D.back[i]) {
         // lifted off the letter and drawn back into the loop
@@ -985,8 +1038,9 @@
         PX = m * m * m * D.tx[i] + 3 * m * m * e * D.ox1[i] + 3 * m * e * e * x2 + e * e * e * qx;
         PY = m * m * m * D.ty[i] + 3 * m * m * e * D.oy1[i] + 3 * m * e * e * y2 + e * e * e * qy;
         PS = 1 + 0.5 * bump(f, 0.25, 0.25);
-        PG = 0.7;
-        return 0.95 * smooth(0, 0.08, f) * (1 - smooth(T_CLOSE1 - 150, T_CLOSE1 + 60, t));
+        PG = 0.7 * (1 - smooth(0.7, 1, f));
+        PD = 1 - smooth(0.35, 0.75, f);
+        return (0.95 - 0.1 * smooth(0.7, 1, f)) * smooth(0, 0.08, f) * (1 - smooth(T_CLOSE1 - 200, T_CLOSE1 + 40, t));
       }
       // back on the loop (or in the knot), going round into the crossing as the loop closes
       const age = t - D.back[i];
@@ -1003,32 +1057,66 @@
       return 0.85 * (1 - smooth(T_CLOSE1 - 200, T_CLOSE1 + 40, t));
     }
 
-    function drawWordDust(t, sc, lo) {
+    /**
+     * Where every grain of the words' dust is in this frame (kept in GX.. for drawWordDust, in order of
+     * colour), and a small dark shadow under each, drawn before the letters: the letters have a dark
+     * halo too, and with it the dust that builds them can be seen pouring in over a bright picture.
+     */
+    let GM = 0;
+    function placeWordDust(t, sc) {
       const drawn = 0.5 * penAt(t);
-      const step = lo ? 2 : 1;
-      let glows = 0;
-      const maxGlows = lo ? 0 : 140;
+      let m = 0;
+      // (all of it even when the PC struggles: it builds the words, and half of it vanishing in the
+      // middle of a letter would show)
       for (let c = 0; c < D_ORDER.length; c++) {
         const ids = D_ORDER[c];
-        if (!ids.length) continue;
-        const spr = env.sprite(DUST[c]);
-        for (let q = 0; q < ids.length; q += step) {
+        for (let q = 0; q < ids.length; q++) {
           const i = ids[q];
           let a = grain(i, t, drawn, sc);
           if (a <= 0.02) continue;
           a *= 0.8 + 0.2 * Math.sin(D.ph[i] + t * 0.013);
-          const sz = D.size[i] * PS;
-          add(PX, PY, sz, a);
-          // a soft glow round some of the moving grains
-          if (PG > 0.05 && glows < maxGlows && (i % 3) === 0) {
-            const gs = sz * 5.5;
-            ctx.globalAlpha = a * 0.3 * PG;
-            ctx.drawImage(spr, PX - gs / 2, PY - gs / 2, gs, gs);
-            n++;
-            glows++;
-          }
+          GX[m] = PX;
+          GY[m] = PY;
+          GZ[m] = D.size[i] * PS;
+          GA[m] = a;
+          GG[m] = PG;
+          GD[m] = PD;
+          GI[m] = i;
+          GC[m] = c;
+          m++;
         }
-        flush(DUST[c]);
+      }
+      GM = m;
+      if (!m) return;
+      ctx.globalCompositeOperation = 'source-over';
+      for (let j = 0; j < m; j++) if (GD[j] > 0.02) add(GX[j], GY[j], GZ[j] * 2.2, GA[j] * GD[j] * 0.3);
+      flush(SHADOW);
+    }
+
+    function drawWordDust(t) {
+      let glows = 0;
+      const maxGlows = env.low() ? 0 : 140;
+      const m = GM;
+      if (m) {
+        let j = 0;
+        for (let c = 0; c < DUST.length; c++) {
+          if (j >= m || GC[j] !== c) continue;
+          const spr = env.sprite(DUST[c]);
+          for (; j < m && GC[j] === c; j++) {
+            const sz = GZ[j];
+            const a = GA[j];
+            add(GX[j], GY[j], sz, a);
+            // a soft glow round some of the moving grains
+            if (GG[j] > 0.05 && glows < maxGlows && (GI[j] % 3) === 0) {
+              const gs = sz * 5.5;
+              ctx.globalAlpha = a * 0.3 * GG[j];
+              ctx.drawImage(spr, GX[j] - gs / 2, GY[j] - gs / 2, gs, gs);
+              n++;
+              glows++;
+            }
+          }
+          flush(DUST[c]);
+        }
       }
       // grains drifting off the loop onto the letters during the hold
       if (t > 3000 && t < 10500) {
@@ -1061,26 +1149,37 @@
     function drawWords(t) {
       if (t < 200 || t >= T_CLOSE1) return;
       for (const e of LET) {
-        if (!(e.la1 > 0)) continue;
         const g = e.g;
-        // brightens out of its dust: white-hot light first, where the grains land, then the letter
-        // in its colours as the last of them arrive
-        const span = Math.max(80, e.la1 - e.la0);
-        const form = smooth(e.la0 + span * 0.45, e.la1 + 120, t);
-        const gone = smooth(e.d0 + 40, e.d0 + 420, t);
-        const a = form * (1 - gone);
+        const la0 = e.la0;
+        const la1 = e.la1;
+        const d0 = e.d0;
+        if (t < la0 - 120) continue;
+        const span = Math.max(90, la1 - la0);
+        // A letter condenses out of its dust: the grains land one by one and draw it in dust first
+        // (see grain()); a haze gathers round it and pulls in; once a third of the grains are there
+        // the letter's shape starts to glow lilac between them, and as the last of them land it burns
+        // white and cools into its colours. At the end it flares, its colours go, and its light thins
+        // out as its dust lifts off.
+        const brk = smooth(d0, d0 + 220, t);
+        const thin = smooth(d0 + 40, d0 + 340, t);
+        if (thin >= 1) continue;
+        const ha = 0.42 * smooth(la0 - 120, la0 + span * 0.5, t) * (1 - smooth(la1 - 160, la1 + 140, t));
+        if (ha > 0.01) {
+          ctx.globalCompositeOperation = 'lighter';
+          stamp(P.haze, g.cx, g.cy, g.size * (2.1 - 0.9 * smooth(la0 - 120, la1, t)), ha);
+          ctx.globalCompositeOperation = 'source-over';
+        }
+        const a = smooth(la0 + span * 0.6, la1 + 160, t) * (1 - brk);
         if (a > 0.003) { env.glyph(g, a, FILL); n++; }
-        // the gathering dust glows lilac in the letter's shape first ...
-        const glow = smooth(e.la0 - 60, e.la0 + span * 0.5, t) * (1 - smooth(e.la1, e.la1 + 420, t)) * 0.75;
-        if (glow > 0.01) { env.glyph(g, glow * (1 - gone), GLOW, { op: 'lighter' }); n++; }
-        // ... then burns white as the last of it lands, and cools into the letter's colours
-        let hot = smooth(e.la0 + span * 0.25, e.la1, t) * (1 - smooth(e.la1 + 40, e.la1 + 600, t)) * 0.9;
-        // it lights up again as it breaks back into dust
-        hot += 0.6 * bump(t, e.d0 + 60, 200);
-        // and glints as a ripple passes
+        const glow = 0.7 * smooth(la0 + span * 0.35, la1, t) * (1 - smooth(la1 + 40, la1 + 360, t)) +
+          0.55 * smooth(d0 - 20, d0 + 110, t) * (1 - thin);
+        if (glow > 0.01) { env.glyph(g, glow, GLOW, { op: 'lighter' }); n++; }
+        let hot = 0.75 * smooth(la0 + span * 0.7, la1 + 20, t) * (1 - smooth(la1 + 30, la1 + 320, t));
+        hot += 0.55 * bump(t, d0 + 50, 170);
+        // and it glints as a ripple passes
         const dc = Math.hypot(g.cx - CX, (g.cy - CY) * 1.3);
-        hot += 0.4 * ripplePush(t, dc) * (1 - gone);
-        if (hot > 0.01) { env.glyph(g, hot * (1 - gone * 0.6), HOT, { op: 'lighter' }); n++; }
+        hot += 0.4 * ripplePush(t, dc) * (1 - brk);
+        if (hot > 0.01) { env.glyph(g, hot * (1 - thin), HOT, { op: 'lighter' }); n++; }
       }
     }
 
@@ -1112,11 +1211,12 @@
       drawStream(t, sc, lo);
       drawPens(t);
       drawFlare(t);
+      placeWordDust(t, sc);
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = 1;
       drawWords(t);
       ctx.globalCompositeOperation = 'lighter';
-      drawWordDust(t, sc, lo);
+      drawWordDust(t);
       drawWink(t);
       ctx.restore();
       return n;
@@ -1134,7 +1234,7 @@
       for (const c of DUST.concat(COMET_COLS)) env.sprite(c);
       const cv = ctx.canvas;
       ctx.save();
-      for (const t of [30, 260, 520, 900, 1500, 2300, 3400, 4300, 10700, 11500, 12100]) {
+      for (const t of [30, 260, 520, 900, 1500, 4300, 10700, 11500, 12100]) {
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         draw(t);
       }

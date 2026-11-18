@@ -345,6 +345,66 @@
     return tex;
   }
 
+  /*
+   * The letters are built (and melted) behind fronts of fire: a ragged, soft edge that the letter
+   * shows on one side of and not the other. A front is a mask, opaque where the letter is still
+   * hidden, drawn with 'destination-out' over a copy of the letter in a scratch canvas: no straight
+   * edge ever cuts a letter or its halo. Its pattern repeats every p pixels, so that a window of it
+   * can flow along the front as the fire burns.
+   */
+  const PIX = { key: '', set: null };    // the letters' own pictures, fronts and scratch canvases, per size and words
+
+  /** How far a ragged edge strays (about -1..1) at u, 0..1 round its repeating pattern. */
+  function ragged(u, ph) {
+    return 0.5 * Math.sin(TAU * 2 * u + 0.6 + ph) + 0.27 * Math.sin(TAU * 5 * u + 2.2 + 2 * ph) +
+      0.15 * Math.sin(TAU * 9 * u + 4.1 + 3 * ph) + 0.08 * Math.sin(TAU * 17 * u + 1.3 + 5 * ph);
+  }
+
+  /**
+   * An upright front Z px across and 2p tall: hidden on its right (R) or on its left (L), soft and
+   * ragged between. E[r]: where the edge of R is on row r, from the left of the zone (L's is at Z - E[r]).
+   */
+  function hFront(Z, p, both) {
+    const soft = Math.max(1, Z * 0.07);
+    const E = new Float32Array(p);
+    for (let r = 0; r < p; r++) E[r] = Z * (0.5 + 0.3 * ragged(r / p, 0));
+    const make = (mirror) => {
+      const c = canvas(Z, 2 * p);
+      const g = c.getContext('2d');
+      const img = g.createImageData(Z, 2 * p);
+      const d = img.data;
+      for (let r = 0; r < 2 * p; r++) {
+        const e = E[r % p];
+        for (let x = 0; x < Z; x++) {
+          const k = clamp(((mirror ? Z - 1 - x : x) + 0.5 - e + soft) / (2 * soft), 0, 1);
+          d[(r * Z + x) * 4 + 3] = Math.round(255 * k * k * (3 - 2 * k));
+        }
+      }
+      g.putImageData(img, 0, 0);
+      return c;
+    };
+    return { R: make(false), L: both ? make(true) : null, E: E, Z: Z, p: p };
+  }
+
+  /** A level front 2p across and Z tall, hidden above its ragged edge: E[c], where the edge is in column c. */
+  function vFront(Z, p) {
+    const soft = Math.max(1, Z * 0.07);
+    const E = new Float32Array(p);
+    for (let x = 0; x < p; x++) E[x] = Z * (0.5 + 0.3 * ragged(x / p, 1.9));
+    const c = canvas(2 * p, Z);
+    const g = c.getContext('2d');
+    const img = g.createImageData(2 * p, Z);
+    const d = img.data;
+    for (let y = 0; y < Z; y++) {
+      for (let x = 0; x < 2 * p; x++) {
+        const k = clamp((y + 0.5 - E[x % p] + soft) / (2 * soft), 0, 1);
+        d[(y * 2 * p + x) * 4 + 3] = Math.round(255 * (1 - k * k * (3 - 2 * k)));
+      }
+    }
+    g.putImageData(img, 0, 0);
+    return { c: c, E: E, Z: Z, p: p };
+  }
+
   /* ---------------------------------------------------------- style --- */
 
   function create(env) {
@@ -614,12 +674,11 @@
 
     /* --- the letters: where each one's ink is, and when the fire builds it and melts it --- */
     const LT = letterTextures(L.titleSize, L.yearSize || L.titleSize, dpr);
-    // fx.js keeps each letter in a cell of its own, halo included, and a crop is a fraction of that
-    // cell: here is the cell as fx.js works it out (the steel and the hot fills have the same halo).
+    // fx.js keeps each letter in a cell of its own, halo included: here is the cell as fx.js works it
+    // out (the steel, the white-hot and the green fills have the same halo), and a margin of CM
+    // device pixels round it, so that a copy of the cell holds all of the letter's picture.
     const cellPad = (Math.max(6, L.titleSize * 0.28) * 1.6 + L.titleSize * 0.04) / Math.min(1, dpr) + 2;
-    const NS = 6;                        // strips across a title letter: its burning edge is ragged
-    const NSY = 10;                      // ... across a digit: it flares out round from its middle
-    const NC = 5;                        // columns across a melting letter
+    const CM = 2;
     // The letters' geometry depends only on the size and the words: worked out once (prime() does it
     // before midnight) and shared by every instance after it.
     const GL = env.glyphs();
@@ -629,8 +688,11 @@
     const LETTERS = GL.map((g, id) => Object.assign({ g: g, id: id }, GEO.list[id]));
     const TITLE = LETTERS.filter((o) => o.g.line === 0);
     const YEAR = LETTERS.filter((o) => o.g.line === 1);
+    // ... and so do their own pictures, copied from fx.js's (also before midnight)
+    if (PIX.key !== GKEY) { PIX.key = ''; PIX.set = letterPictures(); PIX.key = GKEY; }
+    const PS = PIX.set;
 
-    /** Each letter's cell, the ink in it (points in the order the fire reaches them), strips, flame spots. */
+    /** Each letter's cell (CSS px, and device px with the margin), the ink in it (points in the order the fire reaches them), flame spots. */
     function letterGeometry() {
       const list = GL.map((g) => {
         const half = g.size * 0.62;
@@ -638,7 +700,8 @@
         const Y0 = Math.floor((g.cy - half - cellPad) * dpr);
         const wd = Math.max(1, Math.ceil((g.x1 + g.size * 0.06 + cellPad) * dpr) - X0);
         const hd = Math.max(1, Math.ceil((g.cy + half + cellPad) * dpr) - Y0);
-        return { g: g, x0: X0 / dpr, y0: Y0 / dpr, w: wd / dpr, h: hd / dpr, wd: wd, hd: hd, raw: [],
+        return { g: g, x0: X0 / dpr, y0: Y0 / dpr, w: wd / dpr, h: hd / dpr,
+          cx0: X0 - CM, cy0: Y0 - CM, cw: wd + 2 * CM, ch: hd + 2 * CM, raw: [],
           inkL: Infinity, inkR: -Infinity, inkT: Infinity, inkB: -Infinity };
       });
       // Points on the ink, each given to its letter: the fire runs along the strokes, not across boxes.
@@ -669,29 +732,19 @@
         o.mx = (o.inkL + o.inkR) / 2;
         o.my = (o.inkT + o.inkB) / 2;
         // in the order the fire reaches them: left to right in the title, out from the middle in the year
-        const key = (p) => (g.line === 0 ? raw[p * 2] : Math.hypot(raw[p * 2] - o.mx, raw[p * 2 + 1] - o.my));
+        const key = (p) => (g.line === 0 ? raw[p * 2] : Math.abs(raw[p * 2] - o.mx));
         const idx = [];
         for (let p = 0; p < raw.length / 2; p++) idx.push(p);
         idx.sort((p, q) => key(p) - key(q));
         o.pts = new Float32Array(idx.length * 3);
         idx.forEach((p, k) => { o.pts[k * 3] = raw[p * 2]; o.pts[k * 3 + 1] = raw[p * 2 + 1]; o.pts[k * 3 + 2] = key(p); });
         o.raw = null;
-        o.rInk = idx.length ? o.pts[o.pts.length - 1] : Math.hypot(o.inkR - o.mx, o.inkB - o.my);
-        o.rMax = Math.hypot(Math.max(o.mx - o.x0, o.x0 + o.w - o.mx), Math.max(o.my - o.y0, o.y0 + o.h - o.my)) + 1;
         // a whole letter is drawn without the outer part of its cell, where its halo has faded to
         // nothing (under half a percent): far fewer pixels to blend for the same picture
         const tu = (cellPad * 0.4) / o.w;
         const tv = (cellPad * 0.4) / o.h;
         o.tfS = { crop: [tu, tv, 1 - tu, 1 - tv] };
         o.tfL = { crop: [tu, tv, 1 - tu, 1 - tv], op: 'lighter' };
-        // strips over the ink, on whole device pixels so that neighbouring crops meet without a seam
-        const ns = g.line === 0 ? NS : NSY;
-        o.vb = new Float32Array(ns + 1);
-        o.vb[ns] = 1;
-        for (let j = 1; j < ns; j++) o.vb[j] = clamp(Math.round((lerp(o.inkT, o.inkB, j / ns) - o.y0) * dpr) / o.hd, 0, 1);
-        o.ub = new Float32Array(NC + 1);
-        o.ub[NC] = 1;
-        for (let c = 1; c < NC; c++) o.ub[c] = clamp(Math.round((lerp(o.inkL, o.inkR, c / NC) - o.x0) * dpr) / o.wd, 0, 1);
         // where flames lick at it: the highest ink in its left half and in its right half
         o.anc = [];
         for (const side of [0, 1]) {
@@ -706,6 +759,69 @@
       }
       for (const o of list) delete o.g;      // each instance joins its own glyph records to these
       return list;
+    }
+
+    /**
+     * The letters' own pictures, copied from fx.js's: C, the steel under the white-hot (as the fire
+     * leaves a letter) and B, its green heat, each letter drawn alone on the clear canvas and copied
+     * off it at once, pixel for pixel. Then the fronts of each line, and two scratch canvases a
+     * letter (one for upright fronts, one for the level front it melts behind).
+     */
+    function letterPictures() {
+      const set = { cells: [], C: null, B: null, fr: [null, null], mv: [null, null] };
+      for (const line of [0, 1]) {
+        let s = 0;
+        let ph = 1;
+        let pw = 1;
+        for (const o of LETTERS) if (o.g.line === line) { s = o.g.size; ph = Math.max(ph, o.ch); pw = Math.max(pw, o.cw); }
+        if (!(s > 0)) continue;
+        const Z = Math.max(6, Math.round(s * 0.34 * dpr));
+        set.fr[line] = hFront(Z, ph, line === 1);
+        set.mv[line] = vFront(Z, pw);
+      }
+      const rowW = [0, 0];
+      const rowH = [0, 0];
+      for (const o of LETTERS) {
+        const r = o.g.line;
+        set.cells[o.id] = { ax: rowW[r], ay: 0 };
+        rowW[r] += o.cw + 2;
+        rowH[r] = Math.max(rowH[r], o.ch);
+      }
+      for (const o of LETTERS) {
+        const c = set.cells[o.id];
+        if (o.g.line === 1) c.ay = rowH[0] + 2;
+        c.hw = set.fr[o.g.line].Z * (o.g.line === 0 ? 1 : 2);    // the white-hot half of the upright scratch; the green half follows
+        c.h = canvas(c.hw * 2, o.ch);
+        c.hg = c.h.getContext('2d');
+        c.v = canvas(o.cw * 2, set.mv[o.g.line].Z);
+        c.vg = c.v.getContext('2d');
+      }
+      set.C = canvas(Math.max(1, rowW[0], rowW[1]), rowH[0] + 2 + rowH[1]);
+      set.B = canvas(set.C.width, set.C.height);
+      if (!LETTERS.length) return set;
+      const cg = set.C.getContext('2d');
+      const bg = set.B.getContext('2d');
+      const cv = ctx.canvas;
+      ctx.save();
+      try {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+        for (const o of LETTERS) {
+          const c = set.cells[o.id];
+          for (let pass = 0; pass < 2; pass++) {
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(o.cx0, o.cy0, o.cw, o.ch);
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);    // as fx.js draws a letter: CSS px, scaled
+            if (pass === 0) { env.glyph(o.g, 1, STEELFILL); env.glyph(o.g, 1, HOT); } else env.glyph(o.g, 1, BLOOM);
+            (pass === 0 ? cg : bg).drawImage(cv, o.cx0, o.cy0, o.cw, o.ch, c.ax, c.ay, o.cw, o.ch);
+          }
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.clearRect(o.cx0, o.cy0, o.cw, o.ch);
+        }
+      } finally {
+        ctx.restore();
+      }
+      return set;
     }
 
     // The left head of fire drawing the outer ring comes level with the title: a spark leaps from it
@@ -979,8 +1095,8 @@
           if (ctx.globalAlpha > 0.004) { ctx.drawImage(LT.burst.c, cx - d / 2, L.yearY - d / 2, d, d); n++; }
         } else {
           const u = (t - T_YB) / 800;
-          const d = L.yearSize * (1.6 + 0.8 * easeOut(Math.min(1, u * 3)));
-          ctx.globalAlpha = Math.min(1, 0.6 * Math.pow(1 - smooth(0, 0.45, u), 2) * fade);
+          const d = L.yearSize * (1.5 + 0.5 * easeOut(Math.min(1, u * 3)));
+          ctx.globalAlpha = Math.min(1, 0.6 * Math.pow(1 - smooth(0, 0.38, u), 2) * fade);
           if (ctx.globalAlpha > 0.004) { ctx.drawImage(LT.burst.c, cx - d / 2, L.yearY - d / 2, d, d); n++; }
           const k = easeOut(u);
           const rx = lerp(yHalf * 0.3, yHalf * 2 + L.yearSize, k);
@@ -1578,22 +1694,22 @@
         ctx.globalAlpha = Math.min(1, 0.95 * Math.pow(1 - u, 1.7) * fade);
         ctx.drawImage(TEX.head.c, o.mx - d / 2, o.my - d / 2, d, d);
         n++;
-        // tongues of fire leaping up off its top, fanning a little, and dying back
+        // tongues of fire leaping up off its top, leaning outward, and dying back (upright sprites:
+        // the flame textures lean left and right already, and a turned sprite costs five times more)
         const e = Math.sin(Math.PI * Math.min(1, u * 1.1));
         for (let i = 0; i < o.tongue.length; i += 3) {
           const a = o.tongue[i];
           const len = s * 0.62 * o.tongue[i + 1] * e;
           if (len < 2) continue;
-          const fl = TEX.flames[(o.tongue[i + 2] + Math.floor(t / 70)) % 3];
+          const side = a < -Math.PI / 2 - 0.2 ? 1 : a > -Math.PI / 2 + 0.2 ? 2 : (o.tongue[i + 2] + Math.floor(t / 70)) % 3;
+          const fl = TEX.flames[side];
           const fw = s * 0.32;
-          const c = Math.cos(a + Math.PI / 2);
-          const sn = Math.sin(a + Math.PI / 2);
-          setT(c, sn, -sn, c, o.mx + Math.cos(a) * s * 0.3, o.inkT + s * 0.12 + (Math.sin(a) + 1) * s * 0.3);
+          const rx = o.mx + Math.cos(a) * s * 0.3;
+          const ry = o.inkT + s * 0.12 + (Math.sin(a) + 1) * s * 0.3;
           ctx.globalAlpha = Math.min(1, 0.9 * e * fade);
-          ctx.drawImage(fl.c, -fw / 2, -len * fl.base, fw, len);
+          ctx.drawImage(fl.c, rx - fw / 2, ry - len * fl.base, fw, len);
           n++;
         }
-        resetT();
       }
       if (t < o.t1) {
         const r = brandR(o, t);
