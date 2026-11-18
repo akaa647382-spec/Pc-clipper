@@ -4,16 +4,25 @@
  * It draws on a transparent canvas lying over the movie, so it never paints a backdrop: every
  * frame starts from a clear canvas and only adds light.
  *
- *   'stark'      golden dust sweeps in and assembles into the words (the film's dust effect in
- *                reverse), shimmers while red and gold fireworks bloom in the top corners, then
- *                blows away as dust again.
- *   'fireworks'  classic multicolour fireworks with a gold title.
+ *   'stark'      golden dust sweeps in from the left and assembles into HAPPY NEW YEAR, a second
+ *                gust from the right builds the year (the film's dust effect in reverse), it
+ *                shimmers while red and gold fireworks bloom in the top corners, then blows away.
+ *   'fireworks'  classic multicolour fireworks: the year blasts out of a gold burst, then the
+ *                letters of the title pop in one by one with a crackle of sparks.
  *
  * More styles come from their own files (src/fx-*.js), registered with
  *   APFx.register(id, { duration, name, create(env) -> { step(dt, t), draw(t) -> particles drawn } })
  * where env gives the canvas (already cleared and scaled to CSS pixels), the size, a seeded random,
  * where the words sit, the words themselves ready to stamp, points on the words, glow sprites and
  * whether the PC is struggling (draw less then). See makeEnv below.
+ *
+ * The words should not simply appear: a style builds them, letter by letter or line by line, with
+ *   env.glyphs()                  every letter: { line (0 title, 1 year), i, n, ch, x0, x1, cx, cy, top, bottom, size }
+ *   env.textGlyphs(text, line)    the same for another text set on that line (the old year, '2026', say)
+ *   env.glyph(g, alpha, fill, tf) one letter with its halo; tf = { dx, dy, scale, sx, sy, rot, op, crop: [x0, y0, x1, y1] }
+ *   env.warm(fill, text, line)    makes those pictures ahead of time (from prime())
+ * Every letter is a picture of its own with its whole halo, so a letter alone looks finished, and
+ * all of them in place look exactly like env.words().
  *
  * Every frame has to fit in 1/60 s on a big screen: nothing may draw text or blurred shadows per
  * frame (the words are drawn once and stamped), and the canvas never holds more than about 4.2
@@ -33,7 +42,8 @@
     assembleEnd: 2400,      // words fully formed
     holdEnd: 8400,          // start blowing away
     sweep: 1500,            // the disintegration wave crosses the words in this time
-    fly: 2100               // how long one grain takes to fade once released
+    fly: 2100,              // how long one grain takes to fade once released
+    yearLag: 550            // the year's gust comes this much after the title's
   };
   // gold, deep gold, ember, hot-rod red, arc-reactor cyan
   const DUST_COLORS = ['#ffe2a0', '#f9b233', '#ff8a2a', '#ff4d4d', '#8fefff'];
@@ -95,9 +105,13 @@
     let low = false;         // the PC cannot keep 60 frames a second: the soft glow is dropped
     let slowFor = 0;         // how long frames have been taking longer than a 60 Hz screen allows (s)
     let custom = null;       // the running instance of a registered style
+    let lines = null;        // the letters of the two lines (built-in styles)
+    let reveal = null;       // Fireworks: when each letter arrives, the burst and the crackles
+    let lastStepT = -1;      // the last moment simulated (a resize mid-way does not replay the bursts)
     let wordsCache = Object.create(null);    // these three are kept until the size changes:
     let sampleCache = Object.create(null);   // prime() fills them before midnight, so the first
     let pointCache = Object.create(null);    // frame of the animation has nothing slow left to do
+    let glyphCache = Object.create(null);    // the letters, one picture each (also kept until the size changes)
     const spriteCache = Object.create(null);
 
     const api = {
@@ -123,6 +137,7 @@
       wordsCache = Object.create(null);
       sampleCache = Object.create(null);
       pointCache = Object.create(null);
+      glyphCache = Object.create(null);
       canvas.width = Math.max(1, Math.round(W * DPR));
       canvas.height = Math.max(1, Math.round(H * DPR));
       if (opts) prepare();                     // mid-animation: lay the words out again for the new size
@@ -250,6 +265,16 @@
           if (!pointCache[key]) { const s = sampleTargets(layout, b); pointCache[key] = { pts: Float32Array.from(s.pts), step: s.step, minX: s.minX, maxX: s.maxX }; }
           return pointCache[key];
         },
+        // The letters, for building the words up: see the header of this file.
+        glyphs: () => lineGlyphs(layout, 0, layout.title).concat(layout.year ? lineGlyphs(layout, 1, layout.year) : []),
+        textGlyphs: (text, line) => lineGlyphs(layout, line === 1 ? 1 : 0, String(text == null ? '' : text)),
+        glyph: (g, alpha, fill, tf) => drawGlyph(g, alpha, fill || GOLD, tf),
+        warm: (fill, text, line) => {
+          const f = fill || GOLD;
+          if (text != null) { glyphSet(f, line === 1 ? 1 : 0, String(text)); return; }
+          glyphSet(f, 0, layout.title);
+          if (layout.year) glyphSet(f, 1, layout.year);
+        },
         sprite: sprite,
         low: () => low,                       // true once the PC cannot keep 60 frames a second: draw less
         clamp: clamp, lerp: lerp, smooth: smooth, easeOut: easeOut, easeIn: easeIn, mulberry32: mulberry32
@@ -261,7 +286,11 @@
       layout = computeLayout();
       dust = null;
       custom = null;
+      reveal = null;
+      lines = null;
       if (STYLES[opts.style]) { custom = STYLES[opts.style].create(makeEnv()) || null; return; }
+      lines = [lineGlyphs(layout, 0, layout.title), layout.year ? lineGlyphs(layout, 1, layout.year) : []];
+      if (opts.style === 'fireworks') reveal = fireworksReveal();
       if (simple || opts.style !== 'stark') return;
       // The same seed always lays out the same dust, whatever happened before.
       const r = mulberry32((opts.seed == null ? 20270101 : opts.seed) ^ 0x9E3779B9);
@@ -275,16 +304,20 @@
         order: []
       };
       const scale = Math.max(0.3, Math.min(W / 1920, H / 1080));
+      // Between the two lines: grains below it build the year.
+      const split = layout.year ? (layout.titleY + layout.titleSize / 2 + layout.yearY - layout.yearSize / 2) / 2 : Infinity;
       for (let i = 0; i < n; i++) {
         const tx = s.pts[i * 2] + (r() - 0.5) * s.step * 0.5;
         const ty = s.pts[i * 2 + 1] + (r() - 0.5) * s.step * 0.5;
         const along = (tx - d.minX) / d.span;
+        const year = ty > split;
         d.tx[i] = tx;
         d.ty[i] = ty;
-        // Blown in from the left on a rising, spreading wind.
-        d.sx[i] = -W * (0.05 + r() * 0.5);
+        // The title blows in from the left on a rising, spreading wind; a moment later a second
+        // gust from the right builds the year, right to left.
+        d.sx[i] = year ? W * (1.05 + r() * 0.5) : -W * (0.05 + r() * 0.5);
         d.sy[i] = ty + (r() - 0.35) * H * 0.75;
-        d.delay[i] = 120 + along * 760 + r() * 520;
+        d.delay[i] = 120 + (year ? (1 - along) : along) * 760 + r() * 520 + (year ? STARK.yearLag : 0);
         d.dur[i] = 880 + r() * 620;
         d.ph[i] = r() * Math.PI * 2;
         d.amp[i] = (20 + r() * 90) * scale;
@@ -316,6 +349,7 @@
       nextRocket = opts && opts.style === 'stark' ? STARK.assembleEnd + 150 : 0;
       rocketSide = 0;
       peak = 0;
+      lastStepT = -1;
     }
 
     function launch(t) {
@@ -335,6 +369,46 @@
       const hue = stark ? [44, 36, 18, 2, 48][(rnd() * 5) | 0] : (rnd() * 360) | 0;
       const flight = 0.55 + rnd() * 0.25;
       rockets.push({ x: x + (rnd() - 0.5) * 60 * scale, y: H + 10, tx: x, ty: ty, t: 0, flight: flight, hue: hue, sat: stark && hue === 48 ? 30 : 100 });
+    }
+
+    /**
+     * Fireworks: the year blasts out of a gold burst behind it, centre digits first; then the
+     * letters of the title pop in one by one, left to right, each with a crackle of sparks.
+     * (Title only, without a year: the burst is behind the title and its letters follow it.)
+     */
+    function fireworksReveal() {
+      const tl = lines[0];
+      const yl = lines[1];
+      const BOOM = 560;
+      const list = [];
+      if (yl.length) {
+        const mid = (yl.length - 1) / 2;
+        for (const g of yl) list.push({ g: g, at: BOOM + 40 + Math.abs(g.i - mid) * 90, year: true });
+      }
+      const t0 = yl.length ? 1250 : BOOM + 60;
+      for (const g of tl) list.push({ g: g, at: t0 + g.i * 60, year: false });
+      list.sort((a, b) => a.at - b.at);
+      const ref = yl.length ? yl : tl;
+      const boom = ref.length ? { at: BOOM, x: (ref[0].x0 + ref[ref.length - 1].x1) / 2, y: ref[0].cy } : null;
+      // Bursts already fired (a resize mid-way rebuilds this) are not fired again.
+      let next = 0;
+      while (next < list.length && list[next].at <= lastStepT) next++;
+      return { list: list, next: next, boom: boom, boomed: !boom || boom.at <= lastStepT };
+    }
+
+    /** A burst of `count` sparks from (x, y) in all directions, with a flash. */
+    function burstAt(x, y, hue, count, power, life) {
+      const scale = Math.max(0.3, Math.min(W / 1920, H / 1080));
+      for (let i = 0; i < count && sparks.length < 1800; i++) {
+        const a = (i / count) * Math.PI * 2 + rnd() * 0.12;
+        const v = power * scale * (0.82 + rnd() * 0.36);
+        const l = life * (0.7 + rnd() * 0.5);
+        sparks.push({
+          x: x, y: y, px: x, py: y, ppx: x, ppy: y, vx: Math.cos(a) * v, vy: Math.sin(a) * v,
+          life: l, max: l, hue: hue + (rnd() - 0.5) * 14, sat: 100, lum: 64 + rnd() * 14, size: (3 + rnd() * 2.2) * Math.max(0.6, scale)
+        });
+      }
+      flashes.push({ x: x, y: y, t: 0, r: power * scale * 0.6, hue: hue, sat: 100 });
     }
 
     function burst(rk) {
@@ -358,7 +432,16 @@
       if (simple || !opts || W < 8) return;
       if (custom) { if (custom.step) custom.step(dt, t); return; }
       const stark = opts.style === 'stark';
-      const until = stark ? STARK.holdEnd - 500 : 9300;
+      if (reveal) {
+        if (!reveal.boomed && t >= reveal.boom.at) { reveal.boomed = true; burstAt(reveal.boom.x, reveal.boom.y, 44, 150, 520, 1.6); }
+        while (reveal.next < reveal.list.length && t >= reveal.list[reveal.next].at) {
+          const e = reveal.list[reveal.next++];
+          if (!e.year) burstAt(e.g.cx, e.g.top, 46, 12, 150, 0.6);
+        }
+      }
+      lastStepT = t;
+      // The last rocket goes up early enough for every spark to be gone by the end (12 s).
+      const until = stark ? STARK.holdEnd - 500 : 8800;
       while (t >= nextRocket && nextRocket <= until) {
         const salvo = !stark && nextRocket === 0 ? 4 : 1 + (rnd() < 0.25 ? 1 : 0);
         for (let i = 0; i < salvo; i++) launch(nextRocket);
@@ -407,11 +490,13 @@
       const pad = Math.ceil(L.titleSize * 0.9);
       const top = Math.floor(L.top - pad);
       const hgt = Math.ceil(L.bottom - L.top + pad * 2);
+      // On the screen's pixel grid (whole device pixels), so it is copied 1:1 and never resampled.
+      const topDev = Math.floor(top * DPR);
       const c = document.createElement('canvas');
-      c.width = Math.max(1, Math.round(W * DPR));
-      c.height = Math.max(1, Math.round(hgt * DPR));
+      c.width = canvas.width;
+      c.height = Math.max(1, Math.ceil((top + hgt) * DPR) - topDev);
       const g = c.getContext('2d');
-      g.setTransform(DPR, 0, 0, DPR, 0, -top * DPR);
+      g.setTransform(DPR, 0, 0, DPR, 0, -topDev);
       if (fill.halo) {
         g.shadowColor = fill.halo;
         g.shadowBlur = Math.max(6, L.titleSize * 0.28);
@@ -421,7 +506,7 @@
       for (const st of fill.stops) grad.addColorStop(st[0], st[1]);
       g.fillStyle = grad;
       drawWords(g, L, (ch, x, y) => g.fillText(ch, x, y));
-      return (wordsCache[key] = { canvas: c, top: top, h: hgt });
+      return (wordsCache[key] = { canvas: c, top: topDev / DPR, h: c.height / DPR });
     }
 
     function stampWords(alpha, scaleUp, fill) {
@@ -437,12 +522,150 @@
       }
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = alpha;
-      ctx.drawImage(b.canvas, 0, b.top, W, b.h);
+      ctx.drawImage(b.canvas, 0, b.top, b.canvas.width / DPR, b.h);
       ctx.restore();
     }
 
     function drawSolidWords(alpha, scaleUp) {
       stampWords(alpha, scaleUp, GOLD);
+    }
+
+    /* --------------------------------------------------------- letters --- */
+
+    /**
+     * The letters of `text` set on line 0 (the title) or 1 (the year) exactly as drawLine() sets
+     * them, spaces left out: { line, i, n, ch, x0, x1, cx, cy, top, bottom, size, text } in CSS px.
+     */
+    function lineGlyphs(L, line, text) {
+      const size = line === 0 ? L.titleSize : L.yearSize;
+      const cy = line === 0 ? L.titleY : L.yearY;
+      const out = [];
+      if (!text || !(size > 0)) return out;
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.font = font(size);
+      const gap = size * 0.14;
+      const chars = Array.from(text);
+      const widths = chars.map((ch) => ctx.measureText(ch).width);
+      ctx.restore();
+      let total = 0;
+      for (const w of widths) total += w + gap;
+      total -= gap;
+      let x = L.cx - total / 2;
+      const n = chars.filter((ch) => ch.trim()).length;
+      chars.forEach((ch, k) => {
+        if (ch.trim()) {
+          out.push({ line: line, i: out.length, n: n, ch: ch, x0: x, x1: x + widths[k], cx: x + widths[k] / 2, cy: cy,
+            top: cy - size * 0.37, bottom: cy + size * 0.37, size: size, text: text });
+        }
+        x += widths[k] + gap;
+      });
+      return out;
+    }
+
+    /**
+     * The letters of one line in one fill, each drawn once with its halo into a cell of its own
+     * (the colours run top to bottom across both lines, as in the words picture).
+     */
+    function glyphSet(fill, line, text) {
+      const L = layout;
+      const key = JSON.stringify(fill) + '|' + line + '|' + text + '|' + L.title + '|' + L.year;
+      if (glyphCache[key]) return glyphCache[key];
+      const list = lineGlyphs(L, line, text);
+      // The halo exactly as in the words picture (shadows are measured in the picture's pixels).
+      const blur = fill.halo ? Math.max(6, L.titleSize * 0.28) : 0;
+      const pad = (blur * 1.6 + L.titleSize * 0.04) / Math.min(1, DPR) + 2;
+      // Cells in device pixels, on the screen's pixel grid: a letter is copied 1:1, never resampled.
+      const cells = [];
+      let total = 0;
+      let tall = 0;
+      for (const g of list) {
+        const half = g.size * 0.62;                 // a little more than the letters reach above and below the middle
+        const x0 = Math.floor((g.x0 - g.size * 0.06 - pad) * DPR);
+        const y0 = Math.floor((g.cy - half - pad) * DPR);
+        const cell = { at: total, x0: x0, y0: y0, w: Math.ceil((g.x1 + g.size * 0.06 + pad) * DPR) - x0, h: Math.ceil((g.cy + half + pad) * DPR) - y0 };
+        cells.push(cell);
+        total += cell.w + 2;
+        if (cell.h > tall) tall = cell.h;
+      }
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, total);
+      c.height = Math.max(1, tall);
+      const g2 = c.getContext('2d');
+      list.forEach((g, k) => {
+        const cell = cells[k];
+        // Each letter drawn where it sits on the screen, moved into its cell by whole pixels: the
+        // gradient stays in screen coordinates, so a letter alone has the colours it has in the words.
+        g2.save();
+        g2.beginPath();
+        g2.rect(cell.at, 0, cell.w, cell.h);
+        g2.clip();
+        g2.setTransform(DPR, 0, 0, DPR, cell.at - cell.x0, -cell.y0);
+        if (fill.halo) {
+          g2.shadowColor = fill.halo;
+          g2.shadowBlur = blur;
+          g2.shadowOffsetY = L.titleSize * 0.04;
+        }
+        const grad = g2.createLinearGradient(0, L.top, 0, L.bottom);
+        for (const st of fill.stops) grad.addColorStop(st[0], st[1]);
+        g2.fillStyle = grad;
+        g2.font = font(g.size);
+        g2.textBaseline = 'middle';
+        g2.textAlign = 'left';
+        g2.fillText(g.ch, g.x0, g.cy);
+        g2.restore();
+      });
+      return (glyphCache[key] = { canvas: c, cells: cells });
+    }
+
+    /** One letter (from glyphs() or textGlyphs()) with its halo, at `alpha`, moved by `tf`. */
+    function drawGlyph(g, alpha, fill, tf) {
+      if (!layout || !g || alpha <= 0.003) return;
+      const set = glyphSet(fill || GOLD, g.line, g.text);
+      const cell = set.cells[g.i];
+      if (!cell) return;
+      let u0 = 0, v0 = 0, u1 = 1, v1 = 1;
+      if (tf && tf.crop) {
+        u0 = clamp(tf.crop[0], 0, 1); v0 = clamp(tf.crop[1], 0, 1); u1 = clamp(tf.crop[2], 0, 1); v1 = clamp(tf.crop[3], 0, 1);
+        if (u1 <= u0 || v1 <= v0) return;
+      }
+      const sw = cell.w * (u1 - u0);
+      const sh = cell.h * (v1 - v0);
+      ctx.save();
+      ctx.globalCompositeOperation = (tf && tf.op) || 'source-over';
+      ctx.globalAlpha = Math.min(1, alpha);
+      if (tf && (tf.dx || tf.dy || tf.rot || tf.scale != null || tf.sx != null || tf.sy != null)) {
+        const s = tf.scale == null ? 1 : tf.scale;
+        ctx.translate(g.cx + (tf.dx || 0), g.cy + (tf.dy || 0));
+        if (tf.rot) ctx.rotate(tf.rot);
+        ctx.scale(s * (tf.sx == null ? 1 : tf.sx), s * (tf.sy == null ? 1 : tf.sy));
+        ctx.translate(-g.cx, -g.cy);
+      }
+      // Source and destination in device pixels (the context is scaled to CSS pixels by DPR).
+      ctx.drawImage(set.canvas, cell.at + cell.w * u0, cell.h * v0, sw, sh,
+        (cell.x0 + cell.w * u0) / DPR, (cell.y0 + cell.h * v0) / DPR, sw / DPR, sh / DPR);
+      ctx.restore();
+    }
+
+    /** All the letters of one line (0 title, 1 year) in place: the same picture as that line of the words. */
+    function drawLineGlyphs(line, alpha) {
+      if (!lines || alpha <= 0.003) return;
+      for (const g of lines[line]) drawGlyph(g, alpha, GOLD);
+    }
+
+    /** Fireworks: each letter pops in at its moment, white-hot for an instant. */
+    function drawFireworksWords(t, fade) {
+      if (!reveal || fade <= 0.003) return;
+      for (const e of reveal.list) {
+        const since = t - e.at;
+        if (since <= 0) break;                   // the list is in order of arrival
+        const k = clamp(since / (e.year ? 320 : 240), 0, 1);
+        const back = 1 + 2.2 * Math.pow(k - 1, 3) + 1.2 * Math.pow(k - 1, 2);   // a little overshoot
+        const s = e.year ? lerp(1.55, 1, easeOut(k)) : lerp(1.75, 1, back);
+        drawGlyph(e.g, clamp(since / 70, 0, 1) * fade, GOLD, { scale: s });
+        const hot = 1 - clamp(since / (e.year ? 420 : 300), 0, 1);
+        if (hot > 0.01) drawGlyph(e.g, hot * hot * 0.9 * fade, GOLD, { scale: s, op: 'lighter' });
+      }
     }
 
     function drawPulse(t) {
@@ -474,7 +697,7 @@
       const d = dust;
       if (!d || !d.n) return 0;
       const scale = Math.max(0.3, Math.min(W / 1920, H / 1080));
-      const holdT = t - STARK.assembleEnd;
+      const holdT = t - STARK.assembleEnd - (layout.year ? STARK.yearLag : 0);
       // A glint that sweeps across the words every couple of seconds.
       const band = d.span * 0.09;
       const glintX = holdT > 0 && t < STARK.holdEnd ? d.minX - band * 3 + ((holdT % 2500) / 2500) * (d.span + band * 6) : -1e9;
@@ -603,15 +826,16 @@
       let live = 0;
       if (opts.style === 'stark') {
         drawPulse(t);
-        // The solid words fade in underneath as the dust settles, so they read instantly.
-        const under = smooth(STARK.assembleEnd - 800, STARK.assembleEnd + 200, t) * (1 - smooth(STARK.holdEnd, STARK.holdEnd + STARK.sweep * 0.8, t));
-        drawSolidWords(under * 0.62, 1);
+        // The solid words fade in underneath as the dust settles, so they read instantly: the
+        // title as its dust lands, the year as its own gust lands.
+        const keep = 1 - smooth(STARK.holdEnd, STARK.holdEnd + STARK.sweep * 0.8, t);
+        drawLineGlyphs(0, smooth(STARK.assembleEnd - 800, STARK.assembleEnd + 200, t) * keep * 0.62);
+        drawLineGlyphs(1, smooth(STARK.assembleEnd - 800 + STARK.yearLag, STARK.assembleEnd + 200 + STARK.yearLag, t) * keep * 0.62);
         live += drawFireworks();
         live += drawDust(t);
       } else {
         live += drawFireworks();
-        const a = smooth(300, 1100, t) * (1 - smooth(total - 1300, total - 150, t));
-        drawSolidWords(a, lerp(0.88, 1, easeOut(clamp((t - 300) / 900, 0, 1))));
+        drawFireworksWords(t, 1 - smooth(total - 1300, total - 150, t));
       }
       if (live > peak) peak = live;
     }
@@ -655,6 +879,8 @@
       layout = null;
       dust = null;
       custom = null;
+      reveal = null;
+      lines = null;
       rockets = [];
       sparks = [];
       flashes = [];
@@ -674,12 +900,15 @@
         opts = options(o);
         prepare();
         if (layout) wordsBitmap(GOLD);
+        if (lines) { glyphSet(GOLD, 0, layout.title); if (layout.year) glyphSet(GOLD, 1, layout.year); }
         if (custom && custom.prime) custom.prime();
       } catch (e) { /* only a head start */ }
       opts = null;
       layout = null;
       dust = null;
       custom = null;
+      reveal = null;
+      lines = null;
     }
 
     function options(o) {

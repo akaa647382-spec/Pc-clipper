@@ -2236,6 +2236,27 @@ const scenarios = {
       }));
       await s.page.click('#optCelebration [data-v="off"]');
       check('the New Year animation can be turned off', await s.page.evaluate(() => window.__AP.cfg.celebration === 'off'));
+      check('all nine animation choices are there, the five theme ones included', await s.page.evaluate(() =>
+        ['stark', 'fireworks', 'arc', 'gamma', 'warmachine', 'tva', 'doom', 'minimal', 'off'].every((id) => {
+          const b = document.querySelector('#optCelebration [data-v="' + id + '"]');
+          return b && !b.hidden && b.offsetWidth > 0;
+        })));
+      // Each theme animation really plays in the app (its file loaded, registered and drawing).
+      for (const id of ['arc', 'gamma', 'warmachine', 'tva', 'doom']) {
+        await s.page.click(`#optCelebration [data-v="${id}"]`);
+        await s.page.click('#previewCelebration');
+        await sleep(2200);
+        const r = await s.page.evaluate(() => {
+          const c = document.getElementById('fx');
+          const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+          let lit = 0;
+          for (let i = 3; i < d.length; i += 16) if (d[i] > 8) lit++;
+          return { running: !!(window.__AP.Celebration.fx && window.__AP.Celebration.fx.running), lit, style: window.__AP.cfg.celebration, hint: document.getElementById('celebHint').textContent };
+        });
+        check(`${id}: the preview plays in the app and draws`, r.running && r.lit > 200 && r.style === id && r.hint.length > 20, JSON.stringify(r));
+        if (id === 'tva') await shot(s.page, 'celebration-tva');
+        await s.page.evaluate(() => window.__AP.Celebration.stop());
+      }
       await s.page.click('#optCelebration [data-v="stark"]');
       await s.page.keyboard.press('f');
       check('F enters fullscreen and hides the panel', await waitFor(s.page, () => document.getElementById('app').classList.contains('is-fs'), null, 4000) && await s.page.isHidden('#panel'));
@@ -2623,7 +2644,17 @@ const scenarios = {
       await s.page.click('.tab[data-tab="mission"]');
       await s.page.click('#armBtn');
       check('armed with my own start time: nothing is asked, it waits for 9:29:28.6 PM', await waitPhase(s.page, 'standby', 6000) && (await g(s.page)).lead === 9031400, JSON.stringify(await g(s.page)));
-      check('while armed the start time cannot be changed', await s.page.isDisabled('#smClassic') && await s.page.isDisabled('#smOwnInput'));
+      // While armed the start time can still be changed (1.11.0): the countdown follows at once.
+      await s.page.click('.tab[data-tab="setup"]');
+      check('while armed the start time can still be changed', await s.page.isEnabled('#smClassic') && await s.page.isEnabled('#smOwnInput') && await s.page.isVisible('#smHere'));
+      await s.page.click('#smOwnPlus01');
+      v = await g(s.page);
+      const armedNow = await s.page.evaluate(() => ({ mode: window.__AP.Engine.mode, phase: window.__AP.Engine.phase }));
+      check('+0.1 s while armed: the countdown now waits for 9:29:28.7 PM, still armed', v.own === 9031.3 && v.lead === 9031300 && armedNow.mode === 'armed' && armedNow.phase === 'standby', JSON.stringify(Object.assign({ own: v.own, lead: v.lead }, armedNow)));
+      await s.page.click('#smOwnMinus01');
+      v = await g(s.page);
+      check('and −0.1 s puts it back on 9:29:28.6 PM', v.own === 9031.4 && v.lead === 9031400, JSON.stringify({ own: v.own, lead: v.lead }));
+      await s.page.click('.tab[data-tab="mission"]');
       await s.page.click('#armBtn');
       await s.page.click('#armBtn');
       check('stopped', await waitFor(s.page, () => window.__AP.Engine.mode === 'free', null, 4000));
@@ -2697,6 +2728,7 @@ const scenarios = {
       const lastOk = rows.slice(0, i).filter((r) => r.now >= whole + 20).every((r) => secs(r.count) === 0 && Math.abs(+r.count.slice(9) - (at - r.now)) < 30);
       check('the countdown\'s seconds go with the clock (.332 after them), the last .332 counts down live, and the movie launches at the exact start', i > 0 && rows[i - 1].now < at && rows[i].now >= at && rows[i].now - at < 50 && /^00:00:00\.\d{3}$/.test(rows[i - 1].count) && beforeOk && lastOk,
         i > 0 ? 'last countdown frame ' + (rows[i - 1].now - at) + ' ms (' + rows[i - 1].count + '), film from ' + (rows[i].now - at) + ' ms after the start' : 'never');
+      check('the replay was recording while the movie started', await s.page.evaluate(() => { const r = window.__AP.Replay.rec; return !!(r && r.kind === 'start' && r.started); }));
       check('and the film runs locked to the clock', await waitSynced(s.page, 8000));
       v = await look();
       check('no test result, no pass or fail', /No test run yet/.test(v.results) && /^SIMULATION · /.test(v.label), v.label);

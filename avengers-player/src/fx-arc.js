@@ -1,0 +1,1225 @@
+/*!
+ * Avengers Player: 'arc', the Arc Reactor celebration (a style for src/fx.js).
+ *
+ *   0.0 s     the instant it plays: a reactor core ignites in the middle of the frame (a white-hot
+ *             burst, a lens streak, a ring of light) and its segmented rings assemble round it,
+ *             inside out, spinning up.
+ *   0.7 s     the reactor rises into the space above the words and settles.
+ *   1.4 s     the core flares; rays and a shockwave sweep out across the picture and the words light
+ *             up in white and cyan as the wave passes over them.
+ *   2-9 s     the rings spin, energy filaments race round them, current jumps between them, motes
+ *             orbit the core, the core beats and a bar of light scans the words; a surge at 6.2 s.
+ *   9.3 s     the rings spin down, flicker and break into drifting cyan sparks; the core collapses.
+ *   11-12.5 s everything fades out.
+ *
+ * Every frame is a function of the seed and t alone (nothing is simulated frame by frame), so
+ * renderAt(t), a resize in the middle and the live animation all draw the same picture.
+ */
+(function (root) {
+  'use strict';
+
+  const APFx = root.APFx;
+  if (!APFx || typeof APFx.register !== 'function') return;
+
+  const DURATION = 12500;
+  const FADE_FROM = DURATION - 1500;              // everything fades out from here
+  const TAU = Math.PI * 2;
+  // The words: white at the top to reactor cyan at the bottom, with a deep navy halo.
+  const FILL = { stops: [[0, '#ffffff'], [0.5, '#dcfaff'], [1, '#4fd6ff']], halo: 'rgba(0,8,20,0.9)' };
+
+  const T_RISE0 = 680;          // the reactor rises from the middle of the frame into place
+  const T_RISE1 = 1320;
+  const T_FLARE = 1400;         // the core flares and the shockwave leaves
+  const SHOCK_DUR = 1500;
+  const PULSES = [2800, 4400, 8000];             // the core's heartbeats
+  const T_SURGE = 6200;         // a second beat in the middle: the reactor surges
+  const SCANS = [3300, 6900, 9050];              // a bar of light scans the words
+  const SCAN_DUR = 1250;
+  const T_DOWN = 9300;          // spin-down
+  const T_BREAK = 9750;         // the rings start breaking into sparks
+  const T_CORE_OUT = 10950;     // the core collapses
+
+  const WHITE = '#ffffff';
+  const ICE = '#d2f9ff';
+  const CYAN = '#5fe3ff';
+  const GOLD = '#f6c453';
+  // The reactor's soft light on everything round it, and the dark backing behind it.
+  const HALO_STOPS = [[0, 'rgba(120,232,255,0.6)'], [0.22, 'rgba(70,200,255,0.34)'], [0.5, 'rgba(40,165,255,0.13)'],
+    [0.78, 'rgba(30,150,255,0.035)'], [1, 'rgba(30,150,255,0)']];
+  const SCRIM_STOPS = [[0, 'rgba(2,8,20,0.42)'], [0.55, 'rgba(2,8,20,0.3)'], [0.8, 'rgba(2,8,20,0.12)'], [1, 'rgba(2,8,20,0)']];
+
+  /* ----------------------------------------------------- textures (once) --- */
+
+  let TEX = null;
+
+  function canvas(w, h) {
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    return c;
+  }
+
+  function radial(g, x, y, r, stops) {
+    const gr = g.createRadialGradient(x, y, 0, x, y, r);
+    for (const s of stops) gr.addColorStop(s[0], s[1]);
+    return gr;
+  }
+
+  /** Glows drawn once and stamped (kept for the life of the page: prime() makes them before it plays). */
+  function textures() {
+    if (TEX) return TEX;
+    // The core: a white-hot centre inside a cyan bloom.
+    const core = canvas(256, 256);
+    let g = core.getContext('2d');
+    g.fillStyle = radial(g, 128, 128, 128, [[0, 'rgba(255,255,255,1)'], [0.06, 'rgba(255,255,255,1)'], [0.12, 'rgba(214,250,255,0.92)'],
+      [0.22, 'rgba(110,228,255,0.5)'], [0.4, 'rgba(50,185,255,0.18)'], [0.68, 'rgba(30,150,255,0.05)'], [1, 'rgba(30,150,255,0)']]);
+    g.fillRect(0, 0, 256, 256);
+    // A long horizontal lens streak (an anamorphic flare): a round glow squashed sixteen times.
+    const streak = canvas(512, 32);
+    g = streak.getContext('2d');
+    g.setTransform(16, 0, 0, 1, 0, 0);
+    g.fillStyle = radial(g, 16, 16, 16, [[0, 'rgba(240,253,255,1)'], [0.1, 'rgba(170,240,255,0.8)'], [0.35, 'rgba(80,200,255,0.25)'], [1, 'rgba(30,150,255,0)']]);
+    g.fillRect(0, 0, 32, 32);
+    // The same, standing up: the bar of light that scans the words.
+    const bar = canvas(32, 256);
+    g = bar.getContext('2d');
+    g.setTransform(1, 0, 0, 8, 0, 0);
+    g.fillStyle = radial(g, 16, 16, 16, [[0, 'rgba(225,251,255,0.9)'], [0.25, 'rgba(120,230,255,0.35)'], [1, 'rgba(30,150,255,0)']]);
+    g.fillRect(0, 0, 32, 32);
+    TEX = { core: core, streak: streak, bar: bar };
+    return TEX;
+  }
+
+  /* -------------------------------------------------------------- style --- */
+
+  function create(env) {
+    const ctx = env.ctx;
+    const W = env.W;
+    const H = env.H;
+    const L = env.layout;
+    const rnd = env.rnd;
+    const clamp = env.clamp;
+    const lerp = env.lerp;
+    const smooth = env.smooth;
+    const easeOut = env.easeOut;
+    const tex = textures();
+    const glowIce = env.sprite(ICE);
+    const glowCyan = env.sprite(CYAN);
+    const glowGold = env.sprite(GOLD);
+    const backOut = (u) => { const v = u - 1; return 1 + 2.70158 * v * v * v + 1.70158 * v * v; };
+
+    // Where the reactor holds: centred in the space above the words. It is born bigger, in the
+    // middle of the frame, and rises into place.
+    const spaceTop = H * 0.045;
+    const spaceBottom = Math.max(H * 0.3, L.top - H * 0.035);
+    const HOLD_R = Math.max(24, Math.min(H * 0.21, (spaceBottom - spaceTop) * 0.46, W * 0.3));
+    const HOLD_X = W / 2;
+    const HOLD_Y = (spaceTop + spaceBottom) / 2;
+    const START_R = Math.max(HOLD_R, Math.min(HOLD_R * 1.6, H * 0.36, W * 0.36));
+    const START_Y = H * 0.47;
+    const K_HOLD = Math.max(0.35, HOLD_R / 225);
+    // Once the reactor holds still (from T_RISE1) its halo and its dark backing are always the same
+    // picture: drawn here once at their final size, a frame copies them 1:1 onto whole device pixels
+    // (a stretched sprite or a big gradient costs several times as much on a software-rendered canvas).
+    const DPR = env.dpr || 1;
+    function still(r, stops) {
+      const px = Math.max(2, Math.ceil(r * 2 * DPR));
+      const c = canvas(px, px);
+      const g = c.getContext('2d');
+      g.fillStyle = radial(g, px / 2, px / 2, px / 2, stops);
+      g.fillRect(0, 0, px, px);
+      return c;
+    }
+    const haloPic = still(HOLD_R * 1.25, HALO_STOPS);
+    const scrimPic = still(HOLD_R * 1.32, SCRIM_STOPS);
+
+    // The pose of this frame (set by pose(t)): centre, radius, and the scale of lines and specks.
+    let X = HOLD_X;
+    let Y = HOLD_Y;
+    let RR = HOLD_R;
+    let KK = K_HOLD;
+    function pose(t) {
+      const u = smooth(T_RISE0, T_RISE1, t);
+      X = HOLD_X;
+      Y = lerp(START_Y, HOLD_Y, u);
+      RR = lerp(START_R, HOLD_R, u);
+      KK = Math.max(0.35, RR / 225);
+    }
+    const lw = (px) => Math.max(1, px * KK);
+
+    // A table of seeded noise for flicker and twinkle (the frame for t never depends on the past).
+    const NOISE = new Float32Array(1024);
+    for (let i = 0; i < 1024; i++) NOISE[i] = rnd();
+    const noise = (a, b) => NOISE[(Math.imul(a, 73856093) ^ Math.imul(b, 19349663)) & 1023];
+
+    /* ------------------------------------------------------------- spin --- */
+
+    // How fast the reactor turns (1 = cruising): spins up, overspeeds at the flare, surges, spins down.
+    function spinAt(t) {
+      const up = 0.55 * smooth(0, 500, t) + 0.45 * smooth(500, 1400, t);
+      const over = 1.1 * smooth(T_FLARE - 120, T_FLARE + 200, t) * (1 - smooth(T_FLARE + 450, T_FLARE + 2000, t));
+      const surge = 0.9 * smooth(T_SURGE - 150, T_SURGE + 100, t) * (1 - smooth(T_SURGE + 300, T_SURGE + 1500, t));
+      const down = 1 - 0.85 * smooth(T_DOWN, T_DOWN + 1500, t);
+      return (up + over + surge) * down;
+    }
+    // Its integral, tabulated: how far a ring turning at speed 1 has turned by t.
+    const STEP = 10;
+    const NA = Math.ceil((DURATION + 200) / STEP) + 2;
+    const turned = new Float64Array(NA);
+    for (let i = 1; i < NA; i++) turned[i] = turned[i - 1] + spinAt((i - 0.5) * STEP) * STEP / 1000;
+    function spun(t) {
+      const x = clamp(t / STEP, 0, NA - 1.001);
+      const i = x | 0;
+      return turned[i] + (turned[i + 1] - turned[i]) * (x - i);
+    }
+
+    /* ------------------------------------------------------------ rings --- */
+
+    function addRing(o) {
+      o.th0 = rnd() * TAU;
+      o.whip = o.whip || 0;
+      const n = o.n || 0;
+      o.s0 = new Float32Array(n);                  // segment start (radians, in the ring's frame)
+      o.sl = new Float32Array(n);                  // segment length
+      o.tb = new Float32Array(n);                  // when it breaks into sparks
+      if (o.seg === 'even') {
+        for (let j = 0; j < n; j++) { o.s0[j] = j * TAU / n; o.sl[j] = o.fill * TAU / n; }
+      } else if (o.seg === 'rand') {
+        const lens = [];
+        const gaps = [];
+        let sum = 0;
+        for (let j = 0; j < n; j++) { const a = 0.45 + rnd(); const gp = 0.14 + rnd() * 0.3; lens.push(a); gaps.push(gp); sum += a + gp; }
+        let at = 0;
+        for (let j = 0; j < n; j++) { o.s0[j] = at; o.sl[j] = lens[j] * TAU / sum; at += (lens[j] + gaps[j]) * TAU / sum; }
+      }
+      for (let j = 0; j < n; j++) o.tb[j] = o.breakAt + rnd() * o.breakSpan;
+      return o;
+    }
+
+    // Inside out: f is the radius in R, w the line width in px (at R = 225), sp radians per second
+    // at cruising speed, dir +1 clockwise.
+    const hub = addRing({ f: 0.205, w: 2.4, sp: 0, dir: 1, t0: 20, dur: 460, breakAt: T_CORE_OUT, breakSpan: 0 });
+    const coil = addRing({ f: 0.335, w: 18, sp: 0.36, dir: 1, t0: 90, dur: 420, seg: 'even', n: 14, fill: 0.7, breakAt: T_BREAK + 650, breakSpan: 520 });
+    const dash = addRing({ f: 0.47, w: 1.8, sp: 0.8, dir: -1, t0: 200, dur: 500, n: 72, breakAt: T_BREAK + 380, breakSpan: 600 });
+    const arcs = addRing({ f: 0.6, w: 5.5, sp: 1.0, dir: 1, t0: 270, dur: 560, whip: 2.4, seg: 'rand', n: 5, breakAt: T_BREAK + 260, breakSpan: 620 });
+    const ticks = addRing({ f: 0.735, w: 1.5, sp: 0.2, dir: -1, t0: 340, dur: 540, n: 96, breakAt: T_BREAK + 140, breakSpan: 600 });
+    const outer = addRing({ f: 0.875, w: 2.8, sp: 0.5, dir: -1, t0: 400, dur: 600, whip: 3.0, seg: 'rand', n: 3, breakAt: T_BREAK, breakSpan: 560 });
+    const rim = addRing({ f: 1.0, w: 1.3, sp: 0.22, dir: 1, t0: 460, dur: 700, seg: 'even', n: 4, fill: 0.085, breakAt: T_BREAK, breakSpan: 420 });
+    const field = { f: 1.2, th0: rnd() * TAU, sp: 0.07, dir: -1 };
+    const ARC_RINGS = [arcs, outer];
+
+    function angleOf(o, t) {
+      return o.th0 + o.dir * (o.sp * spun(t) - o.whip * (1 - easeOut(clamp((t - o.t0) / 1000, 0, 1))));
+    }
+
+    /* ----------------------------------------------------------- shock --- */
+
+    // The shockwave leaves the core where the reactor holds (it has risen by then).
+    const rho0 = 0.2 * HOLD_R;
+    let far = 0;
+    for (const p of [[0, 0], [W, 0], [0, H], [W, H]]) far = Math.max(far, Math.hypot(p[0] - HOLD_X, p[1] - HOLD_Y));
+    const rho1 = far + 60 * K_HOLD;
+    const shockRadius = (t) => rho0 + (rho1 - rho0) * (1 - Math.pow(1 - clamp((t - T_FLARE) / SHOCK_DUR, 0, 1), 4));
+    // When the shockwave reaches a point this far from the core.
+    const shockTime = (d) => T_FLARE + SHOCK_DUR * (1 - Math.pow(1 - clamp((d - rho0) / (rho1 - rho0), 0, 1), 0.25));
+
+    // The surge sends a smaller wave of light out from the core.
+    const SURGE_DUR = 1400;
+    const surgeRadius = (t) => RR * (0.25 + 3.3 * easeOut(clamp((t - T_SURGE) / SURGE_DUR, 0, 1)));
+    // When it reaches the words (the reactor has long settled by then).
+    const surgeOnWords = T_SURGE + SURGE_DUR * (1 - Math.cbrt(1 - clamp(((L.top - HOLD_Y) / HOLD_R - 0.25) / 3.3, 0, 0.999)));
+
+    // Rays of light thrown out by the flare.
+    const NRAY = 14;
+    const rayA = new Float32Array(NRAY);
+    const rayW = new Float32Array(NRAY);
+    const rayL = new Float32Array(NRAY);
+    for (let i = 0; i < NRAY; i++) { rayA[i] = (i + rnd() * 0.7) * TAU / NRAY; rayW[i] = 0.012 + rnd() * 0.022; rayL[i] = 0.55 + rnd() * 0.45; }
+
+    // Energy drawn into the core just before it flares.
+    const NCH = 52;
+    const chA = new Float32Array(NCH);
+    const chF = new Float32Array(NCH);
+    const chT = new Float32Array(NCH);
+    const chD = new Float32Array(NCH);
+    for (let i = 0; i < NCH; i++) {
+      chA[i] = rnd() * TAU;
+      chF[i] = 1.2 + rnd() * 1.6;
+      chD[i] = 300 + rnd() * 200;
+      chT[i] = T_FLARE + 30 - chD[i] - rnd() * 420;
+    }
+
+    /* ----------------------------------------------------------- words --- */
+
+    const wp = env.wordPoints(Math.round(clamp(1100 * K_HOLD * K_HOLD, 260, 1300)));
+    const nW = wp.pts.length >> 1;
+    const wx = new Float32Array(nW);
+    const wy = new Float32Array(nW);
+    const wReach = new Float32Array(nW);
+    const wSize = new Float32Array(nW);
+    let wordsOn = Infinity;
+    for (let i = 0; i < nW; i++) {
+      wx[i] = wp.pts[i * 2] + (rnd() - 0.5) * wp.step * 0.6;
+      wy[i] = wp.pts[i * 2 + 1] + (rnd() - 0.5) * wp.step * 0.6;
+      wReach[i] = shockTime(Math.hypot(wx[i] - HOLD_X, wy[i] - HOLD_Y)) + rnd() * 50;
+      wSize[i] = (1.5 + rnd() * 1.4) * K_HOLD;
+      if (wReach[i] < wordsOn) wordsOn = wReach[i];
+    }
+    if (!isFinite(wordsOn)) wordsOn = shockTime(L.top - HOLD_Y);
+    const wMinX = wp.minX;
+    const wMaxX = wp.maxX;
+    // Until the shockwave has passed the whole picture of the words, they show only inside it.
+    let wordsFar = 0;
+    {
+      const pad = L.titleSize * 0.6;
+      for (const x of [wMinX - pad, wMaxX + pad]) for (const y of [L.top - pad, L.bottom + pad]) wordsFar = Math.max(wordsFar, Math.hypot(x - HOLD_X, y - HOLD_Y));
+    }
+    // Where each line of words runs (from the points on its letters): the scanning bar lights a line
+    // only while it is over it, so it never leaves a smudge of light on the empty picture beside it.
+    const SCAN_LINES = [];
+    {
+      const split = L.year ? (L.titleY + L.yearY) / 2 : Infinity;
+      for (let q = 0; q < (L.year ? 2 : 1); q++) {
+        let x0 = Infinity;
+        let x1 = -Infinity;
+        for (let i = 0; i < nW; i++) {
+          if ((wy[i] < split) !== (q === 0)) continue;
+          if (wx[i] < x0) x0 = wx[i];
+          if (wx[i] > x1) x1 = wx[i];
+        }
+        if (x1 > x0) SCAN_LINES.push({ x0: x0, x1: x1, y: q ? L.yearY : L.titleY, h: (q ? L.yearSize : L.titleSize) * 1.7 });
+      }
+    }
+
+    /* --------------------------------------------------------- comets --- */
+
+    // Bright filaments racing round the rings, each a head and a fading tail.
+    const comets = [];
+    const lanes = [0.47, 0.535, 0.6, 0.8, 0.875, 1.0, 1.1];
+    for (let i = 0; i < 14; i++) {
+      const surge = i >= 9;
+      comets.push({
+        f: lanes[(rnd() * lanes.length) | 0],
+        thick: rnd() < 0.45 ? 1 : 0,
+        speed: (2.3 + rnd() * 2.4) * (rnd() < 0.5 ? 1 : -1),
+        ph: rnd() * TAU,
+        tail: 0.75 + rnd() * 1.0,
+        on: surge ? T_SURGE - 120 + rnd() * 260 : T_FLARE + 100 + i * 110 + rnd() * 160,
+        off: surge ? T_SURGE + 1300 + rnd() * 900 : T_DOWN + 150 + rnd() * 900,
+        blink: 0.0005 + rnd() * 0.0007,
+        bph: rnd() * TAU
+      });
+    }
+    const COMET_PARTS = 6;
+
+    /* ---------------------------------------------------------- bolts --- */
+
+    // Short-lived arcs of current jumping between two rings.
+    const bolts = [];
+    const pairs = [[0.39, 0.6], [0.6, 0.875], [0.875, 1.0], [0.47, 0.735]];
+    for (let t = T_FLARE + 450; t < T_DOWN + 300;) {
+      const pr = pairs[(rnd() * pairs.length) | 0];
+      bolts.push({ t: t, dur: 90 + rnd() * 140, th: rnd() * TAU, d: (rnd() - 0.5) * 0.5, f1: pr[0], f2: pr[1], id: bolts.length });
+      t += (t > T_SURGE - 200 && t < T_SURGE + 900 ? 90 : 230) + rnd() * 520;
+    }
+    const BOLT_PTS = 8;
+
+    /* ---------------------------------------------------------- motes --- */
+
+    // Specks of light thrown into orbit by the flare.
+    const NM = 96;
+    const motes = [];
+    for (let i = 0; i < NM; i++) {
+      const band = rnd();
+      const f = band < 0.2 ? 0.24 + rnd() * 0.14 : band < 0.72 ? 0.42 + rnd() * 0.55 : 1.05 + rnd() * 0.45;
+      const tilted = rnd() < 0.24;
+      motes.push({
+        f: f,
+        ecc: tilted ? 0.32 + rnd() * 0.36 : 1,
+        tilt: rnd() * Math.PI,
+        w: (0.75 + rnd() * 0.6) * Math.pow(0.6 / f, 1.2) * (rnd() < 0.62 ? 1 : -1),
+        ph: rnd() * TAU,
+        size: 1.1 + rnd() * 1.5,
+        app: T_FLARE + 30 + rnd() * 650,
+        exit: T_BREAK + rnd() * 1100,
+        gold: rnd() < 0.1,
+        glow: rnd() < 0.7,
+        tw: rnd() * TAU
+      });
+    }
+
+    /* --------------------------------------------------------- sparks --- */
+
+    // What the rings break into: born where a segment was at the moment it breaks.
+    const MAXS = 1000;
+    const sx = new Float32Array(MAXS);
+    const sy = new Float32Array(MAXS);
+    const svx = new Float32Array(MAXS);
+    const svy = new Float32Array(MAXS);
+    const stb = new Float32Array(MAXS);
+    const slife = new Float32Array(MAXS);
+    const ssz = new Float32Array(MAXS);
+    const sdrag = new Float32Array(MAXS);
+    const scol = new Uint8Array(MAXS);              // 0 ice, 1 white, 2 gold
+    const sglow = new Uint8Array(MAXS);
+    let ns = 0;
+    const k = K_HOLD;
+    function emit(a, rr, tb, vt, col) {
+      if (ns >= MAXS) return;
+      const i = ns++;
+      const c = Math.cos(a);
+      const s = Math.sin(a);
+      const v = vt * (0.7 + rnd() * 0.6);
+      const vr = (35 + rnd() * 150) * k;
+      sx[i] = HOLD_X + c * rr;
+      sy[i] = HOLD_Y + s * rr;
+      svx[i] = -s * v + c * vr + (rnd() - 0.5) * 34 * k;
+      svy[i] = c * v + s * vr + (rnd() - 0.5) * 34 * k;
+      stb[i] = tb;
+      slife[i] = 1100 + rnd() * 1000;
+      ssz[i] = (1.4 + rnd() * 1.8) * k;
+      sdrag[i] = 0.45 + rnd() * 0.7;
+      scol[i] = col != null ? col : rnd() < 0.18 ? 1 : 0;
+      sglow[i] = rnd() < 0.45 ? 1 : 0;
+    }
+    const tangential = (o, t, rr) => o.dir * o.sp * spinAt(t) * rr;
+    // Segmented rings: sparks along each segment, spaced about 7 px apart.
+    for (const o of [outer, arcs, coil, rim]) {
+      const r0 = o.f * HOLD_R;
+      for (let j = 0; j < o.n; j++) {
+        const tb = o.tb[j];
+        const a0 = angleOf(o, tb) + o.s0[j];
+        const m = clamp(Math.round(o.sl[j] * r0 / (7 * k)) * (o === coil ? 2 : 1), 2, 22);
+        for (let q = 0; q < m; q++) {
+          const rr = r0 + (rnd() - 0.5) * o.w * k * 0.8;
+          emit(a0 + ((q + rnd()) / m) * o.sl[j], rr, tb + rnd() * 90, tangential(o, tb, rr), o === rim && rnd() < 0.35 ? 2 : null);
+        }
+      }
+    }
+    // The fine rings and the rim's hairline go as a scatter of sparks while they fade.
+    for (let j = 0; j < 46; j++) { const tb = dash.breakAt + rnd() * dash.breakSpan; emit(angleOf(dash, tb) + rnd() * TAU, dash.f * HOLD_R, tb, tangential(dash, tb, dash.f * HOLD_R)); }
+    for (let j = 0; j < 48; j++) { const tb = ticks.breakAt + rnd() * ticks.breakSpan; emit(angleOf(ticks, tb) + rnd() * TAU, (ticks.f + rnd() * 0.05) * HOLD_R, tb, tangential(ticks, tb, ticks.f * HOLD_R)); }
+    for (let j = 0; j < 40; j++) { const tb = rim.breakAt + rnd() * rim.breakSpan; emit(angleOf(rim, tb) + rnd() * TAU, HOLD_R, tb, tangential(rim, tb, HOLD_R), rnd() < 0.12 ? 2 : null); }
+    for (let j = 0; j < 30; j++) emit(rnd() * TAU, hub.f * HOLD_R * (0.4 + rnd() * 0.6), T_CORE_OUT + rnd() * 80, 0, rnd() < 0.4 ? 1 : 0);
+    // Drawn in alpha bands, one path per colour and band.
+    const SPARK_FILL = [ICE, WHITE, GOLD];
+    const BANDS = 4;
+
+    /* ------------------------------------------------------------ draw --- */
+
+    let count = 0;
+
+    function sprite(img, x, y, size, a) {
+      if (a <= 0.004 || size <= 0.5) return;
+      ctx.globalAlpha = a > 1 ? 1 : a;
+      ctx.drawImage(img, x - size / 2, y - size / 2, size, size);
+      count++;
+    }
+
+    /** A picture made at device resolution, centred on (x, y), copied 1:1 onto whole device pixels. */
+    function blit(img, x, y, a) {
+      if (a <= 0.004) return;
+      ctx.globalAlpha = a > 1 ? 1 : a;
+      ctx.drawImage(img, Math.round(x * DPR - img.width / 2) / DPR, Math.round(y * DPR - img.height / 2) / DPR, img.width / DPR, img.height / DPR);
+      count++;
+    }
+
+    /** How strongly the core beats at t (0 calm, about 1 at the top of a beat, more in the surge). */
+    function beat(t) {
+      let b = 0;
+      for (let i = 0; i < PULSES.length; i++) {
+        const age = t - PULSES[i];
+        if (age >= 0 && age < 1400) b = Math.max(b, Math.exp(-age / 260) * smooth(0, 60, age));
+      }
+      const sa = t - T_SURGE;
+      if (sa >= 0 && sa < 2400) b = Math.max(b, 1.4 * Math.exp(-sa / 420) * smooth(0, 90, sa));
+      return b;
+    }
+
+    /** The reactor losing power: 1 steady, dropping in flickers as it spins down. */
+    function power(t) {
+      if (t < T_DOWN + 200) return 1;
+      const dying = smooth(T_DOWN + 200, T_BREAK + 500, t);
+      return 1 - dying * 0.45 * noise(77, Math.floor(t / 55));
+    }
+
+    /** A soft flash over the frame at ignition (well under a quarter of full light). */
+    function drawFlash(t, fade) {
+      if (t >= 320) return;
+      const a = 0.2 * Math.pow(1 - t / 320, 2) * fade;
+      if (a <= 0.004) return;
+      const reach = Math.max(W, H) * 0.75;
+      const g = ctx.createRadialGradient(X, Y, 0, X, Y, reach);
+      g.addColorStop(0, 'rgba(200,247,255,1)');
+      g.addColorStop(0.25, 'rgba(80,200,255,0.5)');
+      g.addColorStop(1, 'rgba(30,140,255,0)');
+      ctx.globalAlpha = a;
+      ctx.fillStyle = g;
+      ctx.fillRect(Math.max(0, X - reach), Math.max(0, Y - reach), Math.min(W, X + reach) - Math.max(0, X - reach), Math.min(H, Y + reach) - Math.max(0, Y - reach));
+      count++;
+    }
+
+    /** The first ring of light at ignition, and the rays of the flare. */
+    function drawBurst(t, fade, low) {
+      const u = t / 620;
+      if (u < 1) {
+        ctx.strokeStyle = ICE;
+        ctx.lineWidth = lw(3.5 * (1 - u) + 1);
+        ctx.globalAlpha = 0.9 * Math.pow(1 - u, 1.5) * fade;
+        ctx.beginPath();
+        ctx.arc(X, Y, RR * (0.1 + 1.7 * easeOut(u)), 0, TAU);
+        ctx.stroke();
+        count++;
+      }
+      const v = (t - T_FLARE) / 1300;
+      if (v > 0 && v < 1 && !low) {
+        const a = Math.pow(1 - v, 2.2) * smooth(0, 0.03, v) * 0.45 * fade;
+        const len = RR * (1.4 + 3.4 * easeOut(v));
+        const g = ctx.createRadialGradient(X, Y, RR * 0.12, X, Y, len);
+        g.addColorStop(0, 'rgba(225,251,255,0.95)');
+        g.addColorStop(0.35, 'rgba(95,227,255,0.4)');
+        g.addColorStop(1, 'rgba(30,150,255,0)');
+        const rot = v * 0.35;
+        ctx.fillStyle = g;
+        ctx.globalAlpha = a;
+        ctx.beginPath();
+        for (let i = 0; i < NRAY; i++) {
+          const e = rayA[i] + rot;
+          ctx.moveTo(X, Y);
+          ctx.arc(X, Y, len * rayL[i], e - rayW[i], e + rayW[i]);
+          ctx.closePath();
+        }
+        ctx.fill();
+        count += NRAY;
+      }
+    }
+
+    function drawCharge(t, fade) {
+      if (t < T_FLARE - 1000 || t > T_FLARE + 40) return;
+      const head = new Path2D();
+      const tail = new Path2D();
+      let n = 0;
+      for (let i = 0; i < NCH; i++) {
+        const u = (t - chT[i]) / chD[i];
+        if (u <= 0 || u >= 1) continue;
+        // Falls in faster and faster, a bright head and a fainter tail streaming behind it.
+        const r = RR * (0.24 + chF[i] * (1 - u * u));
+        const len = RR * (0.04 + 0.32 * u * u) * Math.min(1, u * 6);
+        const c = Math.cos(chA[i]);
+        const s = Math.sin(chA[i]);
+        const mid = r + len * 0.35;
+        head.moveTo(X + c * r, Y + s * r);
+        head.lineTo(X + c * mid, Y + s * mid);
+        tail.moveTo(X + c * mid, Y + s * mid);
+        tail.lineTo(X + c * (r + len), Y + s * (r + len));
+        n++;
+      }
+      if (!n) return;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = CYAN;
+      ctx.lineWidth = lw(1.4);
+      ctx.globalAlpha = 0.4 * fade;
+      ctx.stroke(tail);
+      ctx.strokeStyle = WHITE;
+      ctx.lineWidth = lw(2);
+      ctx.globalAlpha = 0.9 * fade;
+      ctx.stroke(head);
+      ctx.lineCap = 'butt';
+      count += n * 2;
+    }
+
+    /** A soft dark backing behind the reactor so its light still reads over a bright scene. */
+    function drawScrim(t, fade) {
+      const a = 0.85 * smooth(T_RISE0 - 250, T_RISE1, t) * (1 - smooth(T_BREAK + 300, T_CORE_OUT + 300, t)) * fade;
+      if (a <= 0.004) return;
+      ctx.globalCompositeOperation = 'source-over';
+      if (t >= T_RISE1) blit(scrimPic, X, Y, a);
+      else {
+        const r = RR * 1.32;
+        const g = ctx.createRadialGradient(X, Y, 0, X, Y, r);
+        for (const st of SCRIM_STOPS) g.addColorStop(st[0], st[1]);
+        const x0 = Math.max(0, X - r);
+        const y0 = Math.max(0, Y - r);
+        ctx.globalAlpha = a;
+        ctx.fillStyle = g;
+        ctx.fillRect(x0, y0, Math.min(W, X + r) - x0, Math.min(H, Y + r) - y0);
+        count++;
+      }
+      ctx.globalCompositeOperation = 'lighter';
+    }
+
+    function drawCore(t, fade, b, low) {
+      // Size (diameter, in R) and brightness of the core.
+      let size;
+      let a = 1;
+      if (t < T_FLARE) {
+        const ign = smooth(0, 50, t);
+        size = 2.0 * Math.exp(-t / 200) * ign + 1.05 * smooth(60, 520, t) + 0.3 * ign;
+        // Charging: a flutter just before the flare.
+        if (t > T_FLARE - 320) { size += 0.35 * smooth(T_FLARE - 320, T_FLARE, t); a = 0.72 + 0.28 * noise(5, Math.floor(t / 40)); }
+      } else {
+        size = 1.55 + 1.3 * Math.exp(-(t - T_FLARE) / 280) + 0.45 * b;
+      }
+      // Dying: shrinks and dims, then one last pop.
+      if (t > T_CORE_OUT - 700) {
+        const d = smooth(T_CORE_OUT - 700, T_CORE_OUT, t);
+        size *= 1 - 0.8 * d;
+        a *= (1 - 0.5 * d) * (0.7 + 0.3 * noise(9, Math.floor(t / 45)));
+        if (t >= T_CORE_OUT) {
+          const pa = (t - T_CORE_OUT) / 420;
+          size = 1.7 * (0.5 + 0.5 * easeOut(clamp(pa, 0, 1)));
+          a = pa < 1 ? Math.pow(1 - pa, 2) * 0.9 : 0;
+        }
+      }
+      a *= fade;
+      // The reactor's glow on its surroundings, then the core itself.
+      const haloA = (0.5 * smooth(T_FLARE + 150, T_FLARE + 900, t) + 0.35 * b) * (1 - smooth(T_BREAK, T_CORE_OUT, t)) * fade;
+      if (t > T_FLARE + 150 && !low) blit(haloPic, X, Y, haloA);
+      sprite(tex.core, X, Y, size * RR, a);
+      // The anamorphic streak: wide at ignition and at the flare, a thin glint while it holds.
+      let sw = 0;
+      let sa = 0;
+      if (t < T_FLARE) { sw = W * 1.15 * (0.25 + 0.75 * easeOut(clamp(t / 260, 0, 1))); sa = 1 - smooth(120, 900, t); }
+      const ft = t - T_FLARE;
+      if (ft >= 0 && ft < 1500) { const w2 = W * 1.6 * (0.35 + 0.65 * easeOut(clamp(ft / 240, 0, 1))); const a2 = 1 - smooth(80, 1500, ft); if (a2 > sa) { sw = w2; sa = a2; } }
+      const hold = 0.2 * (1 + 0.8 * b) * smooth(T_FLARE + 600, T_FLARE + 1600, t) * (1 - smooth(T_CORE_OUT - 600, T_CORE_OUT, t));
+      if (hold > sa) { sw = RR * 6.2; sa = hold; }
+      if (t >= T_CORE_OUT) { sw = RR * 4 * (1 + (t - T_CORE_OUT) / 300); sa = a; }
+      if (sa > 0.004 && fade > 0) {
+        const sh = lw(30) * (0.6 + 0.4 * Math.min(1, sa));
+        ctx.globalAlpha = Math.min(1, sa * fade);
+        ctx.drawImage(tex.streak, X - sw / 2, Y - sh / 2, sw, sh);
+        count++;
+      }
+    }
+
+    function drawShock(t, fade, low) {
+      const u = (t - T_FLARE) / SHOCK_DUR;
+      if (u <= 0 || u >= 1) return;
+      const rho = shockRadius(t);
+      const a = Math.pow(1 - u, 1.25) * fade;
+      const w = (22 + 80 * easeOut(u)) * K_HOLD;
+      const inner = Math.max(0, rho - w);
+      const outerR = rho + 3 * K_HOLD;
+      const g = ctx.createRadialGradient(HOLD_X, HOLD_Y, inner, HOLD_X, HOLD_Y, outerR);
+      g.addColorStop(0, 'rgba(30,150,255,0)');
+      g.addColorStop(0.72, 'rgba(95,227,255,0.24)');
+      g.addColorStop(0.95, 'rgba(225,252,255,0.9)');
+      g.addColorStop(1, 'rgba(225,252,255,0)');
+      ctx.globalAlpha = a;
+      ctx.strokeStyle = g;
+      ctx.lineWidth = outerR - inner;
+      ctx.beginPath();
+      ctx.arc(HOLD_X, HOLD_Y, (inner + outerR) / 2, 0, TAU);
+      ctx.stroke();
+      count++;
+      // A thin gold echo just behind it.
+      const r2 = shockRadius(t - 110);
+      if (r2 > rho0 + 2 && !low) {
+        ctx.globalAlpha = a * 0.55;
+        ctx.strokeStyle = GOLD;
+        ctx.lineWidth = Math.max(1, 1.6 * K_HOLD);
+        ctx.beginPath();
+        ctx.arc(HOLD_X, HOLD_Y, r2, 0, TAU);
+        ctx.stroke();
+        count++;
+      }
+    }
+
+    /** Thin rings rippling out from the core on each beat, and a wave of light at the surge. */
+    function drawRipples(t, fade) {
+      ctx.strokeStyle = ICE;
+      ctx.lineWidth = lw(1.5);
+      for (let i = 0; i < PULSES.length; i++) {
+        const u = (t - PULSES[i]) / 1100;
+        if (u <= 0 || u >= 1) continue;
+        ctx.globalAlpha = 0.4 * Math.pow(1 - u, 1.6) * fade;
+        ctx.beginPath();
+        ctx.arc(X, Y, RR * (0.22 + 1.05 * easeOut(u)), 0, TAU);
+        ctx.stroke();
+        count++;
+      }
+      const u = (t - T_SURGE) / SURGE_DUR;
+      if (u > 0 && u < 1) {
+        const rho = surgeRadius(t);
+        const w = (14 + 46 * u) * KK;
+        const inner = Math.max(0, rho - w);
+        const g = ctx.createRadialGradient(X, Y, inner, X, Y, rho + 2 * KK);
+        g.addColorStop(0, 'rgba(30,150,255,0)');
+        g.addColorStop(0.75, 'rgba(95,227,255,0.3)');
+        g.addColorStop(0.95, 'rgba(225,252,255,0.85)');
+        g.addColorStop(1, 'rgba(225,252,255,0)');
+        ctx.globalAlpha = 0.6 * Math.pow(1 - u, 1.4) * fade;
+        ctx.strokeStyle = g;
+        ctx.lineWidth = rho + 2 * KK - inner;
+        ctx.beginPath();
+        ctx.arc(X, Y, (inner + rho + 2 * KK) / 2, 0, TAU);
+        ctx.stroke();
+        count++;
+      }
+    }
+
+    /** A ring's light gets a lift when a ripple passes over it. */
+    function lift(t, f) {
+      let b = 0;
+      for (let i = 0; i < PULSES.length; i++) {
+        const u = (t - PULSES[i]) / 1100;
+        if (u <= 0 || u >= 1) continue;
+        const d = (0.22 + 1.05 * easeOut(u) - f) / 0.07;
+        b = Math.max(b, Math.exp(-d * d) * (1 - u));
+      }
+      const us = (t - T_SURGE) / SURGE_DUR;
+      if (us > 0 && us < 1) { const d = (surgeRadius(t) / RR - f) / 0.09; b = Math.max(b, Math.exp(-d * d) * 1.3 * (1 - us)); }
+      return 1 + 0.7 * b;
+    }
+
+    /** Adds a ring's unbroken segments to the current path (shrinking towards their middle as they break). */
+    function segPath(o, t, th, r, fly) {
+      let n = 0;
+      for (let j = 0; j < o.n; j++) {
+        let s = o.s0[j];
+        let len = o.sl[j];
+        const since = t - o.tb[j];
+        if (since >= 140) continue;
+        if (since > 0) { const keep = 1 - since / 140; s += len * (1 - keep) / 2; len *= keep; }
+        let rr = r;
+        if (fly) {
+          // Coil blocks fly in from far out, one after another round the ring.
+          const u = clamp((t - o.t0 - j * 22) / o.dur, 0, 1);
+          if (u <= 0) continue;
+          rr = r * (1 + 1.7 * Math.pow(1 - easeOut(u), 1.4));
+        }
+        const a = th + s;
+        ctx.moveTo(X + Math.cos(a) * rr, Y + Math.sin(a) * rr);
+        ctx.arc(X, Y, rr, a, a + len);
+        n++;
+      }
+      return n;
+    }
+
+    /** A flash where a segment breaks. */
+    function breakFlashes(o, t, th, r, fade) {
+      if (t < o.breakAt || t > o.breakAt + o.breakSpan + 200) return;
+      for (let j = 0; j < o.n; j++) {
+        const since = t - o.tb[j];
+        if (since < 0 || since > 200) continue;
+        const a = th + o.s0[j] + o.sl[j] / 2;
+        sprite(glowIce, X + Math.cos(a) * r, Y + Math.sin(a) * r, (26 + o.sl[j] * 30) * KK, (1 - since / 200) * 0.9 * fade);
+      }
+    }
+
+    function drawRings(t, fade, low) {
+      const pw = power(t) * fade;
+      ctx.lineCap = 'butt';
+
+      // Hub: the ring right round the core, a faint lit disc inside it, and turbine vanes.
+      {
+        const o = hub;
+        const u = (t - o.t0) / o.dur;
+        if (u > 0 && t < T_CORE_OUT + 60) {
+          const r = o.f * RR * backOut(clamp(u, 0, 1)) * (t > T_CORE_OUT - 700 ? 1 - 0.55 * smooth(T_CORE_OUT - 700, T_CORE_OUT, t) : 1);
+          const a = smooth(0, 0.2, u) * pw;
+          ctx.beginPath();
+          ctx.arc(X, Y, Math.max(0.5, r), 0, TAU);
+          ctx.fillStyle = CYAN;
+          ctx.globalAlpha = a * 0.13;
+          ctx.fill();
+          ctx.strokeStyle = ICE;
+          ctx.lineWidth = lw(o.w);
+          ctx.globalAlpha = a * 0.95;
+          ctx.stroke();
+          const vane = spun(t) * 2.8;
+          ctx.beginPath();
+          for (let j = 0; j < 12; j++) {
+            const e = vane + j * TAU / 12;
+            const c = Math.cos(e);
+            const s = Math.sin(e);
+            ctx.moveTo(X + c * r * 0.45, Y + s * r * 0.45);
+            ctx.lineTo(X + c * r * 0.82, Y + s * r * 0.82);
+          }
+          ctx.strokeStyle = WHITE;
+          ctx.lineWidth = lw(2);
+          ctx.globalAlpha = a * 0.3;
+          ctx.stroke();
+          count += 14;
+        }
+      }
+
+      // Coils: thick blocks, each with a hot filament down its middle.
+      {
+        const o = coil;
+        if (t > o.t0) {
+          const th = angleOf(o, t);
+          const r = o.f * RR;
+          const a = smooth(o.t0, o.t0 + 260, t) * pw * lift(t, o.f);
+          ctx.beginPath();
+          const n = segPath(o, t, th, r, true);
+          if (n) {
+            if (!low) { ctx.strokeStyle = CYAN; ctx.lineWidth = lw(o.w + 12); ctx.globalAlpha = a * 0.12; ctx.stroke(); }
+            ctx.strokeStyle = CYAN;
+            ctx.lineWidth = lw(o.w);
+            ctx.globalAlpha = a * 0.42;
+            ctx.stroke();
+            ctx.strokeStyle = WHITE;
+            ctx.lineWidth = lw(3);
+            ctx.globalAlpha = a * 0.85;
+            ctx.stroke();
+            count += n * (low ? 2 : 3);
+          }
+          breakFlashes(o, t, th, r, fade);
+        }
+      }
+
+      // Fine dashes, written on round the ring.
+      {
+        const o = dash;
+        const u = (t - o.t0) / o.dur;
+        if (u > 0) {
+          const a = smooth(0, 0.15, u) * pw * lift(t, o.f) * (1 - smooth(o.breakAt + 100, o.breakAt + o.breakSpan + 200, t));
+          if (a > 0.004) {
+            const th = angleOf(o, t);
+            const r = o.f * RR;
+            const reveal = easeOut(clamp(u, 0, 1));
+            const period = TAU * r / o.n;
+            ctx.setLineDash([period * 0.42, period * 0.58]);
+            ctx.strokeStyle = ICE;
+            ctx.lineWidth = lw(o.w);
+            ctx.globalAlpha = a * 0.75;
+            ctx.beginPath();
+            ctx.arc(X, Y, r, th, th + reveal * TAU);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            count += o.n;
+            if (reveal < 0.995) sprite(glowIce, X + Math.cos(th + reveal * TAU) * r, Y + Math.sin(th + reveal * TAU) * r, 18 * KK, a);
+          }
+        }
+      }
+
+      // The arc rings: arcs that swirl into place (the inner one with a bright line inside).
+      for (const o of ARC_RINGS) {
+        const u = (t - o.t0) / o.dur;
+        if (u <= 0) continue;
+        const r = o.f * RR * (0.6 + 0.4 * backOut(clamp(u, 0, 1)));
+        const a = smooth(0, 0.3, u) * pw * lift(t, o.f);
+        const th = angleOf(o, t);
+        breakFlashes(o, t, th, r, fade);
+        ctx.beginPath();
+        const n = segPath(o, t, th, r, false);
+        if (!n) continue;
+        if (!low) { ctx.strokeStyle = CYAN; ctx.lineWidth = lw(o.w + 9); ctx.globalAlpha = a * 0.13; ctx.stroke(); }
+        ctx.strokeStyle = o === arcs ? CYAN : ICE;
+        ctx.lineWidth = lw(o.w);
+        ctx.globalAlpha = a * (o === arcs ? 0.62 : 0.85);
+        ctx.stroke();
+        if (o === arcs) {
+          ctx.strokeStyle = WHITE;
+          ctx.lineWidth = lw(1.4);
+          ctx.globalAlpha = a * 0.8;
+          ctx.stroke();
+        }
+        count += n * (low ? 2 : 3);
+        if (o === outer) {
+          // Small square studs at the ends of the outer arcs.
+          ctx.fillStyle = WHITE;
+          ctx.globalAlpha = a * 0.9;
+          const s = lw(5);
+          for (let j = 0; j < o.n; j++) {
+            if (t >= o.tb[j]) continue;
+            const e0 = th + o.s0[j];
+            const e1 = e0 + o.sl[j];
+            ctx.fillRect(X + Math.cos(e0) * r - s / 2, Y + Math.sin(e0) * r - s / 2, s, s);
+            ctx.fillRect(X + Math.cos(e1) * r - s / 2, Y + Math.sin(e1) * r - s / 2, s, s);
+            count += 2;
+          }
+        }
+      }
+
+      // Ticks: a dial of short marks, written on the other way round.
+      {
+        const o = ticks;
+        const u = (t - o.t0) / o.dur;
+        if (u > 0) {
+          const a = smooth(0, 0.15, u) * pw * lift(t, o.f) * (1 - smooth(o.breakAt + 60, o.breakAt + o.breakSpan + 150, t));
+          if (a > 0.004) {
+            const th = angleOf(o, t);
+            const r = o.f * RR;
+            const shown = Math.round(o.n * easeOut(clamp(u, 0, 1)));
+            ctx.beginPath();
+            for (let j = 0; j < shown; j++) {
+              const e = th - j * TAU / o.n;
+              const len = (j % 8 === 0 ? 0.075 : 0.035) * RR;
+              const c = Math.cos(e);
+              const s = Math.sin(e);
+              ctx.moveTo(X + c * r, Y + s * r);
+              ctx.lineTo(X + c * (r + len), Y + s * (r + len));
+            }
+            ctx.strokeStyle = ICE;
+            ctx.lineWidth = lw(o.w);
+            ctx.globalAlpha = a * 0.6;
+            ctx.stroke();
+            count += shown;
+          }
+        }
+      }
+
+      // Rim: a hairline that closes in from outside, four bright brackets and eight gold marks.
+      {
+        const o = rim;
+        const u = (t - o.t0) / o.dur;
+        if (u > 0) {
+          const r = RR * (1 + 0.45 * Math.pow(1 - easeOut(clamp(u, 0, 1)), 1.5));
+          const a = smooth(0, 0.3, u) * pw * lift(t, o.f);
+          const th = angleOf(o, t);
+          const hair = a * (1 - smooth(o.breakAt, o.breakAt + o.breakSpan + 200, t));
+          if (hair > 0.004) {
+            ctx.strokeStyle = CYAN;
+            ctx.lineWidth = lw(o.w);
+            ctx.globalAlpha = hair * 0.45;
+            ctx.beginPath();
+            ctx.arc(X, Y, r, 0, TAU);
+            ctx.stroke();
+            ctx.beginPath();
+            for (let j = 0; j < 8; j++) {
+              const e = th + (j + 0.5) * TAU / 8;
+              const c = Math.cos(e);
+              const s = Math.sin(e);
+              ctx.moveTo(X + c * (r - 0.03 * RR), Y + s * (r - 0.03 * RR));
+              ctx.lineTo(X + c * (r + 0.045 * RR), Y + s * (r + 0.045 * RR));
+            }
+            ctx.strokeStyle = GOLD;
+            ctx.lineWidth = lw(2.2);
+            ctx.globalAlpha = hair * 0.85;
+            ctx.stroke();
+            count += 9;
+          }
+          breakFlashes(o, t, th, r, fade);
+          ctx.beginPath();
+          const n = segPath(o, t, th, r, false);
+          if (n) {
+            ctx.strokeStyle = WHITE;
+            ctx.lineWidth = lw(4.5);
+            ctx.globalAlpha = a * 0.85;
+            ctx.stroke();
+            count += n;
+          }
+        }
+      }
+
+      // Field: a faint dashed ring further out, lit by the shockwave as it passes.
+      {
+        const ton = shockTime(field.f * HOLD_R);
+        const a = 0.24 * smooth(ton, ton + 300, t) * pw * (1 - smooth(T_BREAK, T_BREAK + 900, t)) * lift(t, field.f);
+        if (a > 0.004) {
+          const th = field.th0 + field.dir * field.sp * spun(t);
+          const r = field.f * RR;
+          const period = TAU * r / 120;
+          ctx.setLineDash([period * 0.5, period * 0.5]);
+          ctx.strokeStyle = CYAN;
+          ctx.lineWidth = lw(1.1);
+          ctx.globalAlpha = a;
+          ctx.beginPath();
+          ctx.arc(X, Y, r, th, th + TAU);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          count++;
+        }
+      }
+    }
+
+    function drawComets(t, fade, low) {
+      const heads = [];
+      for (let part = 0; part < COMET_PARTS; part++) {
+        for (let thick = 0; thick < 2; thick++) {
+          ctx.beginPath();
+          let n = 0;
+          for (let i = 0; i < comets.length; i++) {
+            const c = comets[i];
+            if (c.thick !== thick || t < c.on || t > c.off) continue;
+            if (low && (i & 1)) continue;
+            // A comet comes and goes by growing and shrinking its tail.
+            const vis = smooth(c.on, c.on + 300, t) * (1 - smooth(c.off - 350, c.off, t)) * (0.55 + 0.45 * Math.sin(t * c.blink + c.bph));
+            if (vis < 0.03) continue;
+            const head = c.ph + c.speed * t / 1000;
+            const tl = c.tail * vis / COMET_PARTS;
+            const r = c.f * RR;
+            const a0 = c.speed > 0 ? head - (part + 1) * tl : head + part * tl;
+            ctx.moveTo(X + Math.cos(a0) * r, Y + Math.sin(a0) * r);
+            ctx.arc(X, Y, r, a0, a0 + tl);
+            n++;
+            if (part === 0) heads.push(i, vis);
+          }
+          if (!n) continue;
+          const f = 1 - part / COMET_PARTS;
+          if (thick && part < 3 && !low) {
+            ctx.strokeStyle = CYAN;
+            ctx.lineWidth = lw(8);
+            ctx.globalAlpha = 0.16 * f * fade;
+            ctx.stroke();
+          }
+          ctx.strokeStyle = part < 2 ? WHITE : ICE;
+          ctx.lineWidth = lw((thick ? 2.8 : 1.7) * (0.45 + 0.55 * f));
+          ctx.globalAlpha = Math.pow(f, 1.4) * fade;
+          ctx.stroke();
+          count += n;
+        }
+      }
+      for (let h = 0; h < heads.length; h += 2) {
+        const c = comets[heads[h]];
+        const head = c.ph + c.speed * t / 1000;
+        sprite(glowIce, X + Math.cos(head) * c.f * RR, Y + Math.sin(head) * c.f * RR, (c.thick ? 24 : 16) * KK, heads[h + 1] * fade);
+      }
+    }
+
+    function drawBolts(t, fade, low) {
+      ctx.beginPath();
+      let n = 0;
+      const ends = [];
+      for (let i = 0; i < bolts.length; i++) {
+        const b = bolts[i];
+        const age = t - b.t;
+        if (age < 0 || age > b.dur) continue;
+        if (noise(b.id, Math.floor(t / 33)) < 0.22) continue;           // it flickers
+        const slot = Math.floor(t / 45);
+        for (let j = 0; j <= BOLT_PTS; j++) {
+          const s = j / BOLT_PTS;
+          const inner = j > 0 && j < BOLT_PTS;
+          const e = b.th + b.d * s + (inner ? (noise(b.id * 13 + j, slot) - 0.5) * 0.09 : 0);
+          const r = RR * (lerp(b.f1, b.f2, s) + (inner ? (noise(b.id * 29 + j, slot + 7) - 0.5) * 0.06 : 0));
+          const x = X + Math.cos(e) * r;
+          const y = Y + Math.sin(e) * r;
+          if (j === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+          if (j === 0 || j === BOLT_PTS) ends.push(x, y);
+        }
+        n++;
+      }
+      if (!n) return;
+      ctx.lineJoin = 'bevel';
+      if (!low) { ctx.strokeStyle = CYAN; ctx.lineWidth = lw(5); ctx.globalAlpha = 0.22 * fade; ctx.stroke(); }
+      ctx.strokeStyle = WHITE;
+      ctx.lineWidth = lw(1.3);
+      ctx.globalAlpha = 0.9 * fade;
+      ctx.stroke();
+      count += n * BOLT_PTS;
+      for (let e = 0; e < ends.length; e += 2) sprite(glowIce, ends[e], ends[e + 1], 16 * KK, 0.75 * fade);
+    }
+
+    function drawMotes(t, fade, low) {
+      const pts = [new Path2D(), new Path2D(), new Path2D()];          // ice bright, ice dim, gold
+      const trails = new Path2D();
+      let n = 0;
+      const turn = spun(t);
+      for (let i = 0; i < NM; i++) {
+        if (low && (i & 1)) continue;
+        const m = motes[i];
+        if (t < m.app) continue;
+        const out = t > m.exit ? (t - m.exit) / 1000 : 0;
+        let a = smooth(m.app, m.app + 250, t) * (1 - smooth(m.exit + 100, m.exit + 1000, t)) * fade;
+        a *= 0.6 + 0.4 * Math.sin(t * 0.004 + m.tw);
+        if (a < 0.03) continue;
+        const r = RR * m.f * (0.15 + 0.85 * easeOut(clamp((t - m.app) / 900, 0, 1))) + out * out * 320 * KK;
+        const ph = m.ph + m.w * turn;
+        const c = Math.cos(m.tilt);
+        const s = Math.sin(m.tilt);
+        const ex = Math.cos(ph) * r;
+        const ey = Math.sin(ph) * r * m.ecc;
+        const x = X + ex * c - ey * s;
+        const y = Y + ex * s + ey * c;
+        const sz = m.size * KK;
+        pts[m.gold ? 2 : a > 0.6 ? 0 : 1].rect(x - sz / 2, y - sz / 2, sz, sz);
+        if (!low && m.ecc === 1 && a > 0.2) {
+          const tl = Math.min(0.5, Math.abs(m.w) * 0.35);
+          const a0 = m.w > 0 ? ph - tl : ph;
+          trails.moveTo(X + Math.cos(a0) * r, Y + Math.sin(a0) * r);
+          trails.arc(X, Y, r, a0, a0 + tl);
+        }
+        if (m.glow) sprite(m.gold ? glowGold : glowCyan, x, y, sz * 6, a * 0.55);
+        n++;
+      }
+      if (!n) return;
+      ctx.lineWidth = lw(1);
+      ctx.strokeStyle = CYAN;
+      ctx.globalAlpha = 0.28 * fade;
+      ctx.stroke(trails);
+      ctx.fillStyle = WHITE;
+      ctx.globalAlpha = 0.95 * fade;
+      ctx.fill(pts[0]);
+      ctx.fillStyle = ICE;
+      ctx.globalAlpha = 0.5 * fade;
+      ctx.fill(pts[1]);
+      ctx.fillStyle = GOLD;
+      ctx.globalAlpha = 0.9 * fade;
+      ctx.fill(pts[2]);
+      count += n * 2;
+    }
+
+    function drawSparks(t, fade, low) {
+      if (t < T_BREAK - 10) return;
+      const paths = [];
+      for (let i = 0; i < SPARK_FILL.length * BANDS; i++) paths.push(null);
+      const step = low ? 2 : 1;
+      for (let i = 0; i < ns; i += step) {
+        const age = t - stb[i];
+        if (age < 0 || age >= slife[i]) continue;
+        const u = age / slife[i];
+        let a = Math.pow(1 - u, 1.3) * fade * (0.62 + 0.38 * Math.sin(age * 0.028 + i * 1.7));
+        if (a < 0.03) continue;
+        const as = age / 1000;
+        const f = (1 - Math.exp(-sdrag[i] * as)) / sdrag[i];
+        const x = sx[i] + svx[i] * f + 6 * k * as;
+        const y = sy[i] + svy[i] * f - 14 * k * as;
+        let s = ssz[i];
+        if (age < 140) { s *= 1 + 1.4 * (1 - age / 140); a = Math.min(1, a * 1.3); }
+        const band = Math.min(BANDS - 1, (a * BANDS) | 0);
+        const key = scol[i] * BANDS + band;
+        (paths[key] || (paths[key] = new Path2D())).rect(x - s / 2, y - s / 2, s, s);
+        if (sglow[i]) sprite(scol[i] === 2 ? glowGold : glowCyan, x, y, s * 6, a * 0.7);
+        count++;
+      }
+      for (let i = 0; i < paths.length; i++) {
+        if (!paths[i]) continue;
+        ctx.fillStyle = SPARK_FILL[(i / BANDS) | 0];
+        ctx.globalAlpha = ((i % BANDS) + 0.7) / BANDS;
+        ctx.fill(paths[i]);
+      }
+    }
+
+    /** Light on the words: the shockwave igniting them, scans, and the odd twinkle. */
+    function drawWordLights(t, fade, low, wordsA) {
+      if (!nW) return;
+      const step = low ? 2 : 1;
+      const bands = [null, null, null, null];        // points drawn in four bands of brightness
+      const put = (i, s, a) => {
+        const b = a >= 0.7 ? 3 : a >= 0.45 ? 2 : a >= 0.2 ? 1 : 0;
+        (bands[b] || (bands[b] = new Path2D())).rect(wx[i] - s / 2, wy[i] - s / 2, s, s);
+      };
+      let n = 0;
+      // 1. Ignition: every point flashes as the shockwave passes it, then glows on a moment.
+      if (t > wordsOn - 20 && t < wordsOn + 1300) {
+        for (let i = 0; i < nW; i += step) {
+          const age = t - wReach[i];
+          if (age < 0 || age > 1100) continue;
+          const a = (0.95 * Math.exp(-age / 70) + 0.08 * Math.exp(-age / 260)) * fade;
+          if (a < 0.05) continue;
+          put(i, wSize[i] * (0.75 + 0.45 * Math.exp(-age / 90)), a);
+          if (age < 120 && i % 3 === 0) sprite(glowCyan, wx[i], wy[i], 17 * k, a * 0.45);
+          n++;
+        }
+      }
+      // 2. A scan: a soft bar of light crosses the words, sparking the points it passes.
+      for (let j = 0; j < SCANS.length; j++) {
+        const u = (t - SCANS[j]) / SCAN_DUR;
+        if (u <= 0 || u >= 1) continue;
+        const band = (wMaxX - wMinX) * 0.06 + 18 * k;
+        const xs = lerp(wMinX - band * 2, wMaxX + band * 2, smooth(0, 1, u));
+        const env1 = Math.sin(u * Math.PI);
+        const ba = 0.3 * env1 * wordsA * fade;
+        if (ba > 0.004) {
+          for (let q = 0; q < SCAN_LINES.length; q++) {
+            const ln = SCAN_LINES[q];
+            const a = ba * smooth(ln.x0 - band, ln.x0 + band * 0.6, xs) * (1 - smooth(ln.x1 - band * 0.6, ln.x1 + band, xs));
+            if (a <= 0.004) continue;
+            ctx.globalAlpha = a;
+            ctx.drawImage(tex.bar, xs - band * 0.9, ln.y - ln.h / 2, band * 1.8, ln.h);
+            count++;
+          }
+        }
+        for (let i = 0; i < nW; i += step) {
+          const d = (wx[i] - xs) / band;
+          if (d <= -1 || d >= 1) continue;
+          const a = (1 - d * d) * (1 - d * d) * 0.95 * env1 * wordsA * fade;
+          if (a < 0.05) continue;
+          put(i, wSize[i], a);
+          n++;
+        }
+      }
+      // 3. Twinkles while the words hold, a burst of them when the surge reaches the words.
+      if (wordsA > 0.5) {
+        const slot = Math.floor(t / 130);
+        const within = (t - slot * 130) / 130;
+        const burst = t > surgeOnWords ? Math.exp(-(t - surgeOnWords) / 380) : 0;
+        const odds = 0.016 + 0.07 * burst;
+        for (let i = 0; i < nW; i += step) {
+          if (noise(i, slot) > odds) continue;
+          const a = (1 - within) * 0.9 * wordsA * fade;
+          put(i, wSize[i] * 1.3, a);
+          sprite(glowIce, wx[i], wy[i], 12 * k, a * 0.7);
+          n++;
+        }
+      }
+      if (!n) return;
+      const BAND_A = [0.12, 0.32, 0.58, 0.92];
+      for (let b = 0; b < 4; b++) {
+        if (!bands[b]) continue;
+        ctx.fillStyle = b >= 2 ? WHITE : ICE;
+        ctx.globalAlpha = BAND_A[b];
+        ctx.fill(bands[b]);
+      }
+      count += n;
+    }
+
+    function draw(t) {
+      count = 0;
+      if (!(t >= 0) || t >= DURATION) return 0;
+      const fade = 1 - smooth(FADE_FROM, DURATION - 120, t);
+      if (fade <= 0) return 0;
+      const low = env.low();
+      const b = beat(t);
+      pose(t);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      drawScrim(t, fade);
+      drawFlash(t, fade);
+      drawCharge(t, fade);
+      drawShock(t, fade, low);
+      drawBurst(t, fade, low);
+      drawRipples(t, fade);
+      drawCore(t, fade, b, low);
+      drawRings(t, fade, low);
+      drawBolts(t, fade, low);
+      drawComets(t, fade, low);
+      drawMotes(t, fade, low);
+      ctx.restore();
+
+      // The words, lit by the shockwave: they appear inside it as it passes over them.
+      const wa = smooth(wordsOn - 30, wordsOn + 240, t) * (1 - smooth(FADE_FROM, DURATION - 250, t));
+      if (wa > 0.003) {
+        const rho = shockRadius(t);
+        if (rho < wordsFar) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(HOLD_X, HOLD_Y, rho, 0, TAU);
+          ctx.clip();
+          env.words(wa, FILL, 1);
+          ctx.restore();
+        } else {
+          env.words(wa, FILL, 1);
+        }
+        count++;
+      }
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      drawWordLights(t, fade, low, wa);
+      drawSparks(t, fade, low);
+      ctx.restore();
+      return count;
+    }
+
+    return {
+      step: function () { /* every frame is drawn from t alone */ },
+      draw: draw,
+      prime: function () {
+        // fx.js draws the words in this fill once and keeps the picture: make it now, clipped to
+        // nothing so the canvas stays clear, instead of on the animation's first frame.
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(-4, -4, 1, 1);
+        ctx.clip();
+        env.words(1, FILL, 1);
+        ctx.restore();
+      }
+    };
+  }
+
+  APFx.register('arc', { name: 'Arc Reactor', duration: DURATION, create: create });
+})(typeof window !== 'undefined' ? window : this);

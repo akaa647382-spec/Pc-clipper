@@ -5,7 +5,9 @@ for the whole two and a half hours, and lands the snap on **12:00:00 AM**: the v
 found in your own file and put on midnight to the millisecond. It works with any copy of *Avengers: Endgame* or
 *Avengers Endgame: Encore*: Remux, Blu-ray or WEB rip, 4K or 1080p, whatever its exact length.
 
-**[Download the installer](../download/Avengers-Player-Setup-1.10.4.exe)** (Windows 10 / 11, 64-bit, about 93 MB).
+Created by **akaa**.
+
+**[Download the installer](../download/Avengers-Player-Setup-1.11.0.exe)** (Windows 10 / 11, 64-bit, about 93 MB).
 You bring your own copy of the movie. Nothing is uploaded anywhere.
 
 Older version, kept as it was: **[1.3.0 (legacy)](../download/Avengers-Player-Setup-1.3.0-legacy.exe)**. Only one
@@ -15,8 +17,8 @@ version is installed at a time: installing one over the other asks first, then r
 
 ## Install
 
-1. Run `Avengers-Player-Setup-1.10.4.exe`. It installs for your user only, so there is no administrator prompt.
-   If Avengers Player is already installed, Setup says so first and asks: *update it to version 1.10.4?*, *install
+1. Run `Avengers-Player-Setup-1.11.0.exe`. It installs for your user only, so there is no administrator prompt.
+   If Avengers Player is already installed, Setup says so first and asks: *update it to version 1.11.0?*, *install
    it again?* (the same version), or, when the installed one is newer, *replace it with this version?* **Yes** puts
    the new version into the folder of the old one (your settings, snap points and an armed countdown stay as they
    are); **No** leaves everything as it is and closes Setup. On a PC without it, Setup simply installs it.
@@ -247,11 +249,13 @@ Position, size, 12/24-hour clock, seven app themes (Arc Reactor, Hot Rod, Infini
 ## The Happy New Year animation
 
 **Display → Happy New Year animation** chooses what plays at midnight: **Stark** (golden dust assembles into HAPPY
-NEW YEAR and blows away again), **Fireworks**, five theme animations (**Arc Reactor**: rings of cyan light spin up
-around a blazing core; **Gamma**: a thunderclap of green light, shockwaves and lightning; **War Machine**: a
-targeting display locks onto the words and a salvo of tracers bursts above them; **TVA**: an amber timeline
-branches across the screen while a door of light opens; **Doom**: a turning circle of runes in green fire and the
-words in polished steel), **Minimal** (a small banner) or **Off**. *Preview the animation* plays it now.
+NEW YEAR and blows away again), **Fireworks**, five theme animations (**Arc Reactor**: a cyan reactor powers up above
+the words, its shockwave lights them up, then its rings break into drifting sparks; **Gamma**: a green thunderclap and
+shockwave, then lightning crackles around glowing lime words as embers rise; **War Machine**: a tactical display boots
+and locks onto the words in steel, then red tracers burst into silver flak above them; **TVA**: an amber timeline
+branches across the screen as a door of light opens behind the words, ringed by a clock dial; **Doom**: a circle of
+runes in green fire turns around the words in polished steel, then collapses into a green flash), **Minimal** (a
+small banner) or **Off**. *Preview the animation* plays it now.
 
 They are built to run at 60 frames a second on big screens too: the words are drawn once and reused, the animation gets ready a
 few seconds before midnight, and if a PC still cannot keep up, the soft glow is the first thing to go.
@@ -371,7 +375,14 @@ want, and switches the sound back on if the player was left muted.
   pre-flight list says so and the app uses the PC clock as it is.
 - Sound through Bluetooth speakers or a TV can lag behind the picture by a tenth of a second or more. That delay
   happens after the player and is not corrected.
-- This is an unofficial fan project. It ships no film content.
+- The animations were measured at 1920×1080 in the app's own browser engine on a 4-core cloud machine with no graphics
+  card: all eight keep 60 frames a second there (95% of frames within 16.8 ms). Your screen and graphics card were not
+  measured. If a PC cannot keep up, the soft glow is dropped first; *Preview the animation* shows it on yours.
+- The replay records the window with Chromium's screen capture. Whether your PC records it in H.264 (usually in the
+  graphics card, light) or falls back to WebM at 30 frames a second (in the processor, heavier) depends on the PC and
+  was not tried on Windows. Run the New Year's Eve simulation once: if the film stutters while it records, switch
+  **Replay of the night** off.
+- This is an unofficial fan project, created by akaa. It ships no film content.
 
 ## For developers
 
@@ -388,5 +399,6 @@ npm run build:win        # package for Windows and build ../download/Avengers-Pl
 | `src/core.js` | Timing maths and the drift controller (pure, unit-tested) |
 | `src/app.js` | The player: sync engine, slip recovery, test runs, overlay, panels |
 | `src/subs-core.js` | Subtitle decoding and parsing |
-| `src/fx.js` | The celebration animation |
+| `src/fx.js` | The celebration engine (Stark, Fireworks) and the style plug-in API |
+| `src/fx-*.js` | The theme animations, one file each: Arc Reactor, Gamma, War Machine, TVA, Doom |
 | `tests/` | `unit/` (node:test), `e2e/` (Playwright driving Electron), `fx/` (animation frames) |

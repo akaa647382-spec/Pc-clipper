@@ -4171,17 +4171,19 @@
     { id: 'doom', name: 'Doom', c: ['#0d1610', '#1f7a47', '#c4ccd2'] }
   ];
   /** The animations, in the order of the Display tab (the H key goes through them). */
-  const CELEB_ORDER = ['stark', 'fireworks', 'arc', 'gamma', 'warmachine', 'tva', 'doom', 'minimal', 'off'];
-  const CELEB_NAMES = { stark: 'Stark', fireworks: 'Fireworks', arc: 'Arc Reactor', gamma: 'Gamma', warmachine: 'War Machine', tva: 'TVA', doom: 'Doom', minimal: 'Minimal', off: 'Off' };
+  const CELEB_ORDER = ['stark', 'fireworks', 'arc', 'hotrod', 'infinity', 'gamma', 'warmachine', 'tva', 'doom', 'minimal', 'off'];
+  const CELEB_NAMES = { stark: 'Stark', fireworks: 'Fireworks', arc: 'Arc Reactor', hotrod: 'Hot Rod', infinity: 'Infinity', gamma: 'Gamma', warmachine: 'War Machine', tva: 'TVA', doom: 'Doom', minimal: 'Minimal', off: 'Off' };
   const celebName = (id) => CELEB_NAMES[id] || id;
   const CELEB_HINT = {
     stark: 'Golden dust sweeps in and assembles into HAPPY NEW YEAR, then blows away. The snap, in reverse.',
     fireworks: 'Classic fireworks with a gold title.',
-    arc: 'The reactor powers up: rings of cyan light spin up around a blazing core, and the words light up in its glow.',
-    gamma: 'A gamma surge: a thunderclap of green light, shockwaves and crackling lightning around the words.',
-    warmachine: 'Target locked: a tactical display locks onto the words, then a salvo of tracers bursts above them.',
-    tva: 'Branching time: an amber timeline branches across the screen while a door of light opens behind the words.',
-    doom: 'Sorcery and steel: a turning circle of runes in green fire, and the words in polished steel.',
+    arc: 'A cyan reactor powers up, its shockwave lights up the words, then its rings break into drifting sparks.',
+    hotrod: 'Red and gold: the words are forged in molten gold, with sparks and heat.',
+    infinity: 'Deep space in violet: an infinity loop of light draws itself around the words.',
+    gamma: 'A green thunderclap and shockwave, then lightning crackles around glowing lime words as embers and shards rise.',
+    warmachine: 'A tactical display boots and locks onto the words in steel, then red tracers burst into silver flak above them.',
+    tva: 'An amber timeline branches across the screen as a door of light opens behind the words, ringed by a clock dial.',
+    doom: 'A circle of runes in green fire turns and burns around the words in polished steel, then collapses into a green flash.',
     minimal: 'A small banner only. Nothing covers the scene.',
     off: 'No animation. The date under the clock still rolls over to January 1.'
   };

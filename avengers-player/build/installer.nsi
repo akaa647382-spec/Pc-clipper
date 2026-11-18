@@ -49,7 +49,7 @@ Unicode true
 
 !define APP_NAME "Avengers Player"
 !define APP_EXE "Avengers Player.exe"
-!define APP_PUBLISHER "Avengers Player"
+!define APP_PUBLISHER "akaa"
 !define UNINSTALLER_EXE "Uninstall Avengers Player.exe"
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\AvengersPlayer"
 !define /date BUILD_YEAR "%Y"

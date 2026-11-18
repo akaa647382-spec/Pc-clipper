@@ -614,6 +614,8 @@ select.inline { padding: 2px 4px; font-size: 12px; }
 .keys dt { white-space: nowrap; }
 .keys dd { margin: 0; color: var(--muted); }
 .about { color: var(--muted); font-size: 12px; line-height: 1.6; margin-bottom: 8px; user-select: text; }
+.about-credit { color: var(--text); font: 600 13px/1.5 var(--sans); margin-bottom: 4px; user-select: text; }
+.about-credit strong { color: var(--acc); font-weight: 700; letter-spacing: .02em; }
 
 /* ==================================================================== MODAL */
 .modal { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: rgba(0, 0, 0, .62); padding: 20px; animation: fadein .15s ease; }
