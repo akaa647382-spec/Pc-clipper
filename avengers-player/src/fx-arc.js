@@ -3,13 +3,19 @@
  *
  *   0.0 s     the instant it plays: a reactor core ignites in the middle of the frame (a white-hot
  *             burst, a lens streak, a ring of light) and its segmented rings assemble round it,
- *             inside out, spinning up.
+ *             inside out, spinning up. Its ring of light runs out over the title: each letter is a
+ *             tube that blinks once or twice as the ring passes it (0.1-0.6 s), but does not catch.
  *   0.7 s     the reactor rises into the space above the words and settles.
- *   1.4 s     the core flares; rays and a shockwave sweep out across the picture and the words light
- *             up in white and cyan as the wave passes over them.
+ *   1.4 s     the core flares; rays and a shockwave sweep out across the picture. As the wave
+ *             reaches each letter of the title (the middle first) the tube strikes: two or three
+ *             quick white-hot flickers, then it catches and settles into its colour.
+ *   1.7 s     energy pours down from the reactor into the year, one digit after another: each
+ *             fills with cyan light from the bottom up and tops out with a small flash (about 2.8 s).
  *   2-9 s     the rings spin, energy filaments race round them, current jumps between them, motes
  *             orbit the core, the core beats and a bar of light scans the words; a surge at 6.2 s.
  *   9.3 s     the rings spin down, flicker and break into drifting cyan sparks; the core collapses.
+ *   10.5 s    the words lose their power: the digits drain from the top down, then the letters of
+ *             the title flicker out one by one from the ends inwards.
  *   11-12.5 s everything fades out.
  *
  * Every frame is a function of the seed and t alone (nothing is simulated frame by frame), so
@@ -26,6 +32,23 @@
   const TAU = Math.PI * 2;
   // The words: white at the top to reactor cyan at the bottom, with a deep navy halo.
   const FILL = { stops: [[0, '#ffffff'], [0.5, '#dcfaff'], [1, '#4fd6ff']], halo: 'rgba(0,8,20,0.9)' };
+  // A tube striking: white-hot with a cyan bloom round it (added as light, never on its own).
+  const HOT = { stops: [[0, '#ffffff'], [0.55, '#f6feff'], [1, '#c4f5ff']], halo: 'rgba(95,227,255,0.9)' };
+  // A tube glowing without having caught (its blinks at ignition, its last glow going out): cyan
+  // neon light, added on top.
+  const GLOW = { stops: [[0, '#d8fbff'], [0.5, '#8cecff'], [1, '#4fd6ff']], halo: 'rgba(60,200,255,0.85)' };
+  // A digit filling with the reactor's light: deeper cyan, with the words' dark halo so it reads.
+  const CHARGE = { stops: [[0, '#9cefff'], [0.5, '#5fe3ff'], [1, '#22b8f5']], halo: 'rgba(0,8,20,0.9)' };
+  // (All of them have a halo, so the pictures of a letter are cut into cells of the same size
+  // and a crop at one height cuts them all at the same place.)
+
+  const T_YEAR0 = 1700;         // energy starts pouring into the first digit of the year
+  const YEAR_GAP = 230;         // the next digit starts this much later (less for a long year)
+  const POUR = 120;             // the stream takes this long to reach the digit
+  const FILL_MS = 380;          // and the digit this long to fill
+  const T_YEAR_OUT = 10450;     // the digits drain, the last one first
+  const DRAIN_MS = 300;
+  const T_TITLE_OUT = 10620;    // the letters of the title go out, from the ends inwards
 
   const T_RISE0 = 680;          // the reactor rises from the middle of the frame into place
   const T_RISE1 = 1320;
@@ -251,29 +274,22 @@
 
     /* ----------------------------------------------------------- words --- */
 
+    // Points on the letters, for the sparks that run over them (when each one sparks is set with
+    // the letters, below).
     const wp = env.wordPoints(Math.round(clamp(1100 * K_HOLD * K_HOLD, 260, 1300)));
     const nW = wp.pts.length >> 1;
     const wx = new Float32Array(nW);
     const wy = new Float32Array(nW);
     const wReach = new Float32Array(nW);
     const wSize = new Float32Array(nW);
-    let wordsOn = Infinity;
     for (let i = 0; i < nW; i++) {
       wx[i] = wp.pts[i * 2] + (rnd() - 0.5) * wp.step * 0.6;
       wy[i] = wp.pts[i * 2 + 1] + (rnd() - 0.5) * wp.step * 0.6;
-      wReach[i] = shockTime(Math.hypot(wx[i] - HOLD_X, wy[i] - HOLD_Y)) + rnd() * 50;
+      wReach[i] = rnd() * 50;
       wSize[i] = (1.5 + rnd() * 1.4) * K_HOLD;
-      if (wReach[i] < wordsOn) wordsOn = wReach[i];
     }
-    if (!isFinite(wordsOn)) wordsOn = shockTime(L.top - HOLD_Y);
     const wMinX = wp.minX;
     const wMaxX = wp.maxX;
-    // Until the shockwave has passed the whole picture of the words, they show only inside it.
-    let wordsFar = 0;
-    {
-      const pad = L.titleSize * 0.6;
-      for (const x of [wMinX - pad, wMaxX + pad]) for (const y of [L.top - pad, L.bottom + pad]) wordsFar = Math.max(wordsFar, Math.hypot(x - HOLD_X, y - HOLD_Y));
-    }
     // Where each line of words runs (from the points on its letters): the scanning bar lights a line
     // only while it is over it, so it never leaves a smudge of light on the empty picture beside it.
     const SCAN_LINES = [];
@@ -404,6 +420,117 @@
     // Drawn in alpha bands, one path per colour and band.
     const SPARK_FILL = [ICE, WHITE, GOLD];
     const BANDS = 4;
+
+    /* --------------------------------------------------------- letters --- */
+
+    // Each letter of the title is a tube the reactor lights; each digit of the year a cell it charges.
+    const LET = env.glyphs();
+    const TITLE = LET.filter((g) => g.line === 0);
+    const YEAR = LET.filter((g) => g.line === 1);
+
+    // When the ignition's ring of light (drawBurst) passes a point: it leaves the core where the
+    // reactor is born, before it rises.
+    function ringTime(x, y) {
+      const e = (Math.hypot(x - HOLD_X, y - START_Y) / START_R - 0.1) / 1.7;
+      return e <= 0 ? 0 : e >= 1 ? 620 : 620 * (1 - Math.cbrt(1 - e));
+    }
+
+    // A tube's moments are lists of flashes [from, to, fill, hot] in ms: fill is the letter in its
+    // colour, hot the white-hot light added on top. Between flashes only a dying glow is left.
+    const nT = TITLE.length;
+    const tubes = TITLE.map((g) => {
+      // The ignition: as the ring passes, the tube blinks (light only), once or twice, and fails.
+      const b1 = ringTime(g.cx, g.cy) + 60 + rnd() * 110;
+      const blinks = [[b1, b1 + 34 + rnd() * 26, 0, 0.5 + rnd() * 0.2]];
+      if (rnd() < 0.65) { const b2 = blinks[0][1] + 80 + rnd() * 130; blinks.push([b2, b2 + 24 + rnd() * 18, 0, 0.3 + rnd() * 0.15]); }
+      // and tries again, here and there, while the reactor draws its charge in before the flare.
+      if (rnd() < 0.55) {
+        const b3 = Math.max(blinks[blinks.length - 1][1] + 90, T_FLARE - 560 + rnd() * 420);
+        if (b3 < T_FLARE - 80) blinks.push([b3, b3 + 26 + rnd() * 18, 0, 0.26 + rnd() * 0.16]);
+      }
+      // The flare: the shockwave reaches it, two or three quick flickers, and it catches.
+      // The further from the middle, the longer it takes to catch, so the title lights from the
+      // middle outwards.
+      const at = shockTime(Math.hypot(g.cx - HOLD_X, g.cy - HOLD_Y)) + rnd() * 25;
+      const side = nT > 1 ? Math.abs(g.i - (nT - 1) / 2) / ((nT - 1) / 2) : 0;
+      const strike = [];
+      const nf = rnd() < 0.3 + 0.5 * side ? 3 : 2;
+      let s = 0;
+      for (let q = 0; q < nf; q++) {
+        const len = 22 + rnd() * 24;
+        const p = q === 0 ? 0.8 + rnd() * 0.2 : 0.45 + rnd() * 0.45;
+        strike.push([s, s + len, p * 0.8, p]);
+        s += len + 40 + rnd() * 50 + side * 70;
+      }
+      // Power-down, from the ends inwards: a sag, a last surge, a sputter or two, then dark.
+      const out = T_TITLE_OUT + Math.min(g.i, nT - 1 - g.i) * 72 + rnd() * 50;
+      const down = [];
+      let o = 0;
+      const seg = (len, fill, hot) => { down.push([o, o + len, fill, hot]); o += len; };
+      seg(45 + rnd() * 45, 0.42, 0);
+      seg(28 + rnd() * 20, 1, 0.5);
+      seg(45 + rnd() * 55, 0.1, 0);
+      if (rnd() < 0.6) { seg(24 + rnd() * 20, 0.62, 0.22); seg(40 + rnd() * 40, 0.06, 0); }
+      return { g: g, blinks: blinks, at: at, strike: strike, caught: at + s, out: out, down: down, dark: out + o };
+    });
+
+    // The year: energy pours from the reactor into each digit in turn, which fills from the bottom up.
+    const nY = YEAR.length;
+    const yGap = nY > 1 ? Math.min(YEAR_GAP, 820 / (nY - 1)) : 0;
+    const digits = YEAR.map((g, j) => {
+      const at = T_YEAR0 + j * yGap + rnd() * 40;
+      return { g: g, at: at, full: at + POUR + FILL_MS, drain: T_YEAR_OUT + (nY - 1 - j) * 110 + rnd() * 30 };
+    });
+    // How full a digit is (0-1) at t: it fills quickly at first, then tops out; it drains smoothly.
+    function level(d, t) {
+      if (t >= d.drain) return 1 - smooth(0, DRAIN_MS, t - d.drain);
+      const u = clamp((t - d.at - POUR) / FILL_MS, 0, 1);
+      return 1 - (1 - u) * (1 - u);
+    }
+    // The height of the surface at that level (a little past the ink at both ends), and where that
+    // height cuts the letter's picture: fx.js cuts each letter into a cell this tall, halo included.
+    const levelY = (g, lv) => lerp(g.bottom + g.size * 0.05, g.top - g.size * 0.05, lv);
+    const CELL_PAD = (Math.max(6, L.titleSize * 0.28) * 1.6 + L.titleSize * 0.04) / Math.min(1, DPR) + 2;
+    function cropAt(g, y) {
+      const top = Math.floor((g.cy - g.size * 0.62 - CELL_PAD) * DPR) / DPR;
+      const bottom = Math.ceil((g.cy + g.size * 0.62 + CELL_PAD) * DPR) / DPR;
+      return clamp((y - top) / Math.max(1, bottom - top), 0, 1);
+    }
+
+    // Everything holds still in between: from ALL_ON the words are one picture until they lose power.
+    let ALL_ON = T_FLARE;
+    for (const tb of tubes) ALL_ON = Math.max(ALL_ON, tb.caught + 480);
+    for (const d of digits) ALL_ON = Math.max(ALL_ON, d.full + 440);
+    let ALL_OUT = T_YEAR_OUT;
+    for (const tb of tubes) ALL_OUT = Math.max(ALL_OUT, tb.dark + 460);
+    for (const d of digits) ALL_OUT = Math.max(ALL_OUT, d.drain + DRAIN_MS + 40);
+
+    // When each point on the words sparks: a point of the title as the shockwave passes it and when
+    // its tube goes out; a point of the year as the light filling (and later draining) its digit
+    // passes it.
+    const wOut = new Float32Array(nW);
+    const splitY = nY ? (L.titleY + L.yearY) / 2 : Infinity;
+    let sparkFrom = Infinity;
+    let sparkTo = -Infinity;
+    for (let i = 0; i < nW; i++) {
+      const year = wy[i] >= splitY;
+      const list = year ? digits : tubes;
+      let best = null;
+      let bd = Infinity;
+      for (const e of list) { const dd = Math.abs(e.g.cx - wx[i]); if (dd < bd) { bd = dd; best = e; } }
+      if (!best) { wReach[i] = -1e9; wOut[i] = -1e9; continue; }
+      if (year) {
+        const g = best.g;
+        const lv = clamp((levelY(g, 0) - wy[i]) / (levelY(g, 0) - levelY(g, 1)), 0, 1);
+        wReach[i] = best.at + POUR + FILL_MS * (1 - Math.sqrt(1 - lv)) + wReach[i] * 0.4;
+        wOut[i] = best.drain + DRAIN_MS * (1 - lv);
+      } else {
+        wReach[i] += shockTime(Math.hypot(wx[i] - HOLD_X, wy[i] - HOLD_Y));
+        wOut[i] = best.dark + wReach[i] % 40;
+      }
+      if (wReach[i] < sparkFrom) sparkFrom = wReach[i];
+      if (wReach[i] > sparkTo) sparkTo = wReach[i];
+    }
 
     /* ------------------------------------------------------------ draw --- */
 
@@ -1093,8 +1220,9 @@
         (bands[b] || (bands[b] = new Path2D())).rect(wx[i] - s / 2, wy[i] - s / 2, s, s);
       };
       let n = 0;
-      // 1. Ignition: every point flashes as the shockwave passes it, then glows on a moment.
-      if (t > wordsOn - 20 && t < wordsOn + 1300) {
+      // 1. Ignition: a point of the title flashes as the shockwave passes it, a point of the year as
+      // the light filling its digit rises past it; then it glows on a moment.
+      if (t > sparkFrom - 20 && t < sparkTo + 1100) {
         for (let i = 0; i < nW; i += step) {
           const age = t - wReach[i];
           if (age < 0 || age > 1100) continue;
@@ -1102,6 +1230,17 @@
           if (a < 0.05) continue;
           put(i, wSize[i] * (0.75 + 0.45 * Math.exp(-age / 90)), a);
           if (age < 120 && i % 3 === 0) sprite(glowCyan, wx[i], wy[i], 17 * k, a * 0.45);
+          n++;
+        }
+      }
+      // 1b. Power-down: a tube's points spit a last spark as it goes out, a digit's as it drains.
+      if (t > T_YEAR_OUT - 20 && t < ALL_OUT + 500) {
+        for (let i = 0; i < nW; i += step) {
+          const age = t - wOut[i];
+          if (age < 0 || age > 420) continue;
+          const a = 0.8 * Math.exp(-age / 90) * fade;
+          if (a < 0.05) continue;
+          put(i, wSize[i] * (0.7 + 0.4 * Math.exp(-age / 90)), a);
           n++;
         }
       }
@@ -1157,6 +1296,161 @@
       count += n;
     }
 
+    /* --------------------------------------------------------- letters --- */
+
+    const LIGHT = { op: 'lighter' };
+    const flash = [0, 0];
+    /** [fill, hot] of a tube s ms into a list of flashes (after a flash, a quickly dying glow). */
+    function flashes(list, s) {
+      flash[0] = 0;
+      flash[1] = 0;
+      for (let q = 0; q < list.length; q++) {
+        const f = list[q];
+        if (s < f[0]) break;
+        if (s < f[1]) { flash[0] = f[2]; flash[1] = f[3]; break; }
+        flash[0] = 0;
+        flash[1] = Math.max(f[2], f[3]) * 0.22 * Math.exp(-(s - f[1]) / 45);
+      }
+      return flash;
+    }
+
+    /** The title: each tube blinks at ignition, strikes at the flare, holds, and goes out. */
+    function drawTitle(t, fade) {
+      for (let q = 0; q < nT; q++) {
+        const tb = tubes[q];
+        let fill = 0;
+        let hot = 0;
+        let glow = 0;
+        if (t < tb.at) {
+          glow = flashes(tb.blinks, t)[1];
+        } else if (t < tb.caught) {
+          flashes(tb.strike, t - tb.at);
+          fill = flash[0];
+          hot = flash[1];
+        } else if (t < tb.out) {
+          const c = t - tb.caught;
+          fill = 1;
+          hot = 0.95 * Math.exp(-c / 170) * (1 - smooth(260, 460, c));
+        } else if (t < tb.dark) {
+          flashes(tb.down, t - tb.out);
+          fill = flash[0];
+          hot = flash[1];
+        } else {
+          const c = t - tb.dark;
+          glow = 0.42 * Math.exp(-c / 120) * (1 - smooth(220, 440, c));     // the last of its glow
+        }
+        if (fill > 0.003) { env.glyph(tb.g, fill * fade, FILL); count++; }
+        if (hot > 0.01) { env.glyph(tb.g, hot * fade, HOT, LIGHT); count++; }
+        if (glow > 0.01) { env.glyph(tb.g, glow * fade, GLOW, LIGHT); count++; }
+      }
+    }
+
+    /** The year: each digit fills with the reactor's light, flashes as it tops out, holds, drains. */
+    function drawYear(t, fade) {
+      for (let j = 0; j < nY; j++) {
+        const d = digits[j];
+        const g = d.g;
+        if (t < d.at + POUR) continue;
+        if (t < d.full || t >= d.drain) {
+          const lv = level(d, t);
+          if (lv <= 0.002) continue;
+          const v = cropAt(g, levelY(g, lv));
+          const band = cropAt(g, levelY(g, lv) + g.size * 0.05) - v;
+          // Filling: the light below the surface in cyan, the surface itself white-hot. Draining:
+          // the digit keeps its colour below a falling surface.
+          env.glyph(g, fade, t < d.full ? CHARGE : FILL, { crop: [0, v, 1, 1] });
+          env.glyph(g, 0.95 * fade, HOT, { op: 'lighter', crop: [0, v, 1, Math.min(1, v + band)] });
+          count += 2;
+        } else {
+          const c = t - d.full;
+          env.glyph(g, fade, FILL);
+          const cyan = 1 - smooth(0, 260, c);
+          if (cyan > 0.01) env.glyph(g, cyan * fade, CHARGE);
+          const hot = 0.9 * Math.exp(-c / 140) * (1 - smooth(240, 420, c));
+          if (hot > 0.01) env.glyph(g, hot * fade, HOT, LIGHT);
+          count += 3;
+        }
+      }
+    }
+
+    /** Energy pouring from the reactor's rim into the digits that are charging (behind the title). */
+    function drawStreams(t, fade, low) {
+      if (!nY || t < T_YEAR0 || t > digits[nY - 1].full + 200) return;
+      const path = new Path2D();
+      let n = 0;
+      for (let j = 0; j < nY; j++) {
+        const d = digits[j];
+        const s = t - d.at;
+        if (s <= 0 || s >= POUR + FILL_MS + 160) continue;
+        const x1 = d.g.cx;
+        const y1 = levelY(d.g, level(d, t));
+        const e = Math.atan2(y1 - Y, x1 - X);
+        const x0 = X + Math.cos(e) * RR * 0.97;
+        const y0 = Y + Math.sin(e) * RR * 0.97;
+        const head = easeOut(clamp(s / POUR, 0, 1));
+        const tail = Math.pow(clamp((s - POUR - FILL_MS) / 160, 0, 1), 1.6);    // topped out: the rest falls in
+        if (head - tail < 0.004) continue;
+        path.moveTo(lerp(x0, x1, tail), lerp(y0, y1, tail));
+        path.lineTo(lerp(x0, x1, head), lerp(y0, y1, head));
+        n++;
+      }
+      if (!n) return;
+      ctx.lineCap = 'round';
+      if (!low) { ctx.strokeStyle = CYAN; ctx.lineWidth = lw(16); ctx.globalAlpha = 0.14 * fade; ctx.stroke(path); }
+      ctx.strokeStyle = CYAN;
+      ctx.lineWidth = lw(4.5);
+      ctx.globalAlpha = 0.5 * fade;
+      ctx.stroke(path);
+      ctx.strokeStyle = ICE;
+      ctx.lineWidth = lw(1.5);
+      ctx.globalAlpha = 0.8 * fade;
+      ctx.stroke(path);
+      // Pulses of light racing down it.
+      ctx.setLineDash([lw(12), lw(26)]);
+      ctx.lineDashOffset = -t * 1.6 * KK;
+      ctx.strokeStyle = WHITE;
+      ctx.lineWidth = lw(3.4);
+      ctx.globalAlpha = fade;
+      ctx.stroke(path);
+      ctx.setLineDash([]);
+      ctx.lineDashOffset = 0;
+      ctx.lineCap = 'butt';
+      count += n * 4;
+    }
+
+    /** Where a stream meets a digit: the head as it falls, then a glow on the rising surface. */
+    function drawSplashes(t, fade) {
+      if (!nY || t < T_YEAR0 || t > digits[nY - 1].full + 700) return;
+      for (let j = 0; j < nY; j++) {
+        const d = digits[j];
+        const s = t - d.at;
+        if (s <= 0) continue;
+        const g = d.g;
+        if (s < POUR + FILL_MS + 160) {
+          // Where the stream leaves the reactor's rim.
+          const y1 = levelY(g, level(d, t));
+          const e = Math.atan2(y1 - Y, g.cx - X);
+          const out = smooth(0, 60, s) * (1 - smooth(POUR + FILL_MS, POUR + FILL_MS + 160, s));
+          sprite(glowCyan, X + Math.cos(e) * RR * 0.97, Y + Math.sin(e) * RR * 0.97, 46 * KK, 0.8 * out * fade);
+        }
+        if (s < POUR + FILL_MS) {
+          const y1 = levelY(g, level(d, t));
+          if (s < POUR) {
+            const head = easeOut(s / POUR);
+            const e = Math.atan2(y1 - Y, g.cx - X);
+            sprite(glowIce, lerp(X + Math.cos(e) * RR * 0.97, g.cx, head), lerp(Y + Math.sin(e) * RR * 0.97, y1, head), 34 * KK, 0.9 * fade);
+          } else {
+            sprite(glowIce, g.cx, y1, g.size * 0.55, 0.55 * fade);
+          }
+        } else {
+          // Topped out: a small flash at the top of the digit.
+          const c = s - POUR - FILL_MS;
+          const a = 0.75 * Math.exp(-c / 140) * fade;
+          if (a > 0.01) sprite(glowIce, g.cx, g.top, g.size * (0.7 + 0.5 * (1 - Math.exp(-c / 120))), a);
+        }
+      }
+    }
+
     function draw(t) {
       count = 0;
       if (!(t >= 0) || t >= DURATION) return 0;
@@ -1178,27 +1472,23 @@
       drawBolts(t, fade, low);
       drawComets(t, fade, low);
       drawMotes(t, fade, low);
+      drawStreams(t, fade, low);
       ctx.restore();
 
-      // The words, lit by the shockwave: they appear inside it as it passes over them.
-      const wa = smooth(wordsOn - 30, wordsOn + 240, t) * (1 - smooth(FADE_FROM, DURATION - 250, t));
-      if (wa > 0.003) {
-        const rho = shockRadius(t);
-        if (rho < wordsFar) {
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(HOLD_X, HOLD_Y, rho, 0, TAU);
-          ctx.clip();
-          env.words(wa, FILL, 1);
-          ctx.restore();
-        } else {
-          env.words(wa, FILL, 1);
-        }
+      // The words: built letter by letter by the reactor (see the top of this file). While they
+      // all hold still they are one picture.
+      if (t >= ALL_ON && t < T_YEAR_OUT) {
+        env.words(fade, FILL, 1);
         count++;
+      } else if (t < ALL_OUT) {
+        drawTitle(t, fade);
+        drawYear(t, fade);
       }
+      const wa = smooth(ALL_ON - 300, ALL_ON, t) * (1 - smooth(T_YEAR_OUT - 250, T_YEAR_OUT, t));
 
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
+      drawSplashes(t, fade);
       drawWordLights(t, fade, low, wa);
       drawSparks(t, fade, low);
       ctx.restore();
@@ -1209,14 +1499,18 @@
       step: function () { /* every frame is drawn from t alone */ },
       draw: draw,
       prime: function () {
-        // fx.js draws the words in this fill once and keeps the picture: make it now, clipped to
-        // nothing so the canvas stays clear, instead of on the animation's first frame.
+        // fx.js draws the words, and each letter in each fill, once and keeps the pictures: make
+        // them now (the words clipped to nothing so the canvas stays clear) instead of at midnight.
         ctx.save();
         ctx.beginPath();
         ctx.rect(-4, -4, 1, 1);
         ctx.clip();
         env.words(1, FILL, 1);
         ctx.restore();
+        env.warm(FILL);
+        env.warm(HOT);
+        if (nT) env.warm(GLOW, L.title, 0);
+        if (nY) env.warm(CHARGE, L.year, 1);
       }
     };
   }

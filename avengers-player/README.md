@@ -222,6 +222,12 @@ Top left of the picture: the **digital clock**, the **date** under it, and the *
 seconds the countdown grows inside that panel and ticks 10, 9, 8 … Nothing is drawn across the picture. At midnight the
 date rolls over from December 31 to January 1.
 
+Each app theme ticks the 10, 9, 8 its own way, inside the panel (Arc Reactor: a spinning cyan ring and a shockwave;
+Hot Rod: molten gold and sparks; Infinity: stardust and an orbiting comet; Gamma: a jolt and a crack of lightning;
+War Machine: brackets that lock on in red; TVA: an old television switching on; Doom: green fire cooling to steel),
+and 3, 2, 1 hit harder. **Display → Preview 10 · 9 · 8** plays the last ten seconds there right now, in the current
+theme (not during a test run or the countdown's last minute; click it again to stop).
+
 **Everything ticks with the clock.** Every countdown (overlay, standby screen, Mission tab, the late box) and the
 film's own time on the control bar change on the same instant as the clock's seconds, also when the start time falls
 between two seconds (9:29:28.6, say). While the film is locked to the clock (in sync, and again after a slip, a

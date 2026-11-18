@@ -4640,7 +4640,8 @@
       if (canTry) setText(el.snapShiftTry, 'Snap not there? Try ' + C.fmtDuration(later, { forceHours: true }) + ' (' + fmtSpan(extra) + ' later)');
       $$('button', el.optCelebration).forEach((b) => { b.classList.toggle('on', b.dataset.v === cfg.celebration); b.hidden = !Celebration.has(b.dataset.v); });
       setText(el.celebHint, CELEB_HINT[cfg.celebration] || '');
-      el.overlay.className = 'overlay pos-' + cfg.overlayPos + ' size-' + cfg.overlaySize;
+      // (A running 10 · 9 · 8 keeps its class: taking it off for a moment would restart its tick.)
+      el.overlay.className = 'overlay pos-' + cfg.overlayPos + ' size-' + cfg.overlaySize + (this.lastTen ? ' final' : '') + (el.overlay.classList.contains('done') ? ' done' : '');
       el.stage.dataset.ov = cfg.overlayPos;
       el.btnOverlay.classList.toggle('on', cfg.showOverlay);
       el.btnLock.innerHTML = cfg.lockControls ? ICON.lock : ICON.unlock;
@@ -4717,6 +4718,58 @@
       el.evLog.innerHTML = rows.map((e) => '<div><b>' + esc(C.fmtClock(new Date(e.at), true)) + '</b> ' + esc(e.text) + '</div>').join('') || '<div>Nothing yet.</div>';
     },
 
+    /* ---- the 10 · 9 · 8 of the clock panel, and its preview ---- */
+
+    /** The big ticking number: `n` (10 … 1), or 0 for none. Each new number restarts its tick (styles.css). */
+    setTen(n) {
+      el.overlay.classList.toggle('final', n > 0);
+      if (n === this.lastTen) return;
+      this.lastTen = n;
+      const v = el.ovCountVal;
+      v.classList.remove('pop');
+      if (!n) { v.classList.remove('last'); v.removeAttribute('data-n'); return; }
+      v.setAttribute('data-n', String(n));
+      v.classList.toggle('last', n <= 3);
+      void v.offsetWidth;
+      v.classList.add('pop');
+    },
+
+    tenPv: 0,           // while the preview runs: the clock moment its 10 · 9 · 8 counts down to
+
+    /** Why the preview cannot run now ('' when it can): a test run, or the countdown in its last minute. */
+    tenPreviewBlock(now) {
+      if (Engine.test) return 'Not during a test run: the preview would change what the test shows';
+      const s = Engine.session;
+      if (Engine.mode === 'armed' && s && s.targetEpoch - now > 0 && s.targetEpoch - now <= 60000) return 'The countdown is in its last minute: the real 10 · 9 · 8 is on its way';
+      return '';
+    },
+
+    /** Display tab: plays the final ten seconds in the clock panel now, with the theme; again stops it. Settings are not touched. */
+    toggleTenPreview() {
+      if (this.tenPv) { this.stopTenPreview(); return; }
+      const now = Clock.now();
+      const why = this.tenPreviewBlock(now);
+      if (why) { toast(why); return; }
+      // 10 at once, then 9 as the clock's second turns, like the real one; a second that is nearly
+      // over is let go by, so that the 10 is more than a flash.
+      let next = Math.ceil(now / 1000) * 1000;
+      if (next - now < 300) next += 1000;
+      this.tenPv = next + 9000;
+      this.renderTenButton();
+      if (!cfg.finalTen) toast('The 10 · 9 · 8 animation is switched off: this is how it would look');
+    },
+
+    stopTenPreview() {
+      if (!this.tenPv) return;
+      this.tenPv = 0;
+      this.renderTenButton();
+    },
+
+    renderTenButton() {
+      setText(el.previewTen, this.tenPv ? 'Stop the preview' : 'Preview 10 · 9 · 8');
+      el.previewTen.classList.toggle('on', !!this.tenPv);
+    },
+
     /* ---- per-frame render ---- */
 
     frame() {
@@ -4775,8 +4828,16 @@
       this.prevNow = now;
 
       /* overlay */
-      const ovOn = cfg.showOverlay && (cfg.showClock || cfg.showDate || cfg.showCount || cfg.finalTen);
+      // The 10 · 9 · 8 preview runs to its own end, unless a test run or the countdown's last minute
+      // (and with it the real 10 · 9 · 8) comes first.
+      let pv = 0;
+      if (this.tenPv) {
+        if (now >= this.tenPv || this.tenPreviewBlock(now)) this.stopTenPreview();
+        else pv = Math.min(10, Math.ceil((this.tenPv - now) / 1000));
+      }
+      const ovOn = pv > 0 || cfg.showOverlay && (cfg.showClock || cfg.showDate || cfg.showCount || cfg.finalTen);
       setHidden(el.overlay, !ovOn);
+      if (!ovOn && this.lastTen) this.setTen(0);
       if (ovOn) {
         setHidden(el.ovClock, !cfg.showClock);
         setHidden(el.ovDate, !cfg.showDate);
@@ -4785,10 +4846,13 @@
         // 10, 9, 8 …: for the last ten seconds the countdown row itself becomes the big ticking number.
         const cdSnap = s ? C.untilClockSecond(s.targetEpoch, now) : NaN;
         const ten = cfg.finalTen && s && Engine.mode === 'armed' && toSnap > 0 && toSnap <= 10000 ? C.countdownParts(cdSnap).total : 0;
-        let showCount = (cfg.showCount || ten > 0) && !!s;
+        let showCount = (cfg.showCount || ten > 0) && !!s || pv > 0;
         let done = false;
         if (showCount) {
-          if (toSnap > 0) {
+          if (pv > 0) {
+            setText(el.ovCountLbl, newYear ? 'NEW YEAR IN' : onTarget(s) ? 'THE SNAP IN' : 'THE TARGET IN');
+            setText(el.ovCountVal, String(pv));
+          } else if (toSnap > 0) {
             const parts = C.countdownParts(cdSnap);
             setText(el.ovCountLbl, newYear ? 'NEW YEAR IN' : onTarget(s) ? 'THE SNAP IN' : 'THE TARGET IN');
             setText(el.ovCountVal, ten ? String(ten) : parts.d > 0 || parts.h > 0 ? C.fmtCountdown(cdSnap) : C.pad(parts.m) + ':' + C.pad(parts.s));
@@ -4801,15 +4865,8 @@
           }
         }
         setHidden(el.ovCount, !showCount);
-        el.overlay.classList.toggle('final', ten > 0);
         el.overlay.classList.toggle('done', done);
-        if (ten && ten !== this.lastTen) {
-          el.ovCountVal.classList.remove('pop');
-          void el.ovCountVal.offsetWidth;
-          el.ovCountVal.classList.add('pop');
-        }
-        if (!ten && this.lastTen) el.ovCountVal.classList.remove('pop');
-        this.lastTen = ten;
+        if (ten || pv || this.lastTen) this.setTen(ten || pv);
         const badge = cfg.showSyncBadge && Engine.mode === 'armed';
         setHidden(el.ovSync, !badge);
         if (badge) {
@@ -5399,6 +5456,7 @@
     bindSelect(el.optSize, 'overlaySize');
     bindSelect(el.opt24h, 'use24h', (v) => v === '24');
     $$('button', el.optCelebration).forEach((b) => b.addEventListener('click', () => setCfg('celebration', b.dataset.v)));
+    el.previewTen.addEventListener('click', () => UI.toggleTenPreview());
     el.previewCelebration.addEventListener('click', () => {
       if (cfg.celebration === 'off') { toast('The animation is switched off'); return; }
       Celebration.play(Engine.session ? Engine.session.targetEpoch : Date.now());

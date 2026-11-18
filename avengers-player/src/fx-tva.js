@@ -4,18 +4,32 @@
  *   0.0 s     the instant it plays: a point of amber light flares in the middle of the frame, a
  *             single timeline shoots out of it to both edges, a ring of light races out to where the
  *             dial will be, and the point stretches into a tall slit.
+ *   0.25 s    the bureau's own machines build the words, the year first: an old split-flap clock wakes,
+ *             its cards flipping in one after another, left to right. The digits the new year shares
+ *             with the old one land at once (a little dim); the card of the digit that changes (the 7
+ *             of 2027) riffles through blank flaps and, at 0.7 s, flips over to its new digit, its
+ *             bottom half slapping down with a white-hot clack of light at 0.98 s, and the whole year
+ *             lights up. (When more digits change, 2029 to 2030, they land one after another, the
+ *             carry last.) The year that is ending is never shown. Every digit stays cut at its hinge.
  *   0.4 s     the slit opens into a tall door of amber light (retro scanlines, a soft CRT flicker, a
- *             rolling bar) and the words switch on like an old screen: a line that opens into them.
+ *             rolling bar).
  *   0.55 s    an abstract analog dial lights up round the door, a bright point sweeping its ring; its
  *             two hands spin round, one each way, and settle at ten past ten.
+ *   1.06 s    once the year has landed, the amber terminal's block cursor switches on and the title
+ *             types out letter by letter behind it from 1.28 s, each letter switching on like an old
+ *             screen (a bright line that opens into it); by 2.6 s both lines are complete and the
+ *             cursor blinks at the end of the line a few times, then goes out like an old screen.
+ *             (No year: the title types out from 0.5 s.)
  *   0.6-6 s   the timeline branches, and the branches branch again and again: a growing tree of
  *             luminous lines that blooms out towards the edges, every fork flashing as it splits.
  *             Pulses of light run out along the lines while motes drift out of the door.
  *   5.6 s     a surge: the door flares and a wave of light runs out through the whole tree.
  *   7.9 s     the branches are pruned back, the youngest first, into the single line, and the line
  *             is reeled back into the door; the hands wind back to midnight.
- *   10.35 s   the door closes to a vertical slit, which collapses and winks out.
- *   11.3 s    the words and whatever is left fade; nothing is drawn from 12.58 s.
+ *   10.35 s   the door closes to a vertical slit, which collapses and winks out. The cursor comes back
+ *             and erases the title from its end, every letter collapsing into a line and a dot, and
+ *             the year's flaps flip over to blank, right to left; the cursor goes out at 11.4 s.
+ *   11.3 s    whatever is left fades; nothing is drawn from 12.58 s.
  *
  * Only light is added over the film, and every frame is a function of the seed and t alone (nothing
  * is simulated frame by frame), so renderAt(t), a resize in the middle and the live animation all
@@ -39,6 +53,11 @@
   const FILL = { stops: [[0, '#fff4dc'], [0.5, '#f4a23c'], [1, '#c8622a']], halo: 'rgba(26,13,5,0.92)' };
   // White glyphs with no halo: the mask the scanlines on the words are cut from.
   const MASK = { stops: [[0, '#ffffff'], [1, '#ffffff']] };
+  // White-hot letters, added over the words for a moment as a letter switches on or a flap lands.
+  // (Their halo is invisible, but there: their pictures are cut exactly as the words' are.)
+  const HOTFILL = { stops: [[0, '#fffaf0'], [1, '#ffe4bd']], halo: 'rgba(26,13,5,0)' };
+  // Dark letters (cut the same way): a thin slice of one is the hinge across a digit of the clock.
+  const INK = { stops: [[0, '#170b04'], [1, '#170b04']], halo: 'rgba(26,13,5,0)' };
 
   const AMBER = '#f4a23c';
   const ORANGE = '#c8622a';
@@ -51,8 +70,6 @@
   const T_SLIT1 = 470;
   const T_OPEN0 = 430;         // the door opens
   const T_OPEN1 = 1350;
-  const T_WORDS0 = 360;        // the words switch on
-  const T_WORDS1 = 1080;
   const T_DIAL0 = 560;         // the dial lights up from the top
   const T_DIAL1 = 1800;
   const T_HANDS0 = 900;        // the hands spin up (time rushing on) ...
@@ -61,7 +78,6 @@
   const REWIND_DUR = 900;
   const T_SURGE = 5600;        // a wave of light runs out through the tree
   const SURGE_V = 1.5;         // px per ms at scale 1
-  const SHIMMERS = [1900, 3800, T_SURGE + 120, 7500];   // a band of light rolls down the words
   const T_PRUNE = 7900;        // the youngest branches are pruned first
   const PRUNE_SPAN = 1050;     // ... and the first generation this much later
   const T_BACK0 = 9750;        // the timeline is reeled back into the door
@@ -72,6 +88,29 @@
   const T_WINK1 = 11730;
   const T_DIALOFF0 = 10150;    // the dial goes out
   const T_DIALOFF1 = 11250;
+
+  // The words. The year, on a split-flap clock (the year that is ending is never shown): ...
+  const T_FLAPS = 250;         // the clock wakes, its cards flipping in left to right ...
+  const FLAP_STEP = 70;        // ... this far apart,
+  const FLAP_DUR = 220;        // ... each flip this long
+  const RIFFLE = 80;           // a digit that changes riffles through blank flaps, about this fast, ...
+  const T_ROLL = 700;          // ... until it flips over to its new digit
+  const ROLL_DUR = 360;
+  const ROLL_STEP = 200;       // the next digit to change (the carry: 2029 -> 2030) flips this much later
+  const FALL = 0.78;           // a flap falls in this share of its flip, then bounces on its stop
+  const BOUNCE = 0.1;
+  const WAIT_A = 0.74;         // the digits already up are a little dimmer until the new year is complete
+  const T_BLANK = 10760;       // at the end the flaps flip over to blank, right to left
+  const BLANK_STEP = 90;
+  const BLANK_DUR = 250;
+  // ... and the title, on the amber terminal, once the year has landed.
+  const CURSOR_AFTER = 80;     // the block cursor switches on this long after the year's clack ...
+  const TYPE_AFTER = 300;      // ... and the first letter is typed this long after it
+  const KEY = 88;              // ms a letter takes to type (a space 1.7 times that)
+  const BLINK = 1060;          // once typed, the cursor blinks (half of this on, half off) ...
+  const BLINKS = 3;            // ... this many times, then goes out
+  const T_ERASE = 10450;       // the cursor comes back and erases the title from its end
+  const ERASE_KEY = 52;
 
   // How a line looks in each generation: core width (at scale 1), glow and core colour, brightness.
   const GEN = [
@@ -551,6 +590,38 @@
     g.fillRect(0, 0, 4, 64);
     P.bar = bar;
 
+    // The terminal's block cursor: a cell of amber phosphor the height of the title's capitals,
+    // with the letters' own dark halo (it reads over a bright picture), cut into scanlines.
+    const ts = L.titleSize;
+    const cBlur = Math.max(6, ts * 0.28);                 // as the engine's halo (in the picture's pixels)
+    P.curW = ts * 0.56;
+    P.curH = ts * 0.8;
+    P.curPad = (cBlur * 1.6 + ts * 0.04) / Math.min(1, dpr) + 2;
+    const cur = canvas((P.curW + P.curPad * 2) * dpr, (P.curH + P.curPad * 2) * dpr);
+    g = cur.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.shadowColor = FILL.halo;
+    g.shadowBlur = cBlur;
+    g.shadowOffsetY = ts * 0.04;
+    gr = g.createLinearGradient(0, P.curPad, 0, P.curPad + P.curH);
+    gr.addColorStop(0, '#fff3d8');
+    gr.addColorStop(0.55, '#f9c674');
+    gr.addColorStop(1, '#f0a04a');
+    g.fillStyle = gr;
+    g.fillRect(P.curPad, P.curPad, P.curW, P.curH);
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.shadowColor = 'rgba(0,0,0,0)';
+    g.globalCompositeOperation = 'destination-out';
+    g.fillStyle = 'rgba(0,0,0,0.32)';
+    const cx0 = Math.round(P.curPad * dpr);
+    const cx1 = Math.round((P.curPad + P.curW) * dpr);
+    const cy1 = Math.round((P.curPad + P.curH) * dpr);
+    for (let yy = Math.round(P.curPad * dpr); yy < cy1; yy += scan) {
+      const hh = Math.min(scan - scanOn, cy1 - yy - scanOn);
+      if (hh > 0) g.fillRect(cx0, yy + scanOn, cx1 - cx0, hh);
+    }
+    P.cursor = cur;
+
     // The words' own scanlines: the glyphs are stamped once (env.words, no halo) and copied out,
     // then cut into lines. The canvas is cleared again at once; the next frame clears it anyway.
     const topD = Math.max(0, Math.floor((L.top - L.titleSize * 0.3) * dpr));
@@ -643,6 +714,111 @@
     const MOTE_SPR = [SPR.amber, SPR.mustard, SPR.cream];
     const door = { w: 0, hh: 0, open: 0, bright: 1 };
     let n = 0;                                   // primitives drawn this frame
+
+    /* ---------------------------------------- the machines that build the words --- */
+
+    const ALL = env.glyphs();
+    const TG = ALL.filter((g) => g.line === 0);
+    const YG = ALL.filter((g) => g.line === 1);
+    // Which digits change from the year that is ending (only when the year is a number). That year
+    // is never shown: it only tells the clock which cards still have to turn.
+    let OLD = null;
+    if (/^\d+$/.test(L.year)) {
+      const o = String(Number(L.year) - 1);
+      if (/^\d+$/.test(o) && o.length === L.year.length && YG.length === L.year.length) OLD = o;
+    }
+
+    // A card of the clock: each digit is cut at its middle (the hinge, a dark hairline across it)
+    // and turns on that hinge. The digit's picture (halo included) reaches halfCell above and below
+    // it, as the engine cuts it; the card itself reaches HC.
+    const ys = L.yearSize || 1;
+    const halfCell = ys * 0.62 + (Math.max(6, L.titleSize * 0.28) * 1.6 + L.titleSize * 0.04) / Math.min(1, dpr) + 2;
+    const HC = ys * 0.5;
+    const KF = Math.min(1, HC / halfCell);
+    const HG = 0;                                                    // the halves meet at the hinge
+    const HV = Math.max(0.6, 1.15 * s) / (2 * halfCell);             // half the hairline, as a share of the picture
+    let CWH = 0;                                                     // half a card's width
+    for (const g of YG) CWH = Math.max(CWH, (g.x1 - g.x0) / 2 + ys * 0.08);
+
+    // The clock's cards wake left to right. A digit the new year shares with the old one flips
+    // straight in; a digit that changes riffles through blank flaps until it flips over to its new
+    // digit, right to left, the carry last (2029 -> 2030), and lands with a clack. (With no year to
+    // compare, the cards just flip in and the last one clacks.)
+    const DIG = YG.map((g, k) => ({
+      g: g, k: k, tIn: T_FLAPS + k * FLAP_STEP, tRoll: -1, span: 0, tLand: 0, clack: false,
+      tOut: T_BLANK + (YG.length - 1 - k) * BLANK_STEP, hf: null, ha: 0, hot: 0
+    }));
+    let carry = 0;
+    for (let k = DIG.length - 1; k >= 0; k--) {
+      const d = DIG[k];
+      if (!OLD || OLD[k] === L.year[k]) continue;
+      d.tRoll = Math.max(T_ROLL + carry++ * ROLL_STEP, d.tIn + RIFFLE);
+      d.span = (d.tRoll - d.tIn) / Math.max(1, Math.round((d.tRoll - d.tIn) / RIFFLE));   // whole riffles
+      d.clack = true;
+    }
+    let landed = 0;
+    for (const d of DIG) {
+      d.tLand = d.tRoll >= 0 ? d.tRoll + ROLL_DUR * FALL : d.tIn + FLAP_DUR * FALL;
+      landed = Math.max(landed, d.tLand);
+    }
+    if (DIG.length && !carry) DIG[DIG.length - 1].clack = true;
+    const T_LANDED = landed;                     // the new year is complete
+
+    // The title: typed one character after another, then erased from its end.
+    const chars = Array.from(L.title);
+    const tCursor = DIG.length ? T_LANDED + CURSOR_AFTER : 300;
+    const tType = DIG.length ? T_LANDED + TYPE_AFTER : 520;
+    let keys = 0;
+    for (const ch of chars) keys += ch.trim() ? 1 : 1.7;
+    const keyMs = clamp((2700 - tType) / Math.max(1, keys), 45, KEY);  // a long title types faster
+    const TCH = [];
+    let tt = tType;
+    let gi = 0;
+    for (const ch of chars) {
+      const space = !ch.trim();
+      TCH.push({ g: space ? null : TG[gi++] || null, x: 0, tOn: tt, tOff: 0, m: null });
+      tt += space ? 1.7 * keyMs : keyMs * (0.82 + 0.36 * rnd());
+    }
+    // where the cursor sits on each character (its left edge), and after the last one
+    const tGap = L.titleSize * 0.14;
+    let lastX1 = null;
+    for (let c = 0; c < TCH.length; c++) {
+      const e = TCH[c];
+      if (e.g) { e.x = e.g.x0; lastX1 = e.g.x1; continue; }
+      if (lastX1 != null) { e.x = lastX1 + tGap; continue; }
+      let nx = L.cx;
+      for (let j = c + 1; j < TCH.length; j++) if (TCH[j].g) { nx = TCH[j].g.x0; break; }
+      e.x = nx - L.titleSize * 0.42;
+    }
+    const endX = lastX1 != null ? Math.min(lastX1 + tGap, W - P.curW - 4) : L.cx - P.curW / 2;
+    const T_TYPED = TCH.length ? TCH[TCH.length - 1].tOn : tType;     // the cursor is at the end of the line
+    const T_BLINK = T_TYPED + 140;
+    const T_CUROFF = T_BLINK + (BLINKS - 1) * BLINK + BLINK * 0.4;     // it goes out while lit
+    let te = T_ERASE + 180;
+    for (let c = TCH.length - 1; c >= 0; c--) { TCH[c].tOff = te; te += ERASE_KEY; }
+    const T_CUREND = TCH.length ? TCH[0].tOff + 150 : T_ERASE + 200;
+    // A band of light rolls down the words now and then, once they are all there.
+    const SHIMMERS = [T_TYPED + 330, Math.max(T_TYPED + 1900, 3800), T_SURGE + 120, 7500];
+
+    // The words' scanlines (one picture of both lines): where each letter, and the year, sit in it.
+    const MB = P.maskBox;
+    let YROWS = null;
+    if (P.mask) {
+      const M = P.mask;
+      const rows = (y0, y1) => [clamp(Math.round((y0 - MB.y) * dpr), 0, M.height), clamp(Math.round((y1 - MB.y) * dpr), 0, M.height)];
+      for (const e of TCH) {
+        if (!e.g) continue;
+        const g = e.g;
+        const x0 = clamp(Math.floor((g.x0 - g.size * 0.07 - MB.x) * dpr), 0, M.width);
+        const x1 = clamp(Math.ceil((g.x1 + g.size * 0.07 - MB.x) * dpr), 0, M.width);
+        const r = rows(g.cy - g.size * 0.6, g.cy + g.size * 0.6);
+        if (x1 > x0 && r[1] > r[0]) e.m = { sx: x0, sy: r[0], sw: x1 - x0, sh: r[1] - r[0], dx: MB.x + x0 / dpr, dy: MB.y + r[0] / dpr };
+      }
+      if (YG.length) {
+        const hg = Math.max(0.6, 1.1 * s);
+        YROWS = [rows(L.yearY - ys * 0.6, L.yearY - hg), rows(L.yearY + hg, L.yearY + ys * 0.6)];
+      }
+    }
 
     const fadeY = (y) => 1 - smooth(G.fadeY0, G.fadeY1, y);
     const flicker = (t) => {
@@ -1109,61 +1285,276 @@
       stamp2(P.flareV, G.cx - 8 * s, G.dcy - fh / 2, 16 * s, fh, a);
     }
 
-    function drawWords(t, fa, lo) {
-      if (t < T_WORDS0) return;
-      const mid = G.wordsMid;
-      // switching on: a bright line across the middle, which opens into the words
-      const lineK = 1 - smooth(T_WORDS0 + 230, T_WORDS0 + 560, t);
-      if (lineK > 0.01) {
-        const half = (G.wMax - G.wMin) / 2 * easeOut(clamp((t - T_WORDS0) / 240, 0, 1));
-        const wc = (G.wMax + G.wMin) / 2;
-        run(P.strips[0], wc - half, wc + half, mid, lineK * fa);
-        stamp(P.flash, wc, mid, 120 * s, 0.6 * lineK * fa);
-      }
-      const u = clamp((t - T_WORDS0 - 150) / (T_WORDS1 - T_WORDS0 - 150), 0, 1);
-      if (u <= 0) return;
-      const sy = 0.03 + 0.97 * easeOutBack(u);
-      const a = Math.min(1, u * 2.4) * fa;
-      ctx.save();
-      if (Math.abs(sy - 1) > 1e-4) {
-        ctx.translate(0, mid);
-        ctx.scale(1, sy);
-        ctx.translate(0, -mid);
-      }
-      env.words(a, FILL, 1);
+    /* ------------------------------------------------------- the words --- */
+
+    const after = (dt, len) => (dt >= 0 && dt < len ? (1 - dt / len) * (1 - dt / len) : 0);
+    const TF = { sy: null, crop: [0, 0, 1, 1], op: undefined };
+    const TL = { sy: null, op: undefined };
+    /** The digits that wait for the one that changes are dimmer; they brighten as the new year lands. */
+    const faceA = (d, t) => (OLD && d.tRoll < 0 ? WAIT_A + (1 - WAIT_A) * smooth(T_LANDED - 30, T_LANDED + 160, t) : 1);
+
+    /** Rows v0..v1 of a card's face (a digit's picture), turned on the hinge to sy (null: flat); hot: added white-hot. */
+    function face(F, v0, v1, sy, a, hot) {
+      if (!F || a <= 0.004 || v1 - v0 < 0.002 || (sy != null && sy < 0.012)) return;
+      TF.sy = sy;
+      TF.crop[1] = v0;
+      TF.crop[3] = v1;
+      TF.op = hot ? 'lighter' : undefined;
+      env.glyph(F, a > 1 ? 1 : a, hot ? HOTFILL : FILL, TF);
       n++;
-      const M = P.mask;
-      if (M) {
-        const B = P.maskBox;
-        ctx.globalCompositeOperation = 'lighter';
-        // the scanlines on the glyphs: strong as they switch on, then a soft texture
-        const on = 1 - smooth(0.25, 1, u);
-        const steady = lo ? 0 : 0.12;
-        const sa = (steady + 0.65 * on + 0.1 * smooth(FADE_FROM, FADE_TO - 400, t)) * a;
-        if (sa > 0.004) {
-          ctx.globalAlpha = sa;
-          ctx.drawImage(M, B.x, B.y, M.width / dpr, M.height / dpr);
+    }
+
+    function card(F, a, hot) {
+      face(F, 0, 0.5 - HG, null, a, hot);
+      face(F, 0.5 + HG, 1, null, a, hot);
+    }
+
+    /**
+     * One card of the clock turning over from face A to face B (a digit's letter, or null for a
+     * blank flap), u from 0 to 1: A's top half falls on its flap, uncovering B's top half above it;
+     * past the hinge the flap shows B's bottom half, which swings down over A's and bounces on its
+     * stop. The flap's edge catches the light as it turns.
+     */
+    function flip(d, A, B, u, aA, aB, fa, lo) {
+      const g = d.g;
+      if (u >= 1) { card(B, aB * fa); hinge(d, B, aB * fa); return; }
+      const f = u < FALL ? u / FALL : 1;
+      const th = PI * f * f;                       // it falls faster and faster
+      if (th < PI / 2) hinge(d, A, aA * fa); else hinge(d, B, aB * fa);
+      if (th < PI / 2) {
+        const sy = Math.cos(th);
+        face(B, 0, Math.min(0.5 - HG, 0.5 - 0.5 * KF * sy), null, aB * fa);
+        face(A, 0.5 + HG, 1, null, aA * fa);
+        face(A, 0, 0.5 - HG, sy, aA * fa);
+        if (!lo) face(A, 0, 0.5 - HG, sy, aA * fa * 0.45 * (1 - sy), true);         // catching the light
+        // (a blank flap shows only its edge, which is lit all the way: it is what uncovers B)
+        run(P.strips[1], g.cx - CWH, g.cx + CWH, g.cy - sy * HC, fa * ((A ? 0 : 0.3) + (A ? 0.85 : 0.55) * (1 - sy * sy)));
+      } else {
+        const sy = f < 1 ? -Math.cos(th) : 1 - BOUNCE * Math.sin(PI * (u - FALL) / (1 - FALL));
+        face(B, 0, 0.5 - HG, null, aB * fa);
+        if (f < 1) face(A, Math.max(0.5 + HG, 0.5 + 0.5 * KF * sy), 1, null, aA * fa);
+        face(B, 0.5 + HG, 1, sy, aB * fa);
+        if (!lo) face(B, 0.5 + HG, 1, sy, aB * fa * 0.45 * (1 - sy), true);
+        if (f >= 1 && d.hot > 0.01) {
+          // landed: white-hot for a moment, bouncing with the flap
+          face(B, 0, 0.5 - HG, null, d.hot, true);
+          face(B, 0.5 + HG, 1, sy, d.hot, true);
+        }
+        if (f < 1) run(P.strips[1], g.cx - CWH, g.cx + CWH, g.cy + sy * HC, fa * ((B ? 0 : 0.3) + (B ? 0.85 : 0.55) * (1 - sy * sy)));
+      }
+    }
+
+    /** Notes the face whose hinge shows on this card this frame (drawn over all the cards). */
+    function hinge(d, F, a) {
+      d.hf = F;
+      d.ha = a;
+    }
+
+    function drawYear(t, fa, lo) {
+      for (const d of DIG) {
+        d.hf = null;
+        d.hot = 0;
+        if (t < d.tIn) continue;
+        const g = d.g;
+        const a = faceA(d, t);
+        const kC = d.clack ? after(t - d.tLand, 420) : 0;      // the clack as the new year lands
+        d.hot = lo || t >= d.tOut ? 0 : 0.6 * kC * fa;
+        if (t >= d.tOut) {
+          if (t < d.tOut + BLANK_DUR) flip(d, g, null, (t - d.tOut) / BLANK_DUR, a, 0, fa, lo);
+        } else if (d.tRoll >= 0 && t < d.tRoll) {
+          // riffling through blank flaps: only their edges catch the light
+          flip(d, null, null, ((t - d.tIn) % d.span) / d.span, 0, 0, fa * 0.8, lo);
+        } else if (d.tRoll >= 0 ? t < d.tRoll + ROLL_DUR : t < d.tIn + FLAP_DUR) {
+          const t0 = d.tRoll >= 0 ? d.tRoll : d.tIn;
+          flip(d, null, g, (t - t0) / (d.tRoll >= 0 ? ROLL_DUR : FLAP_DUR), 0, a, fa, lo);
+        } else {
+          card(g, a * fa);
+          hinge(d, g, a * fa);
+        }
+        // the light of the cards landing: a flick as each one lands, a clack for the new year
+        if (kC > 0.01) {
+          stamp(P.flash, g.cx, g.cy + HC * 0.45, ys * 1.4, 0.2 * kC * fa);
+          stamp2(P.flareH, g.cx - CWH * 3.2, g.cy + HC - 12 * s, CWH * 6.4, 24 * s, 0.95 * kC * fa);
+          if (d.hot > 0.01 && t >= d.tLand + ((d.tRoll >= 0 ? ROLL_DUR : FLAP_DUR) * (1 - FALL))) card(g, d.hot, true);  // (while it bounces, flip() draws it)
+        } else if (!d.clack) {
+          const kIn = after(t - d.tLand, 240);
+          if (kIn > 0.01) stamp2(P.flareH, g.cx - CWH * 1.5, g.cy + HC - 8 * s, CWH * 3, 16 * s, 0.5 * kIn * fa);
+          // the digits that waited light up with the one that lands last
+          const kL = lo ? 0 : after(t - T_LANDED, 450);
+          if (kL > 0.01 && t < d.tOut) card(g, 0.28 * kL * fa, true);
+        }
+        const kO = after(t - d.tOut - BLANK_DUR * FALL, 220);
+        if (kO > 0.01) stamp2(P.flareH, g.cx - CWH * 1.4, g.cy + HC - 7 * s, CWH * 2.8, 14 * s, 0.4 * kO * fa);
+      }
+      // the hinges: a dark hairline through the strokes of every digit that is up
+      for (const d of DIG) {
+        if (!d.hf || d.ha <= 0.004) continue;
+        TF.sy = null;
+        TF.crop[1] = 0.5 - HV;
+        TF.crop[3] = 0.5 + HV;
+        TF.op = undefined;
+        env.glyph(d.hf, Math.min(1, 0.9 * d.ha), INK, TF);
+        n++;
+      }
+      // the screen's scanlines on the year, once it is complete (cut at the hinge, as the digits
+      // are), dying away just before the cards flip over to blank
+      if (YROWS && !lo && t > T_LANDED + 100 && t < T_BLANK) {
+        const a = 0.12 * smooth(T_LANDED + 100, T_LANDED + 500, t) * (1 - smooth(T_BLANK - 220, T_BLANK, t)) * fa;
+        const M = P.mask;
+        ctx.globalAlpha = a;
+        for (const r of YROWS) {
+          if (r[1] <= r[0]) continue;
+          ctx.drawImage(M, 0, r[0], M.width, r[1] - r[0], MB.x, MB.y + r[0] / dpr, M.width / dpr, (r[1] - r[0]) / dpr);
           n++;
         }
-        // the shimmer: a band of brighter lines rolling down the words
-        for (const t0 of SHIMMERS) {
-          const ph = t - t0;
-          if (ph < 0 || ph > 1100) continue;
-          const bandH = B.h * 0.34;
-          const cyB = B.y - bandH + (ph / 1100) * (B.h + bandH * 2);
-          for (let j = -3; j <= 3; j++) {
-            const y0 = cyB + j * bandH / 7 - bandH / 14;
-            const top = Math.max(Math.round((y0 - B.y) * dpr), 0);
-            const bot = Math.min(Math.round((y0 + bandH / 7 - B.y) * dpr), M.height);
-            if (bot <= top) continue;
-            const w = Math.cos((j / 3.5) * PI / 2);
-            ctx.globalAlpha = 0.6 * w * w * a;
-            ctx.drawImage(M, 0, top, M.width, bot - top, B.x, B.y + top / dpr, M.width / dpr, (bot - top) / dpr);
-            n++;
-          }
+      }
+    }
+
+    function letter(g, a, sy, hot) {
+      if (a <= 0.004 || (sy != null && sy < 0.012)) return;
+      TL.sy = sy;
+      TL.op = hot ? 'lighter' : undefined;
+      env.glyph(g, a > 1 ? 1 : a, hot ? HOTFILL : FILL, TL);
+      n++;
+    }
+
+    /** A letter's own scanlines, turned as the letter is. */
+    function scanlines(e, a, sy) {
+      const m = e.m;
+      if (!m || a <= 0.004) return;
+      ctx.globalAlpha = a > 1 ? 1 : a;
+      if (sy != null) {
+        ctx.save();
+        ctx.translate(0, e.g.cy);
+        ctx.scale(1, sy);
+        ctx.translate(0, -e.g.cy);
+      }
+      ctx.drawImage(P.mask, m.sx, m.sy, m.sw, m.sh, m.dx, m.dy, m.sw / dpr, m.sh / dpr);
+      if (sy != null) ctx.restore();
+      n++;
+    }
+
+    /** The title on the terminal: every letter switches on where the cursor was, and off as it comes back. */
+    function drawTitle(t, fa, lo) {
+      const steady = lo ? 0 : 0.12;
+      for (const e of TCH) {
+        const on = t - e.tOn;
+        if (on < 0) break;                         // typed in order
+        const g = e.g;
+        if (!g) continue;
+        const off = t - e.tOff;
+        if (off >= 245) continue;                  // erased, and its last spark gone
+        let sy = 1;
+        let hot = 0;
+        let line = 0;
+        let lw = 1;
+        let mk = steady;
+        if (off >= 0) {
+          // off like an old screen: it collapses into a line, the line into a dot that fades
+          sy = off < 80 ? 1 - 0.97 * easeIn(off / 80) : 0;
+          hot = 0.8 * smooth(0, 60, off);
+          line = off < 80 ? smooth(15, 70, off) : 1 - smooth(150, 240, off);
+          lw = 1 - smooth(70, 160, off);
+          mk += 0.5 * smooth(0, 60, off);
+          if (off > 120) stamp(SPR.hot, g.cx, g.cy, 18 * s, 0.8 * (1 - smooth(130, 240, off)) * fa);
+        } else {
+          // on like an old screen: a bright line that opens into the letter, hot for a moment
+          sy = on < 25 ? 0.04 : 0.04 + 0.96 * easeOutBack(clamp((on - 25) / 120, 0, 1));
+          hot = on < 320 ? 0.85 * (1 - on / 320) * (1 - on / 320) : 0;
+          line = on < 30 ? 1 : 1 - smooth(30, 150, on);
+          mk += 0.55 * (1 - smooth(60, 420, on));
+          if (on < 200) stamp(P.flash, g.cx, g.cy, g.size * 1.25, 0.2 * (1 - on / 200) * fa);
+        }
+        const sv = Math.abs(sy - 1) < 0.002 ? null : sy;
+        if (sy > 0.012) {
+          letter(g, fa, sv);
+          if (hot > 0.01 && !lo) letter(g, hot * fa, sv, true);
+          scanlines(e, mk * fa, sv);
+        }
+        if (line > 0.01) {
+          const half = ((g.x1 - g.x0) / 2) * lw + g.size * 0.05;
+          run(P.strips[0], g.cx - half, g.cx + half, g.cy, line * fa);
         }
       }
-      ctx.restore();
+    }
+
+    /** The block cursor: on before the first letter, along the line as it types, blinking at its end. */
+    function drawCursor(t, fa) {
+      if (!TCH.length) return;
+      let slot;
+      let t0;
+      let t1;
+      if (t >= tCursor && t < T_CUROFF + 290) {
+        slot = 0;
+        while (slot < TCH.length && TCH[slot].tOn <= t) slot++;
+        t0 = tCursor;
+        t1 = T_CUROFF;
+        if (t >= T_BLINK && t < T_CUROFF && (t - T_BLINK) % BLINK >= BLINK / 2) return;
+      } else if (t >= T_ERASE && t < T_CUREND + 290) {
+        slot = TCH.length;
+        while (slot > 0 && TCH[slot - 1].tOff <= t) slot--;
+        t0 = T_ERASE;
+        t1 = T_CUREND;
+      } else return;
+      const x = slot < TCH.length ? TCH[slot].x : endX;
+      const xc = x + P.curW / 2;
+      const cy = L.titleY;
+      // switching on: a line that opens into the block; off: back to a line, then a dot that fades
+      const a = t - t0;
+      const b = t - t1;
+      let sy = a < 90 ? 0.05 + 0.95 * easeOut(a / 90) : 1;
+      let line = a < 90 ? 1 - a / 90 : 0;
+      let lw = 1;
+      if (b >= 0) {
+        sy = b < 70 ? 1 - 0.95 * easeIn(b / 70) : 0;
+        line = b < 70 ? smooth(10, 60, b) : 1 - smooth(140, 230, b);
+        lw = 1 - smooth(70, 160, b);
+        if (b > 120) stamp(SPR.hot, xc, cy, 22 * s, 0.85 * (1 - smooth(130, 290, b)) * fa);
+      }
+      if (sy > 0.012) {
+        stamp(SPR.amber, xc, cy, P.curH * 1.6, 0.14 * fa * sy);
+        ctx.save();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 0.95 * fa;
+        if (sy !== 1) {
+          ctx.translate(0, cy);
+          ctx.scale(1, sy);
+          ctx.translate(0, -cy);
+        }
+        ctx.drawImage(P.cursor, x - P.curPad, cy - P.curH / 2 - P.curPad, P.cursor.width / dpr, P.cursor.height / dpr);
+        ctx.restore();
+        n++;
+      }
+      if (line > 0.01) {
+        const half = (P.curW / 2) * lw + 2 * s;
+        run(P.strips[0], xc - half, xc + half, cy, line * fa);
+      }
+    }
+
+    function drawWords(t, fa, lo) {
+      drawYear(t, fa, lo);
+      drawTitle(t, fa, lo);
+      drawCursor(t, fa);
+      // the shimmer: a band of brighter lines rolling down the words, once they are all there
+      const M = P.mask;
+      if (!M || t < T_TYPED + 200 || t > T_ERASE) return;
+      const B = MB;
+      for (const t0 of SHIMMERS) {
+        const ph = t - t0;
+        if (ph < 0 || ph > 1100) continue;
+        const bandH = B.h * 0.34;
+        const cyB = B.y - bandH + (ph / 1100) * (B.h + bandH * 2);
+        for (let j = -3; j <= 3; j++) {
+          const y0 = cyB + j * bandH / 7 - bandH / 14;
+          const top = Math.max(Math.round((y0 - B.y) * dpr), 0);
+          const bot = Math.min(Math.round((y0 + bandH / 7 - B.y) * dpr), M.height);
+          if (bot <= top) continue;
+          const w = Math.cos((j / 3.5) * PI / 2);
+          ctx.globalAlpha = 0.6 * w * w * fa;
+          ctx.drawImage(M, 0, top, M.width, bot - top, B.x, B.y + top / dpr, M.width / dpr, (bot - top) / dpr);
+          n++;
+        }
+      }
     }
 
     function draw(t) {
@@ -1197,7 +1588,7 @@
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = 0.02;
-      for (const img of [P.atlas, P.door, P.edge, P.glow, P.flash, P.flareH, P.flareV, P.ring, P.bar, P.mask].concat(P.strips, P.mustard)) {
+      for (const img of [P.atlas, P.door, P.edge, P.glow, P.flash, P.flareH, P.flareV, P.ring, P.bar, P.mask, P.cursor].concat(P.strips, P.mustard)) {
         if (img) ctx.drawImage(img, 0, 0, 1, 1);
       }
       for (const k in SPR) ctx.drawImage(SPR[k], 0, 0, 1, 1);
@@ -1212,6 +1603,21 @@
       ctx.arc(1, 1, 1, 0, TAU);
       ctx.stroke();
       ctx.clearRect(0, 0, 4, 4);
+      // The letters: the pictures of the title and the year (and the year's hinges), made now and
+      // each drawn once, faintly, whole and cut at the hinge, then wiped with the rest of the canvas.
+      env.warm(FILL);
+      env.warm(HOTFILL);
+      if (L.year) env.warm(INK, L.year, 1);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      for (const g of [TG[0], YG[0]]) {
+        if (!g) continue;
+        env.glyph(g, 0.01, FILL);
+        env.glyph(g, 0.01, FILL, { sy: 0.5, crop: [0, 0, 1, 0.5] });
+        env.glyph(g, 0.01, HOTFILL, { sy: 0.5, crop: [0, 0.5, 1, 1], op: 'lighter' });
+        if (g.line === 1) env.glyph(g, 0.01, INK, { crop: [0, 0.49, 1, 0.51] });
+      }
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
       ctx.restore();
     }
 

@@ -5,14 +5,22 @@
  *             heads of green fire race round a great circle from the top, drawing it and shedding
  *             sparks; a second ring is traced from below, runic marks ignite as the fire passes
  *             them and a figure draws itself inside.
- *   0.5 s     the words are cut out of the light from the middle outwards, white-hot green, and
- *             cool into polished steel (white to steel grey).
+ *   0.15 s    as the left head of fire comes level with the title, a spark leaps from it to the
+ *             first letter and sets it alight. The title is burnt in letter after letter, left to
+ *             right: a head of green fire runs across each letter, eating into its strokes and
+ *             throwing sparks, and leaves it white-hot green with a few flames still licking at it;
+ *             each letter then cools into polished steel (white to steel grey).
+ *   1.05 s    the circle surges: a ring of its fire pours in from the inner ring onto the year and
+ *             bursts there, and the year is branded into place, centre digits first, each digit
+ *             flaring out of its own burst of green fire from its middle outwards (whole by 1.9 s).
  *   1-9 s     the circle turns slowly, its inner ring the other way, a dashed dial between them;
  *             green flames lick upward along the outer ring and sparks spiral inward to the words.
  *             A polished-steel sheen sweeps across the words three times; twice the circle surges.
  *   9.4 s     the circle gathers itself, spins faster and collapses inward into the words, which
- *             flare white-hot; a green flash at 11 s, and the energy bursts out as embers that drift
- *             away while everything fades from 11.5 s (nothing at all is drawn from 12.94 s on).
+ *             catch fire again, white-hot, and from 10.6 s melt back into fire, centre first: each
+ *             letter sinks from the top into a row of flames and rising embers. A green flash at
+ *             11 s, the energy bursts out as embers that drift away, and everything fades from
+ *             11.5 s (nothing at all is drawn from 12.94 s on).
  *
  * Original geometry only: rings, ticks, regular polygons and angular marks made up here, no symbol
  * of any film, comic or company. Light only (the movie is under the canvas): the words are stamped
@@ -46,10 +54,6 @@
   const T_IN1 = 1080;
   const T_FIG0 = 520;                   // the figure inside draws itself
   const T_FIG1 = 1500;
-  const T_W0 = 430;                     // the words are cut out of the light ...
-  const T_W1 = 1150;
-  const T_COOL0 = 1200;                 // ... and cool from green-white heat to steel
-  const T_COOL1 = 2400;
   const SHEENS = [2600, 5650, 8350];    // the polished-steel sheen
   const SHEEN_DUR = 1300;
   const SURGES = [4150, 7050];          // the circle surges
@@ -58,6 +62,21 @@
   const T_FLASH = 11050;                // ... and goes out in a green flash
   const T_SP0 = 380;                    // the sparks start spiralling in
   const SP_LAST = T_FLASH - 140;        // the last of them arrive before the flash
+
+  // The words (ms). The circle's own fire lights the title, which is burnt in letter after letter;
+  // then the circle surges and brands the year into place, centre digits first.
+  const BOLT = 120;                     // the spark's flight from the ring's fire to the first letter
+  const TRACE_SPAN = 640;               // the first letter of the title catching fire ... the last
+  const TRACE_DUR = 300;                // a head of fire crossing one letter
+  const COOL_T = 1000;                  // a letter cooling from white-hot green to steel
+  const GATHER = 280;                   // the surge pouring in from the inner ring onto the year
+  const BRAND_STEP = 190;               // the digits are branded centre first, this far apart
+  const BRAND_DUR = 340;                // a digit flaring out of its burst
+  const COOL_Y = 1100;
+  const T_HEAT = T_COLLAPSE + 250;      // the collapsing circle heats the letters again ...
+  const T_MELT = T_COLLAPSE + 650;      // ... and they melt back into fire, centre first
+  const MELT_SPREAD = 260;
+  const MELT_DUR = 520;
 
   // Rotation (rad/s): the outer circle clockwise, the inner ring against it, the dial between faster.
   const W_OUT = 0.085;
@@ -76,6 +95,8 @@
   const HOT = { stops: [[0, '#ffffff'], [0.5, '#e8fff1'], [1, '#86f7b4']], halo: 'rgba(0,14,6,0.86)' };
   const SHEEN = { stops: [[0, '#ffffff'], [1, '#f1f7fb']] };
   const HALO = 'rgba(0,10,4,0.88)';
+  // The green heat round a letter the fire has just made (added as light: its halo is a green glow).
+  const BLOOM = { stops: [[0, '#d9ffe9'], [0.5, '#7dffb5'], [1, '#2fd07a']], halo: 'rgba(60,240,140,1)' };
 
   /*
    * The glyph marks, made up for this circle: polylines in a box 2 wide and 3 tall (y down, up is
@@ -302,6 +323,25 @@
     };
     CACHE.key = key;
     CACHE.tex = tex;
+    return tex;
+  }
+
+  const LCACHE = { key: '', tex: null };
+  const GEO = { key: '', list: null };     // the letters' geometry, for the size and words last seen
+  const BURN = [[0, 'rgba(250,255,251,1)'], [0.18, 'rgba(200,255,222,0.9)'], [0.45, 'rgba(120,250,172,0.32)'], [1, 'rgba(110,245,165,0)']];
+  const BURST = [[0, 'rgba(244,255,248,1)'], [0.22, 'rgba(150,255,195,0.7)'], [0.6, 'rgba(100,242,160,0.2)'], [1, 'rgba(100,242,160,0)']];
+
+  /** The fire that eats into a letter's strokes, sized to the title's letters and to the year's. */
+  function letterTextures(ts, ys, dpr) {
+    const key = ts.toFixed(2) + '|' + ys.toFixed(2) + '|' + dpr;
+    if (LCACHE.key === key) return LCACHE.tex;
+    const tex = {
+      burnT: blob(Math.max(8, ts * 0.22), dpr, BURN),
+      burnY: blob(Math.max(8, ys * 0.12), dpr, BURN),
+      burst: blob(Math.max(16, ys * 1.6), dpr, BURST)    // the surge bursting on the year (drawn scaled)
+    };
+    LCACHE.key = key;
+    LCACHE.tex = tex;
     return tex;
   }
 
@@ -572,6 +612,218 @@
       return list;
     });
 
+    /* --- the letters: where each one's ink is, and when the fire builds it and melts it --- */
+    const LT = letterTextures(L.titleSize, L.yearSize || L.titleSize, dpr);
+    // fx.js keeps each letter in a cell of its own, halo included, and a crop is a fraction of that
+    // cell: here is the cell as fx.js works it out (the steel and the hot fills have the same halo).
+    const cellPad = (Math.max(6, L.titleSize * 0.28) * 1.6 + L.titleSize * 0.04) / Math.min(1, dpr) + 2;
+    const NS = 6;                        // strips across a title letter: its burning edge is ragged
+    const NSY = 10;                      // ... across a digit: it flares out round from its middle
+    const NC = 5;                        // columns across a melting letter
+    // The letters' geometry depends only on the size and the words: worked out once (prime() does it
+    // before midnight) and shared by every instance after it.
+    const GL = env.glyphs();
+    const GKEY = W + 'x' + H + '|' + dpr + '|' + L.title + '|' + L.year + '|' + L.titleSize + '|' + L.yearSize + '|' +
+      GL.map((g) => g.x0.toFixed(2) + ',' + g.x1.toFixed(2)).join(' ');
+    if (GEO.key !== GKEY) { GEO.key = GKEY; GEO.list = letterGeometry(); }
+    const LETTERS = GL.map((g, id) => Object.assign({ g: g, id: id }, GEO.list[id]));
+    const TITLE = LETTERS.filter((o) => o.g.line === 0);
+    const YEAR = LETTERS.filter((o) => o.g.line === 1);
+
+    /** Each letter's cell, the ink in it (points in the order the fire reaches them), strips, flame spots. */
+    function letterGeometry() {
+      const list = GL.map((g) => {
+        const half = g.size * 0.62;
+        const X0 = Math.floor((g.x0 - g.size * 0.06 - cellPad) * dpr);
+        const Y0 = Math.floor((g.cy - half - cellPad) * dpr);
+        const wd = Math.max(1, Math.ceil((g.x1 + g.size * 0.06 + cellPad) * dpr) - X0);
+        const hd = Math.max(1, Math.ceil((g.cy + half + cellPad) * dpr) - Y0);
+        return { g: g, x0: X0 / dpr, y0: Y0 / dpr, w: wd / dpr, h: hd / dpr, wd: wd, hd: hd, raw: [],
+          inkL: Infinity, inkR: -Infinity, inkT: Infinity, inkB: -Infinity };
+      });
+      // Points on the ink, each given to its letter: the fire runs along the strokes, not across boxes.
+      const dense = list.length ? env.wordPoints(3400).pts : [];
+      for (let i = 0; i < dense.length; i += 2) {
+        const x = dense[i];
+        const y = dense[i + 1];
+        const line = y < split ? 0 : 1;
+        let best = null;
+        let bd = Infinity;
+        for (const o of list) {
+          if (o.g.line !== line) continue;
+          const d = x < o.g.x0 ? o.g.x0 - x : x > o.g.x1 ? x - o.g.x1 : 0;
+          if (d < bd) { bd = d; best = o; }
+        }
+        if (best && bd < best.g.size * 0.25) best.raw.push(x, y);
+      }
+      for (const o of list) {
+        const g = o.g;
+        const raw = o.raw;
+        for (let i = 0; i < raw.length; i += 2) {
+          if (raw[i] < o.inkL) o.inkL = raw[i];
+          if (raw[i] > o.inkR) o.inkR = raw[i];
+          if (raw[i + 1] < o.inkT) o.inkT = raw[i + 1];
+          if (raw[i + 1] > o.inkB) o.inkB = raw[i + 1];
+        }
+        if (!(o.inkR >= o.inkL)) { o.inkL = g.x0; o.inkR = g.x1; o.inkT = g.top; o.inkB = g.bottom; }
+        o.mx = (o.inkL + o.inkR) / 2;
+        o.my = (o.inkT + o.inkB) / 2;
+        // in the order the fire reaches them: left to right in the title, out from the middle in the year
+        const key = (p) => (g.line === 0 ? raw[p * 2] : Math.hypot(raw[p * 2] - o.mx, raw[p * 2 + 1] - o.my));
+        const idx = [];
+        for (let p = 0; p < raw.length / 2; p++) idx.push(p);
+        idx.sort((p, q) => key(p) - key(q));
+        o.pts = new Float32Array(idx.length * 3);
+        idx.forEach((p, k) => { o.pts[k * 3] = raw[p * 2]; o.pts[k * 3 + 1] = raw[p * 2 + 1]; o.pts[k * 3 + 2] = key(p); });
+        o.raw = null;
+        o.rInk = idx.length ? o.pts[o.pts.length - 1] : Math.hypot(o.inkR - o.mx, o.inkB - o.my);
+        o.rMax = Math.hypot(Math.max(o.mx - o.x0, o.x0 + o.w - o.mx), Math.max(o.my - o.y0, o.y0 + o.h - o.my)) + 1;
+        // a whole letter is drawn without the outer part of its cell, where its halo has faded to
+        // nothing (under half a percent): far fewer pixels to blend for the same picture
+        const tu = (cellPad * 0.4) / o.w;
+        const tv = (cellPad * 0.4) / o.h;
+        o.tfS = { crop: [tu, tv, 1 - tu, 1 - tv] };
+        o.tfL = { crop: [tu, tv, 1 - tu, 1 - tv], op: 'lighter' };
+        // strips over the ink, on whole device pixels so that neighbouring crops meet without a seam
+        const ns = g.line === 0 ? NS : NSY;
+        o.vb = new Float32Array(ns + 1);
+        o.vb[ns] = 1;
+        for (let j = 1; j < ns; j++) o.vb[j] = clamp(Math.round((lerp(o.inkT, o.inkB, j / ns) - o.y0) * dpr) / o.hd, 0, 1);
+        o.ub = new Float32Array(NC + 1);
+        o.ub[NC] = 1;
+        for (let c = 1; c < NC; c++) o.ub[c] = clamp(Math.round((lerp(o.inkL, o.inkR, c / NC) - o.x0) * dpr) / o.wd, 0, 1);
+        // where flames lick at it: the highest ink in its left half and in its right half
+        o.anc = [];
+        for (const side of [0, 1]) {
+          let bx = 0;
+          let by = Infinity;
+          for (let k = 0; k < o.pts.length; k += 3) {
+            if ((o.pts[k] < o.mx) === (side === 0) && o.pts[k + 1] < by) { bx = o.pts[k]; by = o.pts[k + 1]; }
+          }
+          if (by < Infinity) o.anc.push(bx, by);
+        }
+        if (!o.anc.length) o.anc.push(g.cx, o.inkT);
+      }
+      for (const o of list) delete o.g;      // each instance joins its own glyph records to these
+      return list;
+    }
+
+    // The left head of fire drawing the outer ring comes level with the title: a spark leaps from it
+    // to the first letter and lights it.
+    const crossSpan = Math.acos(clamp((cy - L.titleY) / R, -1, 1));
+    const tCross = clamp(T_TRACE * (1 - Math.cbrt(Math.max(0, 1 - crossSpan / Math.PI))), 100, 420);
+    const T_T0 = tCross + BOLT;
+    const lead = TITLE.length ? TITLE[0] : null;
+    let bolt = null;
+    if (lead) {
+      const sp = Math.PI * easeOut(clamp(tCross / T_TRACE, 0, 1));
+      const x0 = cx - Math.sin(sp) * R;
+      const y0 = cy - Math.cos(sp) * R;
+      const d = Math.hypot(lead.inkL - x0, lead.my - y0);
+      bolt = { x0: x0, y0: y0, x1: lead.inkL, y1: lead.my, qx: (x0 + lead.inkL) / 2, qy: (y0 + lead.my) / 2 - d * 0.3 - L.titleSize * 0.25 };
+    }
+    // The year: the circle surges as the last letters of the title burn, and brands it.
+    const BRAND = YEAR.length > 0;
+    const T_Y0 = TITLE.length ? T_T0 + TRACE_SPAN + TRACE_DUR * 0.5 : T_T0;
+    const T_YB = T_Y0 + GATHER;
+    const yHalf = BRAND ? (YEAR[YEAR.length - 1].g.x1 - YEAR[0].g.x0) / 2 : 0;
+    const xa = TITLE.length ? TITLE[0].g.x0 : 0;
+    const xz = TITLE.length ? TITLE[TITLE.length - 1].g.x0 : 0;
+    const mid = (YEAR.length - 1) / 2;
+    let near = Infinity;
+    for (const o of YEAR) near = Math.min(near, Math.abs(o.g.i - mid));
+    let far = 1;
+    for (const o of LETTERS) far = Math.max(far, Math.hypot(o.g.cx - cx, o.g.cy - cy));
+    let T_STEADY = 0;                    // from here every letter is built and cool, until the melt
+    for (const o of LETTERS) {
+      if (o.g.line === 0) {
+        o.t0 = T_T0 + (xz > xa ? (o.g.x0 - xa) / (xz - xa) : 0) * TRACE_SPAN;
+        o.t1 = o.t0 + TRACE_DUR;
+        o.cool = COOL_T;
+      } else {
+        o.t0 = T_YB + (Math.abs(o.g.i - mid) - near) * BRAND_STEP;
+        o.t1 = o.t0 + BRAND_DUR;
+        o.cool = COOL_Y;
+      }
+      o.m0 = T_MELT + (Math.hypot(o.g.cx - cx, o.g.cy - cy) / far) * MELT_SPREAD;
+      o.m1 = o.m0 + MELT_DUR;
+      T_STEADY = Math.max(T_STEADY, o.t1 + o.cool);
+    }
+
+    /** Where a title letter's head of fire is when it is k of the way across (CSS x). */
+    const traceX = (o, k) => {
+      const xb = o.inkL - o.g.size * 0.08;
+      const xc = o.inkR + o.g.size * 0.1;
+      if (k < 0.12) return lerp(o.x0, xb, k / 0.12);
+      if (k < 0.86) return lerp(xb, xc, (k - 0.12) / 0.74);
+      return lerp(xc, o.x0 + o.w + o.g.size * 0.2, (k - 0.86) / 0.14);
+    };
+    /** Where a melting letter's top edge is when it is k of the way down (CSS y). */
+    const meltY = (o, k) => {
+      const yb = o.inkT - o.g.size * 0.08;
+      const yc = o.inkB + o.g.size * 0.1;
+      if (k < 0.2) return lerp(o.y0, yb, k / 0.2);
+      if (k < 0.88) return lerp(yb, yc, Math.pow((k - 0.2) / 0.68, 1.35));
+      return lerp(yc, o.y0 + o.h + o.g.size * 0.2, (k - 0.88) / 0.12);
+    };
+
+    // Each letter's flicker, its sparks (thrown off the head of fire, or out of a digit's burst) and
+    // the embers it melts into: [birth (ms), x, y, vx, vy (px/s), life (ms), size] each.
+    for (const o of LETTERS) {
+      const g = o.g;
+      const s = g.size;
+      o.ph = rnd() * TAU;
+      o.fi = Math.floor(rnd() * 3);
+      o.fper = [260 + rnd() * 160, 260 + rnd() * 160];
+      o.foff = [rnd() * 400, rnd() * 400];
+      o.mj = new Float32Array(NC);
+      for (let c = 0; c < NC; c++) o.mj[c] = (rnd() - 0.5) * 0.12;
+      const ns = g.line === 0 ? 6 : 12;
+      o.sp = new Float32Array(ns * 7);
+      for (let i = 0; i < ns; i++) {
+        const q = o.sp;
+        const k = i * 7;
+        if (g.line === 0) {
+          const bf = 0.16 + 0.68 * ((i + rnd()) / ns);
+          q[k] = o.t0 + bf * TRACE_DUR;
+          q[k + 1] = traceX(o, bf);
+          q[k + 2] = lerp(o.inkT, o.inkB, rnd());
+          q[k + 3] = s * (0.4 + 1.8 * rnd());
+          q[k + 4] = -s * (1.0 + 2.6 * rnd());
+          q[k + 5] = 260 + rnd() * 320;
+        } else {
+          const a = -Math.PI / 2 + (rnd() - 0.5) * Math.PI * 1.5;
+          const v = s * (1.6 + 2.6 * rnd());
+          q[k] = o.t0 + rnd() * 70;
+          q[k + 1] = o.mx + Math.cos(a) * s * 0.18;
+          q[k + 2] = o.my + Math.sin(a) * s * 0.18;
+          q[k + 3] = Math.cos(a) * v;
+          q[k + 4] = Math.sin(a) * v;
+          q[k + 5] = 380 + rnd() * 420;
+        }
+        q[k + 6] = Math.max(1.2, s * (g.line === 0 ? 0.028 : 0.02)) * (0.7 + 0.6 * rnd());
+      }
+      // the burst a digit flares out of: tongues of fire thrown outward round its top
+      o.tongue = new Float32Array(g.line === 1 ? 5 * 3 : 0);
+      for (let i = 0; i < o.tongue.length; i += 3) {
+        o.tongue[i] = -Math.PI / 2 + ((i / 3 + 0.5) / 5 - 0.5) * Math.PI * 0.6 + (rnd() - 0.5) * 0.2;
+        o.tongue[i + 1] = 0.55 + 0.45 * rnd();
+        o.tongue[i + 2] = Math.floor(rnd() * 3);
+      }
+      o.em = new Float32Array(6 * 7);
+      for (let i = 0; i < 6; i++) {
+        const k = i * 7;
+        const bf = 0.22 + 0.62 * ((i + rnd()) / 6);
+        o.em[k] = o.m0 + bf * MELT_DUR;
+        o.em[k + 1] = lerp(o.inkL, o.inkR, 0.1 + 0.8 * rnd());
+        o.em[k + 2] = Math.min(o.inkB, meltY(o, bf));
+        o.em[k + 3] = s * (rnd() - 0.5) * 1.1;
+        o.em[k + 4] = -s * (1.1 + 1.7 * rnd());
+        o.em[k + 5] = 700 + rnd() * 500;
+        o.em[k + 6] = Math.max(1.6, s * 0.03) * (0.7 + 0.6 * rnd());
+      }
+    }
+
     /* ------------------------------------------------- the clock --- */
 
     const spinExtra = (t) => {
@@ -597,9 +849,12 @@
     const power = (t) => {
       let p = 1;
       for (const s of SURGES) if (t > s - 100 && t < s + 1400) p += 0.55 * Math.exp(-Math.abs(t - s - 150) / 330);
+      // the surge that brands the year
+      if (BRAND && t > T_Y0 - 200 && t < T_Y0 + 1500) p += 0.65 * Math.exp(-Math.abs(t - T_Y0 - 120) / 300);
       p += 0.5 * smooth(T_CHARGE, T_FLASH, t);
       return p;
     };
+    const WAVES = BRAND ? SURGES.concat([T_Y0 - 220]) : SURGES;
 
     // The outer ring is drawn from the top down both sides; the inner one from the bottom up.
     const spanOut = (t) => Math.PI * easeOut(clamp(t / T_TRACE, 0, 1));
@@ -611,7 +866,7 @@
     const flareAt = (a, t, lit) => {
       let f = t >= lit ? Math.exp(-(t - lit) / 260) : 0;
       const d = angDist(a, TOP) / Math.PI;
-      for (const s of SURGES) {
+      for (const s of WAVES) {
         const ts = s + 650 * d;
         if (t >= ts && t < ts + 1500) f += 0.85 * Math.exp(-(t - ts) / 300);
       }
@@ -652,13 +907,17 @@
       return 1;
     }
 
-    function shock(r, w, alpha) {
-      if (alpha <= 0.004 || r < 1) return 0;
+    function shock(r, w, alpha) { return shockAt(cx, cy, r, r, w, alpha); }
+
+    /** A shock ring round (x, y), rx across and ry tall. */
+    function shockAt(x, y, rx, ry, w, alpha) {
+      if (alpha <= 0.004 || rx < 1) return 0;
       ctx.globalAlpha = Math.min(1, alpha * 0.45);
       ctx.strokeStyle = FIRE;
       ctx.lineWidth = w;
       ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, TAU);
+      if (ry === rx) ctx.arc(x, y, rx, 0, TAU);
+      else ctx.ellipse(x, y, rx, Math.max(0.5, ry), 0, 0, TAU);
       ctx.stroke();
       ctx.globalAlpha = Math.min(1, alpha);
       ctx.strokeStyle = FIRE_HOT;
@@ -706,6 +965,27 @@
         if (t < s || t > s + 1000) continue;
         const k = easeOut((t - s) / 1000);
         n += shock(lerp(R_IN, R * 1.2, k), lerp(R * 0.03, 1, k), 0.6 * (1 - k) * fade);
+      }
+      // The brand: a ring of the circle's fire pours in from the inner ring onto the year, and bursts
+      // out along it as the digits are branded.
+      if (BRAND && t >= T_Y0 && t < T_YB + 800) {
+        if (t < T_YB) {
+          const k = (t - T_Y0) / GATHER;
+          const e = k * k;
+          const r = lerp(R_IN, yHalf * 0.55, e);
+          n += shockAt(cx, lerp(cy, L.yearY, e), r, lerp(r, r * 0.5, e), lerp(R * 0.035, R * 0.006, e), 0.85 * smooth(0, 0.3, k) * (1 - 0.55 * e) * fade);
+          const d = L.yearSize * 1.6;
+          ctx.globalAlpha = Math.min(1, 0.5 * e * fade);
+          if (ctx.globalAlpha > 0.004) { ctx.drawImage(LT.burst.c, cx - d / 2, L.yearY - d / 2, d, d); n++; }
+        } else {
+          const u = (t - T_YB) / 800;
+          const d = L.yearSize * (1.6 + 0.8 * easeOut(Math.min(1, u * 3)));
+          ctx.globalAlpha = Math.min(1, 0.6 * Math.pow(1 - smooth(0, 0.45, u), 2) * fade);
+          if (ctx.globalAlpha > 0.004) { ctx.drawImage(LT.burst.c, cx - d / 2, L.yearY - d / 2, d, d); n++; }
+          const k = easeOut(u);
+          const rx = lerp(yHalf * 0.3, yHalf * 2 + L.yearSize, k);
+          n += shockAt(cx, L.yearY, rx, rx * 0.42, lerp(R * 0.03, 1.2, k), 0.9 * (1 - k) * fade);
+        }
       }
       // The collapse: the centre burns brighter and brighter.
       if (t > T_COLLAPSE && t < T_FLASH) {
@@ -1083,55 +1363,396 @@
       return n;
     }
 
-    /** The words: cut out of the light, white-hot cooling to steel; the sheen sweeping across. */
-    function drawWords(t, fade) {
-      if (t < T_W0) return 0;
+    /* ------------------------------------------------ the letters --- */
+
+    const TFC = { crop: [0, 0, 1, 1] };                  // reused: env.glyph reads them at once
+    const TFL = { crop: [0, 0, 1, 1], op: 'lighter' };
+    const setCrop = (tf, u0, v0, u1, v1) => { const c = tf.crop; c[0] = u0; c[1] = v0; c[2] = u1; c[3] = v1; return tf; };
+    const EDGE = new Float32Array(Math.max(NS, NC));
+    let firstMelt = Infinity;
+    for (const o of LETTERS) firstMelt = Math.min(firstMelt, o.m0);
+    const STEADY_END = firstMelt - 170;  // the words are whole pictures from T_STEADY until the first melt
+
+    /** How hot letter o is at t: white-hot as the fire builds it, cooling to steel, hot again as the circle falls in. */
+    function heatOf(o, t) {
+      const own = t < o.t1 ? 1 : 1 - smooth(o.t1, o.t1 + o.cool, t);
+      return Math.max(own, 0.9 * smooth(T_HEAT, T_MELT, t), smooth(o.m0 - 160, o.m0, t));
+    }
+
+    /** A title letter's burning edge at t: the head's x, and EDGE[j] per strip (ragged, its foot a little ahead). */
+    function traceEdge(o, t) {
+      const s = o.g.size;
+      const xe = traceX(o, clamp((t - o.t0) / (o.t1 - o.t0), 0, 1));
+      for (let j = 0; j < NS; j++) EDGE[j] = xe + s * (0.15 * ((j + 0.5) / NS - 0.5) + 0.05 * Math.sin(t * 0.043 + j * 2.3 + o.ph));
+      return xe;
+    }
+
+    /** A digit's burst at t: how far its fire has spread out from its middle (CSS px). */
+    function brandR(o, t) {
+      const k = clamp((t - o.t0) / (o.t1 - o.t0), 0, 1);
+      return k < 0.55 ? o.rInk * 1.06 * easeOut(k / 0.55) : lerp(o.rInk * 1.06, o.rMax, (k - 0.55) / 0.45);
+    }
+
+    /** A melting letter's top edge at t: EDGE[c] per column (ragged). */
+    function meltEdge(o, t) {
+      const s = o.g.size;
+      const ye = meltY(o, clamp((t - o.m0) / MELT_DUR, 0, 1));
+      for (let c = 0; c < NC; c++) EDGE[c] = ye + s * (0.06 * Math.sin(t * 0.037 + c * 1.9 + o.ph) + o.mj[c]);
+      return ye;
+    }
+
+    const colOf = (o, x) => {
+      const u = (x - o.x0) / o.w;
+      let c = 0;
+      while (c < NC - 1 && u >= o.ub[c + 1]) c++;
+      return c;
+    };
+
+    /** A title letter while the fire crosses it: burnt in up to its ragged edge, white-hot. */
+    function traceBody(o, t, a) {
+      traceEdge(o, t);
       let n = 0;
-      const p = clamp((t - T_W0) / (T_W1 - T_W0), 0, 1);
-      const half = (maxX - minX) / 2 + L.titleSize * 0.7;
-      const hw = half * easeOut(p);
-      if (hw < 0.5) return 0;
-      const a = fade;
-      // hot while being cut, and again as the collapsing circle pours into them
-      const heat = Math.max(1 - smooth(T_COOL0, T_COOL1, t),
-        0.9 * smooth(T_COLLAPSE + 350, T_FLASH, t) * (1 - smooth(T_FLASH + 120, T_FLASH + 1100, t)));
-      ctx.save();
-      if (p < 1) {
-        ctx.beginPath();
-        ctx.rect(cx - hw, L.top - L.titleSize * 1.2, hw * 2, L.bottom - L.top + L.titleSize * 2.4);
-        ctx.clip();
+      let lo = Infinity;
+      for (let j = 0; j < NS; j++) {
+        const u = (EDGE[j] - o.x0) / o.w;
+        if (u <= 0) continue;
+        if (u < lo) lo = u;
+        setCrop(TFC, 0, o.vb[j], Math.min(1, u), o.vb[j + 1]);
+        env.glyph(o.g, a, STEELFILL, TFC);
+        env.glyph(o.g, a, HOT, TFC);
+        n += 2;
       }
-      env.words(a, STEELFILL);
-      if (heat > 0.005) env.words(a * heat, HOT);
-      ctx.restore();
-      n += heat > 0.005 ? 2 : 1;
+      if (lo < 1) {
+        // the green heat round what is burnt, and just behind the fire it glows hotter still
+        env.glyph(o.g, 0.6 * a, BLOOM, setCrop(TFL, 0, 0, lo, 1));
+        const du = (o.g.size * 0.45) / o.w;
+        env.glyph(o.g, 0.55 * a, HOT, setCrop(TFL, Math.max(0, lo - du), 0, lo, 1));
+        n += 2;
+      }
+      return n;
+    }
 
-      // The edges of the cut, burning.
-      if (p < 1) {
-        const e = 1 - smooth(0.6, 1, p);
-        const y0 = L.top - L.titleSize * 0.15;
-        const hgt = L.bottom - L.top + L.titleSize * 0.3;
-        const gw = Math.max(5, L.titleSize * 0.16);
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        for (const dir of [-1, 1]) {
-          const x = cx + dir * hw;
-          const g = ctx.createLinearGradient(x - gw, 0, x + gw, 0);
-          g.addColorStop(0, 'rgba(110,245,165,0)');
-          g.addColorStop(0.5, 'rgba(160,255,205,0.6)');
-          g.addColorStop(1, 'rgba(110,245,165,0)');
-          ctx.globalAlpha = e;
-          ctx.fillStyle = g;
-          ctx.fillRect(x - gw, y0, gw * 2, hgt);
-          ctx.fillStyle = FIRE_HOT;
-          ctx.globalAlpha = 0.95 * e;
-          ctx.fillRect(x - 1, y0, 2, hgt);
-          n += 2;
+    /** A digit while it flares out of its burst: round from its middle, white-hot and glowing. */
+    function brandBody(o, t, a) {
+      const r = brandR(o, t);
+      if (r <= 0.5) return 0;
+      let n = 0;
+      for (let j = 0; j < o.vb.length - 1; j++) {
+        const ya = o.y0 + o.vb[j] * o.h;
+        const yb = o.y0 + o.vb[j + 1] * o.h;
+        const dy = ya > o.my ? ya - o.my : yb < o.my ? o.my - yb : 0;
+        if (dy >= r) continue;
+        const hw = Math.sqrt(r * r - dy * dy);
+        const u0 = Math.max(0, (o.mx - hw - o.x0) / o.w);
+        const u1 = Math.min(1, (o.mx + hw - o.x0) / o.w);
+        setCrop(TFC, u0, o.vb[j], u1, o.vb[j + 1]);
+        env.glyph(o.g, a, STEELFILL, TFC);
+        env.glyph(o.g, a, HOT, TFC);
+        env.glyph(o.g, 0.7 * a, BLOOM, setCrop(TFL, u0, o.vb[j], u1, o.vb[j + 1]));
+        n += 3;
+      }
+      return n;
+    }
+
+    /** A letter melting: what is left below its sinking, ragged top edge, white-hot. */
+    function meltBody(o, t, a) {
+      meltEdge(o, t);
+      let n = 0;
+      for (let c = 0; c < NC; c++) {
+        const v = (EDGE[c] - o.y0) / o.h;
+        if (v >= 1) continue;
+        setCrop(TFC, o.ub[c], Math.max(0, v), o.ub[c + 1], 1);
+        env.glyph(o.g, a, STEELFILL, TFC);
+        env.glyph(o.g, a, HOT, TFC);
+        env.glyph(o.g, 0.6 * a, BLOOM, setCrop(TFL, o.ub[c], Math.max(0, v), o.ub[c + 1], 1));
+        n += 3;
+      }
+      return n;
+    }
+
+    /** The letters: each one built by the fire, cooling to steel, then melting back into fire. */
+    function drawLetters(t, fade) {
+      if (!LETTERS.length || fade <= 0.003) return 0;
+      // All of them built and whole, cool or heating as one: the words in one picture (the same pixels
+      // as the letters), as many times as it takes.
+      if (t >= T_STEADY && t < STEADY_END) {
+        const back = 0.9 * smooth(T_HEAT, T_MELT, t);
+        env.words(fade, STEELFILL);
+        if (back > 0.005) env.words(fade * back, HOT);
+        return back > 0.005 ? 2 : 1;
+      }
+      let n = 0;
+      for (const o of LETTERS) {
+        if (t < o.t0 || t >= o.m1) continue;
+        if (t < o.t1) n += o.g.line === 0 ? traceBody(o, t, fade) : brandBody(o, t, fade);
+        else if (t >= o.m0) n += meltBody(o, t, fade);
+        else {
+          const h = heatOf(o, t);
+          env.glyph(o.g, fade, STEELFILL, o.tfS);
+          n++;
+          if (h > 0.02) { env.glyph(o.g, fade * h, HOT, o.tfS); n++; }
+          // the green heat round it from its own fire (a digit just branded flares a little more)
+          const own = Math.max(1 - smooth(o.t1, o.t1 + o.cool, t), smooth(o.m0 - 160, o.m0, t));
+          const bloom = fade * own * own * (o.g.line === 1 ? 0.6 + 0.1 * (1 - smooth(o.t1, o.t1 + 450, t)) : 0.6);
+          if (bloom > 0.03) { env.glyph(o.g, bloom, BLOOM, o.tfL); n++; }
         }
-        ctx.restore();
       }
+      return n;
+    }
 
-      // The sheen: a band of polished light crossing the steel, glinting where it passes.
+    /** Letter o's sparks: thrown off its head of fire, or out of its burst; slowed by the air, falling. */
+    function letterSparks(o, t, fade, low) {
+      const q = o.sp;
+      const G = o.g.size * 5;
+      let n = 0;
+      ctx.fillStyle = FIRE_HOT;
+      for (let k = 0; k < q.length; k += low ? 14 : 7) {
+        const age = t - q[k];
+        if (age < 0 || age >= q[k + 5]) continue;
+        const s = age / 1000;
+        const e = (1 - Math.exp(-2.4 * s)) / 2.4;
+        const x = q[k + 1] + q[k + 3] * e;
+        const y = q[k + 2] + q[k + 4] * e + 0.5 * G * s * s;
+        const al = (1 - age / q[k + 5]) * fade;
+        const z = q[k + 6];
+        ctx.globalAlpha = Math.min(1, al);
+        ctx.fillRect(x - z / 2, y - z / 2, z, z);
+        ctx.globalAlpha = Math.min(1, al * 0.7);
+        blit(TEX.spark, x, y);
+        n += 2;
+      }
+      return n;
+    }
+
+    /** The fire burning a title letter in: on the strokes at its edge, a head of fire, a flame on top. */
+    function traceFire(o, t, fade, low) {
+      let n = 0;
+      if (t < o.t1) {
+        const s = o.g.size;
+        const k = (t - o.t0) / (o.t1 - o.t0);
+        const xe = traceEdge(o, t);
+        const lit = smooth(0.07, 0.16, k) * (1 - smooth(0.8, 0.95, k)) * fade;
+        if (lit > 0.01) {
+          const band = s * 0.26;
+          const P = o.pts;
+          const span = Math.max(1, o.inkB - o.inkT);
+          for (let i = 0; i < P.length; i += low ? 6 : 3) {
+            const x = P[i];
+            if (x > xe + s * 0.13) break;
+            const y = P[i + 1];
+            const d = EDGE[clamp(Math.floor(((y - o.inkT) / span) * NS), 0, NS - 1)] - x;
+            if (d < 0 || d > band) continue;
+            const q = 1 - d / band;
+            ctx.globalAlpha = Math.min(1, q * q * 1.25 * lit);
+            blit(LT.burnT, x, y);
+            n++;
+          }
+          // the head: a column of green fire down the edge, and tongues of flame leaping off its top
+          const hh = span * 2.1;
+          const hw = s * 0.8;
+          ctx.globalAlpha = Math.min(1, 0.95 * lit);
+          ctx.drawImage(TEX.ring.c, xe - hw / 2, o.my - hh / 2, hw, hh);
+          const flick = Math.floor(t / 60) + o.fi;
+          for (let f = 0; f < 2; f++) {
+            const fl = TEX.flames[(flick + f) % 3];
+            const fw = s * (f ? 0.34 : 0.44);
+            const fh = s * (f ? 0.5 : 0.72) * (0.85 + 0.25 * Math.sin(t * 0.031 + o.ph + f * 2.4));
+            const fx = EDGE[f] - s * (f ? 0.12 : 0.02);
+            ctx.globalAlpha = Math.min(1, (f ? 0.75 : 0.95) * lit);
+            ctx.drawImage(fl.c, fx - fw / 2, o.inkT + s * 0.14 - fh * fl.base, fw, fh);
+          }
+          n += 3;
+        }
+      }
+      return n + letterSparks(o, t, fade, low);
+    }
+
+    /** The burst a digit flares out of: a flash, tongues of fire thrown out round it, fire on its strokes. */
+    function brandFire(o, t, fade, low) {
+      let n = 0;
+      const s = o.g.size;
+      const age = t - o.t0;
+      if (age < 560) {
+        const u = age / 560;
+        const d = Math.min(s, L.titleSize * 1.8) * (0.8 + 0.7 * easeOut(Math.min(1, u * 2.5)));
+        ctx.globalAlpha = Math.min(1, 0.95 * Math.pow(1 - u, 1.7) * fade);
+        ctx.drawImage(TEX.head.c, o.mx - d / 2, o.my - d / 2, d, d);
+        n++;
+        // tongues of fire leaping up off its top, fanning a little, and dying back
+        const e = Math.sin(Math.PI * Math.min(1, u * 1.1));
+        for (let i = 0; i < o.tongue.length; i += 3) {
+          const a = o.tongue[i];
+          const len = s * 0.62 * o.tongue[i + 1] * e;
+          if (len < 2) continue;
+          const fl = TEX.flames[(o.tongue[i + 2] + Math.floor(t / 70)) % 3];
+          const fw = s * 0.32;
+          const c = Math.cos(a + Math.PI / 2);
+          const sn = Math.sin(a + Math.PI / 2);
+          setT(c, sn, -sn, c, o.mx + Math.cos(a) * s * 0.3, o.inkT + s * 0.12 + (Math.sin(a) + 1) * s * 0.3);
+          ctx.globalAlpha = Math.min(1, 0.9 * e * fade);
+          ctx.drawImage(fl.c, -fw / 2, -len * fl.base, fw, len);
+          n++;
+        }
+        resetT();
+      }
+      if (t < o.t1) {
+        const r = brandR(o, t);
+        const lit = (1 - smooth(0.5, 0.65, age / (o.t1 - o.t0))) * fade;
+        if (lit > 0.01 && r > 0) {
+          const band = s * 0.09;
+          const P = o.pts;
+          for (let i = 0; i < P.length; i += low ? 15 : 9) {     // every third point (a big digit has many)
+            const d = r - P[i + 2];
+            if (d < 0) break;
+            if (d > band) continue;
+            const q = 1 - d / band;
+            ctx.globalAlpha = Math.min(1, q * q * 1.2 * lit);
+            blit(LT.burnY, P[i], P[i + 1]);
+            n++;
+          }
+        }
+      }
+      return n + letterSparks(o, t, fade, low);
+    }
+
+    /** Flames still licking at a letter while it is hot. */
+    function letterFlames(o, t, fade, h) {
+      const lvl = smooth(0.12, 0.85, h);
+      if (lvl <= 0.01) return 0;
+      let n = 0;
+      const s = Math.min(o.g.size, L.titleSize * 1.3);     // the year's big digits burn no taller
+      for (let k = 0; k < o.anc.length; k += 2) {
+        const ax = o.anc[k];
+        const ay = o.anc[k + 1];
+        // not before the fire has reached it
+        if (t < o.t1) {
+          if (o.g.line === 0) { if (traceX(o, (t - o.t0) / (o.t1 - o.t0)) < ax) continue; }
+          else if (brandR(o, t) < Math.hypot(ax - o.mx, ay - o.my)) continue;
+        }
+        const per = o.fper[k >> 1];
+        const tt = t + o.foff[k >> 1];
+        const c = Math.floor(tt / per);
+        const e = Math.sin(Math.PI * ((tt - c * per) / per));
+        const fh = s * (0.3 + 0.32 * rt(o.id * 131 + c * 17 + k)) * (0.35 + 0.65 * e) * lvl;
+        if (fh < 1.5) continue;
+        const fw = s * 0.26 * (0.8 + 0.2 * e);
+        const fl = TEX.flames[Math.floor(rt(o.id * 53 + c * 7 + k) * 3)];
+        ctx.globalAlpha = Math.min(1, Math.sqrt(e * lvl) * 0.9 * fade);
+        ctx.drawImage(fl.c, ax - fw / 2, ay + s * 0.06 - fh * fl.base, fw, fh);
+        n++;
+      }
+      return n;
+    }
+
+    /** A letter melting back into fire: fire on its strokes at the sinking edge, flames rising off it, embers. */
+    function meltFire(o, t, fade, low) {
+      let n = 0;
+      const s = o.g.size;
+      if (t < o.m1) {
+        const k = (t - o.m0) / MELT_DUR;
+        meltEdge(o, t);
+        const lit = smooth(0.05, 0.22, k) * (1 - smooth(0.86, 0.98, k)) * fade;
+        if (lit > 0.01) {
+          const band = s * 0.2;
+          const P = o.pts;
+          const spr = o.g.line === 0 ? LT.burnT : LT.burnY;
+          const stride = (o.g.line === 0 ? 6 : 9) * (low ? 2 : 1);
+          for (let i = 0; i < P.length; i += stride) {
+            const x = P[i];
+            const d = P[i + 1] - EDGE[colOf(o, x)];
+            if (d < 0 || d > band) continue;
+            const q = 1 - d / band;
+            ctx.globalAlpha = Math.min(1, q * q * 1.2 * lit);
+            blit(spr, x, P[i + 1]);
+            n++;
+          }
+          // the flames it turns into
+          for (let f = 0; f < 3; f++) {
+            const fx = lerp(o.inkL, o.inkR, 0.18 + 0.32 * f);
+            const ye = EDGE[colOf(o, fx)];
+            if (ye > o.inkB + s * 0.05) continue;
+            const fl = TEX.flames[(f + o.fi + Math.floor(t / 75)) % 3];
+            const sf = Math.min(s, L.titleSize * 1.4);
+            const fw = sf * 0.36;
+            const fh = sf * (0.7 + 0.35 * Math.sin(t * 0.023 + f * 2.1 + o.ph)) * (0.6 + 0.4 * Math.sin(Math.PI * Math.min(1, k * 1.1)));
+            ctx.globalAlpha = Math.min(1, 0.95 * lit);
+            ctx.drawImage(fl.c, fx - fw / 2, ye + s * 0.08 - fh * fl.base, fw, fh);
+            n++;
+          }
+        }
+      }
+      // the embers it leaves, rising and swaying as they die
+      const q = o.em;
+      for (let i = 0; i < q.length; i += low ? 14 : 7) {
+        const age = t - q[i];
+        if (age < 0 || age >= q[i + 5]) continue;
+        const sec = age / 1000;
+        const e = (1 - Math.exp(-1.6 * sec)) / 1.6;
+        const x = q[i + 1] + q[i + 3] * e + Math.sin(o.ph + i + sec * 4) * s * 0.06 * sec;
+        const y = q[i + 2] + q[i + 4] * e;
+        const u = age / q[i + 5];
+        const al = (1 - smooth(0.5, 1, u)) * (0.75 + 0.25 * Math.sin(sec * 19 + i)) * fade;
+        const z = q[i + 6] * (1 - 0.4 * u);
+        ctx.globalAlpha = Math.min(1, al * 0.85);
+        blit(TEX.ember, x, y);
+        ctx.fillStyle = i % 3 ? FIRE_LIGHT : FIRE_HOT;
+        ctx.globalAlpha = Math.min(1, al);
+        ctx.fillRect(x - z / 2, y - z / 2, z, z);
+        n += 2;
+      }
+      return n;
+    }
+
+    /** The spark that leaps from the ring's head of fire to the first letter, and the letter catching. */
+    function drawBolt(t, fade) {
+      if (!bolt || t < tCross || t > T_T0 + 260) return 0;
+      const b = bolt;
+      let n = 0;
+      if (t < T_T0) {
+        const k = (t - tCross) / BOLT;
+        const sw = Math.max(TEX.spark.w, L.titleSize * 0.3);
+        // the ring's fire flares as the spark leaves it
+        const fd = L.titleSize * (0.9 + 0.6 * k);
+        ctx.globalAlpha = Math.min(1, 0.8 * (1 - k) * fade);
+        ctx.drawImage(TEX.ring.c, b.x0 - fd / 2, b.y0 - fd / 2, fd, fd);
+        n++;
+        for (let j = 9; j >= 0; j--) {
+          const q = clamp(k - j * 0.05, 0, 1);
+          const iq = 1 - q;
+          const x = iq * iq * b.x0 + 2 * iq * q * b.qx + q * q * b.x1;
+          const y = iq * iq * b.y0 + 2 * iq * q * b.qy + q * q * b.y1;
+          const d = sw * (j === 0 ? 2.4 : 1.6 * (1 - j / 10));
+          ctx.globalAlpha = Math.min(1, (j === 0 ? 1 : 0.8 * (1 - j / 10)) * fade);
+          ctx.drawImage(TEX.spark.c, x - d / 2, y - d / 2, d, d);
+          n++;
+        }
+      } else {
+        const u = (t - T_T0) / 260;
+        const d = L.titleSize * (0.7 + 0.9 * easeOut(u));
+        ctx.globalAlpha = Math.min(1, 0.9 * Math.pow(1 - u, 2) * fade);
+        ctx.drawImage(TEX.head.c, b.x1 - d / 2, b.y1 - d / 2, d, d);
+        n++;
+      }
+      return n;
+    }
+
+    /** In front of the letters: the fire that builds them, keeps them hot and melts them. */
+    function drawLetterFire(t, fade, low) {
+      if (!LETTERS.length || fade <= 0.003) return 0;
+      let n = drawBolt(t, fade);
+      for (const o of LETTERS) {
+        if (t < o.t0) continue;
+        if (t < o.t1 + 900) n += o.g.line === 0 ? traceFire(o, t, fade, low) : brandFire(o, t, fade, low);
+        if (t < o.m0) n += letterFlames(o, t, fade, heatOf(o, t));
+        else n += meltFire(o, t, fade, low);
+      }
+      return n;
+    }
+
+    /** The sheen: a band of polished light crossing the steel, glinting where it passes. */
+    function drawSheen(t, fade) {
+      let n = 0;
+      const a = fade;
       for (let si = 0; si < SHEENS.length; si++) {
         const s0 = SHEENS[si];
         if (t < s0 || t >= s0 + SHEEN_DUR) continue;
@@ -1246,9 +1867,11 @@
       n += drawHeadSparks(t);
       n += drawSparks(t, fade, low);
       ctx.restore();
-      n += drawWords(t, fade);
+      n += drawLetters(t, fade);
+      n += drawSheen(t, fade);
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
+      n += drawLetterFire(t, fade, low);
       n += drawFlashFront(t, fade);
       n += drawEmbers(t, fade, low);
       ctx.restore();
@@ -1259,11 +1882,14 @@
       step: function () { /* every frame is drawn from t alone */ },
       draw: draw,
       /**
-       * Before midnight: the words' pictures, the glyph marks turned the way the first moments need
-       * them (later ones are turned as the circle turns, a few a second), and every texture touched
-       * once, off the picture.
+       * Before midnight: the words' pictures and the letters' (steel and white-hot), the glyph marks
+       * turned the way the first moments need them (later ones are turned as the circle turns, a few
+       * a second), and every texture touched once, off the picture.
        */
       prime: function () {
+        env.warm(STEELFILL);
+        env.warm(HOT);
+        env.warm(BLOOM);
         const first = new Set();
         const need = (set, n, rot, kinds, place) => {
           for (let tt = 0; tt <= 1600; tt += 100) {
@@ -1289,9 +1915,19 @@
           env.words(0.01, STEELFILL);
           env.words(0.01, HOT);
           env.words(0.01, SHEEN);
+          // a letter of each line in each fill, moved onto that pixel, so that their pictures are drawn once
+          for (const o of [TITLE[0], YEAR[0]]) {
+            if (!o) continue;
+            const tf = { dx: (px + 0.5) / dpr - o.g.cx, dy: (py + 0.5) / dpr - o.g.cy };
+            env.glyph(o.g, 0.01, STEELFILL, tf);
+            env.glyph(o.g, 0.01, HOT, tf);
+            tf.op = 'lighter';
+            env.glyph(o.g, 0.01, HOT, tf);
+            env.glyph(o.g, 0.01, BLOOM, tf);
+          }
           ctx.setTransform(1, 0, 0, 1, 0, 0);
           ctx.globalAlpha = 0.01;
-          const all = [TEX.ring, TEX.ringIn, TEX.head, TEX.spark, TEX.ember, TEX.node, TEX.glint].concat(TEX.flames);
+          const all = [TEX.ring, TEX.ringIn, TEX.head, TEX.spark, TEX.ember, TEX.node, TEX.glint, LT.burnT, LT.burnY, LT.burst].concat(TEX.flames);
           for (const sp of all) ctx.drawImage(sp.c, px, py, 1, 1);
           for (const sp of first) ctx.drawImage(sp.c, px, py, 1, 1);
         } finally {

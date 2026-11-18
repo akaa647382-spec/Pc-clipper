@@ -90,7 +90,7 @@
     <div id="overlay" class="overlay pos-tl size-m" hidden>
       <div class="ov-clock" id="ovClock"><span class="t" id="ovTime">--:--:--</span><span class="ampm" id="ovAmpm"></span></div>
       <div class="ov-date" id="ovDate">&nbsp;</div>
-      <div class="ov-count" id="ovCount"><span class="lbl" id="ovCountLbl">NEW YEAR IN</span><span class="val" id="ovCountVal">--:--:--</span></div>
+      <div class="ov-count" id="ovCount"><span class="lbl" id="ovCountLbl">NEW YEAR IN</span><span class="val" id="ovCountVal">--:--:--</span><span class="ten-fx" id="ovTenFx" aria-hidden="true"></span></div>
       <div class="ov-sync" id="ovSync"><i></i><span id="ovSyncTxt">IN SYNC</span></div>
     </div>
 
@@ -354,7 +354,8 @@
 
         <h3 class="sec">Final countdown</h3>
         <label class="sw"><input type="checkbox" id="optMs"><i></i><span>Show milliseconds<small>In the start time and the countdown to it: 9:29:28.348 PM, 00:00:03.348. The countdown's seconds move with the clock either way, and the movie launches at that exact millisecond either way.</small></span></label>
-        <label class="sw"><input type="checkbox" id="optFinal"><i></i><span>10 · 9 · 8 countdown animation <kbd>T</kbd><small>For the last ten seconds the countdown inside the clock panel grows and ticks 10, 9, 8… Nothing is drawn across the picture.</small></span></label>
+        <label class="sw"><input type="checkbox" id="optFinal"><i></i><span>10 · 9 · 8 countdown animation <kbd>T</kbd><small>For the last ten seconds the countdown inside the clock panel grows and ticks 10, 9, 8… in the style of the app theme. Nothing is drawn across the picture.</small></span></label>
+        <button id="previewTen" class="btn btn-ghost btn-sm ten-preview" type="button">Preview 10 · 9 · 8</button>
 
         <h3 class="sec">Happy New Year animation</h3>
         <div class="seg seg-grid" id="optCelebration" role="radiogroup">

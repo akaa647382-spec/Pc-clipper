@@ -3,20 +3,27 @@
  *
  *   0.0 s     the instant it plays, a tactical display boots: a white-hot line cuts across the
  *             middle of the frame and splits into two silver scan lines that sweep to the top and
- *             bottom edges; a vertical scan crosses the frame and lights up the display's frame,
- *             side scales and heading tape as it passes.
+ *             bottom edges, leaving faint contact marks where they find the letters; a vertical
+ *             scan crosses the frame and lights up the display's frame, side scales and heading tape.
  *   0.2 s     a targeting reticle (tick ring, turning segments, range arcs) ignites in the middle of
  *             the picture, spinning, and slides down onto the words while it closes in.
- *   1.05 s    a scan line renders the words in brushed steel; the reticle opens where they cross it.
- *   1.35 s    corner brackets snap in round the words and lock with a red pulse at 1.8 s.
- *   2.3-9 s   five salvoes: red-hot tracers fire from both lower corners, arc upward and burst into
+ *   0.44 s    target acquisition: a red seeker box drops out of the reticle and hops along the title
+ *             in a quick staccato; it snaps onto each letter in turn and a scan line renders that
+ *             letter in brushed steel, top to bottom (HAPPY NEW YEAR by 1.5 s). The reticle opens
+ *             where the letters cross it, each as it arrives.
+ *   1.5 s     the seeker opens the year's readout: its digits power on as a counter, scrambling (it
+ *             never shows the year that is ending), and lock one by one, left to right, each with a
+ *             target box, a red blink and a tick of the reticle. The last lock (2.55 s) locks the
+ *             whole display: corner brackets snap round the words and a red ring pulses out.
+ *             (A title without a year locks at 1.8 s.)
+ *   2.8-9 s   five salvoes: red-hot tracers fire from both lower corners, arc upward and burst into
  *             silver-white flak above the words, each burst marked by the display, with showers of
  *             sparks; a sheen runs across the steel letters.
  *   8.65 s    the finale: one last round from each gun curves in from the sides; the crosshair turns
  *             red, the two meet above the reticle at 9.75 s in one big burst and the brackets blink
  *             red again; a last sheen crosses the steel while the sparks rain down.
- *   11 s      the display powers down: scales and lines retract, the brackets let go, the reticle
- *             shrinks to a point and the words collapse into a line of light that winks out by 12.45 s.
+ *   11 s      the display powers down: scales and lines retract, the brackets let go, the letters
+ *             scan out from the ends inwards and the reticle shrinks to a point that winks out by 12.45 s.
  *
  * Every frame is a function of the seed and t alone (nothing is simulated from frame to frame), so
  * renderAt(t), a resize in the middle and the live animation all draw the same picture.
@@ -39,6 +46,8 @@
   };
   // The same words in plain white without a halo: laid over the steel to polish it.
   const SHEEN = { stops: [[0, '#ffffff'], [1, '#f6f8ff']], halo: '' };
+  // A digit of the year in red, without a halo: laid over the steel as it locks (the lock blink).
+  const REDFILL = { stops: [[0, '#ff9a9d'], [1, '#ff5a5f']], halo: '' };
 
   const WHITE = '#ffffff';
   const SILVER = '#e6e8ee';
@@ -61,13 +70,14 @@
   const T_RET1 = 700;
   const T_SLIDE0 = 760;        // ... and slides onto the words
   const T_SLIDE1 = 1620;
-  const T_REVEAL0 = 1050;      // a scan line renders the words
-  const T_REVEAL1 = 1560;
-  const T_BRK0 = 1360;         // the corner brackets snap in
-  const T_BRK1 = 1760;
-  const T_LOCK = 1800;         // locked: a red pulse
-  const SHEENS = [[1800, 650], [4300, 1050], [7000, 1050], [10050, 900]];  // a sheen across the steel [start, length]
-  const VOLLEYS = [[2300, 2], [3500, 3], [4750, 2], [5950, 3], [7200, 3]];   // [first launch, shots per gun]
+  const T_SEEK = 440;          // the seeker drops out of the reticle ...
+  const T_FIRST = 560;         // ... and lands on the first letter; the others follow a beat apart
+  const SCAN_T = 150;          // a scan line renders one letter (and wipes it out at the end)
+  const HOLD = 24;             // the seeker sits on a letter this long before it hops on
+  const LOCK_GAP = 230;        // between the locks of the year's digits
+  // (The lock itself, T_LOCK, and the brackets that come with it depend on the words: see create.)
+  const SHEENS0 = [[0, 650], [4300, 1050], [7000, 1050], [10050, 900]];  // a sheen across the steel [start, length] (the first: at the lock)
+  const VOLLEYS0 = [[2300, 2], [3500, 3], [4750, 2], [5950, 3], [7200, 3]];  // [first launch, shots per gun] (the first: not before the lock)
   const T_FINALE = 8650;       // both guns fire one last round each; they meet above the reticle
   const FINALE_FLIGHT = 1100;
   const T_DOWN = FADE_FROM;    // the power-down
@@ -209,6 +219,98 @@
     const inkY1 = lines[lines.length - 1].y1 + half;
     const inkH = inkY1 - inkY0;
 
+    /* --- the letters: acquired, one at a time --------------------------- */
+
+    // Every letter of both lines: { g (from fx.js), arr (it starts to render), out (it starts to be
+    // wiped out), det (the boot's scan finds it), b (its target box) }; the year's digits also have
+    // lock (when the counter stops on it), slot, scr (what it shows while it scrambles) and rate.
+    const DPR = env.dpr;
+    const LET = env.glyphs().map((g) => ({ g: g, arr: 0, out: 0, det: 0, lock: -1, slot: -1, scr: null, rate: 60, b: null }));
+    const NL = LET.length;
+    const TITLE = LET.filter((e) => e.g.line === 0);
+    const YEAR = LET.filter((e) => e.g.line === 1);
+    // A year in digits is read out like a counter; any other year is acquired like the title.
+    const COUNTER = /^[0-9]+$/.test(L.year) && YEAR.length === L.year.length ? YEAR : [];
+    const ACQ = COUNTER.length ? TITLE : TITLE.concat(YEAR);
+    const nA = ACQ.length;
+    const nC = COUNTER.length;
+    // The ten digits set on the year's line: the counter's scrambling digits are moved from there.
+    const DIG = nC ? env.textGlyphs('0123456789', 1) : [];
+    const CAD = nA > 1 ? clamp(780 / (nA - 1), 48, 80) : 0;         // the staccato: one letter per beat
+    ACQ.forEach((e, i) => { e.arr = T_FIRST + i * CAD; });
+    const T_ACQ_END = nA ? ACQ[nA - 1].arr : T_FIRST - 100;
+    const T_GATE = T_ACQ_END + 170;               // the seeker opens the readout (or goes home)
+    COUNTER.forEach((e, p) => { e.slot = p; e.arr = T_GATE + 40 + p * 55; });
+    // The lock of the whole display: the counter's last digit, or a beat after the title.
+    const T_LOCK = nC ? Math.max(2450, COUNTER[nC - 1].arr + 150 + LOCK_GAP * (nC - 1)) : Math.max(1750, T_ACQ_END + SCAN_T + 330);
+    COUNTER.forEach((e, p) => { e.lock = T_LOCK - LOCK_GAP * (nC - 1 - p); });
+    const T_BRK0 = T_LOCK - 440;                  // the corner brackets snap in
+    const T_BRK1 = T_LOCK - 40;
+    const SHEENS = SHEENS0.map((s, i) => (i ? s : [T_LOCK + 40, s[1]]));
+    const VOLLEYS = VOLLEYS0.map((v, i) => (i ? v : [Math.max(v[0], T_LOCK + 250), v[1]]));
+    // The power-down wipes them out from the ends inwards, towards the point the reticle shrinks to.
+    let far = 1;
+    for (const e of LET) far = Math.max(far, Math.abs(e.g.cx - BX));
+    for (const e of LET) e.out = T_DOWN + 40 + (1 - Math.abs(e.g.cx - BX) / far) * 460;
+    let T_OUT0 = Infinity;
+    for (const e of LET) T_OUT0 = Math.min(T_OUT0, e.out);
+    // From here until the first one goes, the words are one picture.
+    let T_SETTLED = T_LOCK + 640;
+    for (const e of ACQ) T_SETTLED = Math.max(T_SETTLED, e.arr + SCAN_T + 300);
+    // The boot's two scan lines leave a contact mark on each letter as they pass its line.
+    const scanPass = (y) => {
+      const u = clamp(Math.abs(y - H / 2) / (H / 2), 0, 1);
+      let a = 0;
+      let b = 1;
+      for (let i = 0; i < 18; i++) { const m = (a + b) / 2; if (m * m * (3 - 2 * m) < u) a = m; else b = m; }
+      return T_SPLIT0 + (T_SPLIT1 - T_SPLIT0) * a;
+    };
+    let T_CONTACTS_END = 0;
+    for (const e of LET) {
+      const g = e.g;
+      e.det = scanPass(g.cy);
+      e.b = [g.x0 - g.size * 0.17, g.top - g.size * 0.15, g.x1 + g.size * 0.17, g.bottom + g.size * 0.15];
+      T_CONTACTS_END = Math.max(T_CONTACTS_END, e.arr + 30);
+    }
+    // The readout's gate round the year's digits.
+    const GATE = nC ? [COUNTER[0].b[0], COUNTER[0].b[1], COUNTER[nC - 1].b[2], COUNTER[nC - 1].b[3]] : null;
+    // The seeker's stops: the reticle's centre ('home'), each letter, then the gate (or home again).
+    const STOPS = [{ at: T_SEEK, b: null }];
+    for (const e of ACQ) STOPS.push({ at: e.arr, b: e.b });
+    const LAST = { at: T_GATE, b: GATE };
+    STOPS.push(LAST);
+    const SEEK_END = nC ? T_LOCK + 260 : T_GATE;
+
+    // The picture of a letter is cut as fx.js cuts it: crop fractions for a height on the screen.
+    const PAD_HALO = (Math.max(6, TS * 0.28) * 1.6 + TS * 0.04) / Math.min(1, DPR) + 2;
+    const PAD_BARE = (TS * 0.04) / Math.min(1, DPR) + 2;
+    function cropAt(g, y, pad) {
+      const top = Math.floor((g.cy - g.size * 0.62 - pad) * DPR) / DPR;
+      const bottom = Math.ceil((g.cy + g.size * 0.62 + pad) * DPR) / DPR;
+      return clamp((y - top) / Math.max(1, bottom - top), 0, 1);
+    }
+
+    // The reticle opens where the letters are: each line's box, cut into one stretch per letter at
+    // the middle of each gap, is closed to the ring only while that letter is on the screen.
+    const ON = new Uint8Array(NL);
+    const RUNS = [];
+    for (let l = 0; l < 2; l++) {
+      const idx = [];
+      LET.forEach((e, i) => { if (e.g.line === l) idx.push(i); });
+      if (!idx.length) continue;
+      const first = LET[idx[0]].g;
+      const lastG = LET[idx[idx.length - 1]].g;
+      const b = l === 0 || lines.length > 1 ? BOXES[l]
+        : { x0: first.x0 - TS * 0.25, x1: lastG.x1 + TS * 0.25, y0: first.top - TS * 0.15, y1: first.bottom + TS * 0.15 };
+      const cuts = new Float64Array(idx.length + 1);
+      cuts[0] = b.x0;
+      for (let i = 1; i < idx.length; i++) cuts[i] = (LET[idx[i - 1]].g.x1 + LET[idx[i]].g.x0) / 2;
+      cuts[idx.length] = b.x1;
+      RUNS.push({ x0: b.x0, x1: b.x1, y0: b.y0, y1: b.y1, cuts: cuts, idx: idx });
+    }
+    const MID = BOXES.length === 3 ? BOXES[2] : null;
+    let midOn = false;
+
     /* --- the reticle ----------------------------------------------------- */
 
     const R1 = clamp(Math.max((L.bottom - L.top) * 0.74, TS * 1.55), 30 * k, H * 0.36);   // locked onto the words
@@ -227,20 +329,28 @@
       RY = lerp(SY, BY, v);
       RR = lerp(R0, R1, v) * (0.3 + 0.7 * ign) * (1 - col * col * col);
     }
+    // Each lock of a digit of the year ticks the reticle round a notch (and the scales with it).
+    const NOTCH = TAU / 36;
     function spin(t) {
-      return 2.6 * (1 - Math.exp(-t / 650)) + 0.1 * t / 1000 + 7 * easeIn(smooth(T_DOWN + 150, T_DOWN + 950, t));
+      let s = 2.6 * (1 - Math.exp(-t / 650)) + 0.1 * t / 1000 + 7 * easeIn(smooth(T_DOWN + 150, T_DOWN + 950, t));
+      for (let p = 0; p < nC; p++) {
+        const d = t - COUNTER[p].lock;
+        if (d > 0) s += NOTCH * (d >= 140 ? 1 : backOut(d / 140));
+      }
+      return s;
     }
 
-    // The reticle opens where the words cross it, as the scan reveals them (and closes as they collapse).
-    let gapLimit = -Infinity;
-    let gapSquash = 1;
+    // The reticle opens where the letters cross it, each as it arrives (and closes as it goes).
     function blocked(x, y) {
-      if (y > gapLimit) return false;
-      for (let i = 0; i < BOXES.length; i++) {
-        const b = BOXES[i];
-        if (x > b.x0 && x < b.x1 && y > BY + (b.y0 - BY) * gapSquash && y < BY + (b.y1 - BY) * gapSquash) return true;
+      for (let r = 0; r < RUNS.length; r++) {
+        const ln = RUNS[r];
+        if (y <= ln.y0 || y >= ln.y1 || x <= ln.x0 || x >= ln.x1) continue;
+        const c = ln.cuts;
+        const n = ln.idx.length;
+        for (let i = 0; i < n - 1; i++) if (x < c[i + 1]) return ON[ln.idx[i]] === 1;
+        return ON[ln.idx[n - 1]] === 1;
       }
-      return false;
+      return midOn && x > MID.x0 && x < MID.x1 && y > MID.y0 && y < MID.y1;
     }
     const ARC_N = 180;
     const MIN_ARC = 0.2;

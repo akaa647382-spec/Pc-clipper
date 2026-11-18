@@ -113,6 +113,173 @@ const stripView = (page) => page.evaluate(() => {
 const stripOpen = (page, timeout) => waitFor(page, () => !!window.__AP.SnapCam.view, null, timeout || 60000);
 const stripClosed = (page) => waitFor(page, () => !window.__AP.SnapCam.view && document.getElementById('strip').hidden, null, 4000);
 
+/**
+ * 10 · 9 · 8 in each app theme's own style, through "Preview 10 · 9 · 8" in the Display tab (open,
+ * with a movie loaded and paused): it ticks with the clock in the clock panel, runs the theme's own
+ * animation, draws nothing outside the panel, and goes when it is over, clicked again, or a test run
+ * starts. The theme is left as it was not.
+ */
+async function tenPreviews(s, themes) {
+  const page = s.page;
+  // The val's own animation per theme; its other layers' names start with it too (ten-out is shared).
+  const OWN = { arc: 'ten-arc', hotrod: 'ten-hotrod', infinity: 'ten-infinity', gamma: 'ten-gamma', warmachine: 'ten-wm', tva: 'ten-tva', doom: 'ten-doom' };
+  const look = () => page.evaluate(() => {
+    const g = (id) => document.getElementById(id);
+    const box = g('ovCount');
+    return {
+      pv: window.__AP.UI.tenPv, final: g('overlay').classList.contains('final'), shown: !g('overlay').hidden && !g('ovCount').hidden,
+      n: g('ovCountVal').textContent, lbl: g('ovCountLbl').textContent, btn: g('previewTen').textContent, toasts: g('toasts').textContent,
+      anims: document.getAnimations().filter((a) => a.effect && a.effect.target && box.contains(a.effect.target) && a.playState !== 'idle')
+        .map((a) => a.animationName + (a.effect.pseudoElement || ''))
+    };
+  });
+  // Every frame for `ms`: the number, the clock and where the panel is.
+  const frames = (ms) => page.evaluate(async (ms) => {
+    const g = (id) => document.getElementById(id);
+    const out = [];
+    const end = performance.now() + ms;
+    while (performance.now() < end) {
+      await new Promise((r) => requestAnimationFrame(r));
+      const r = g('overlay').getBoundingClientRect();
+      out.push({ t: performance.now(), n: g('ovCountVal').textContent, clock: g('ovTime').textContent, final: g('overlay').classList.contains('final'),
+        shown: !g('overlay').hidden && !g('ovCount').hidden, box: [r.x, r.y, r.width, r.height].map((x) => Math.round(x * 10) / 10).join(',') });
+    }
+    return out;
+  }, ms);
+  // Clicks the button early in a second of the clock, so its 10 is followed by 9 at that second's end;
+  // returns the frames from just before the click.
+  const startPreview = async () => {
+    await page.waitForFunction(() => { const p = window.__AP.Clock.now() % 1000; return p > 60 && p < 330; }, null, { polling: 'raf', timeout: 3000 });
+    const seen = frames(2400);
+    await page.click('#previewTen');
+    return seen;
+  };
+  const noFinal = () => waitFor(page, () => !document.getElementById('overlay').classList.contains('final'), null, 1500);
+  // A tick held at several moments: around the panel, nothing differs from the moment it is over.
+  const outside = async () => {
+    await page.waitForFunction((n) => document.getElementById('ovCountVal').textContent !== n, await page.textContent('#ovCountVal'), { polling: 'raf', timeout: 3000 });
+    const box = await page.evaluate(() => { const r = document.getElementById('overlay').getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; });
+    const M = 36;
+    const clip = { x: Math.max(0, Math.floor(box.x) - M), y: Math.max(0, Math.floor(box.y) - M) };
+    clip.width = Math.ceil(box.x + box.w) + M - clip.x;
+    clip.height = Math.ceil(box.y + box.h) + M - clip.y;
+    const pics = [];
+    for (const t of [950, 0, 60, 150, 300, 600]) {
+      const n = await page.evaluate(async (t) => {
+        const box = document.getElementById('ovCount');
+        window.__held = document.getAnimations().filter((a) => a.effect && a.effect.target && box.contains(a.effect.target));
+        window.__held.forEach((a) => { a.pause(); a.currentTime = t; });
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        return document.getElementById('ovCountVal').textContent;
+      }, t);
+      pics.push({ n, png: (await page.screenshot({ clip })).toString('base64') });
+    }
+    // (Only what is still held: one that a new tick has cancelled since would come back to life.)
+    await page.evaluate(() => (window.__held || []).forEach((a) => { if (a.playState === 'paused') a.play(); }));
+    return page.evaluate(async ({ pics, box, clip }) => {
+      const read = async (b64) => {
+        const bmp = await createImageBitmap(new Blob([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], { type: 'image/png' }));
+        const c = new OffscreenCanvas(bmp.width, bmp.height);
+        const g = c.getContext('2d');
+        g.drawImage(bmp, 0, 0);
+        return g.getImageData(0, 0, bmp.width, bmp.height);
+      };
+      const base = await read(pics[0].png);
+      const k = base.width / clip.width;
+      const G = 4;                       // a few pixels of glow may reach past the edge
+      const x0 = (box.x - clip.x - G) * k, x1 = (box.x + box.w - clip.x + G) * k, y0 = (box.y - clip.y - G) * k, y1 = (box.y + box.h - clip.y + G) * k;
+      let worst = 0;
+      for (const p of pics.slice(1)) {
+        const d = await read(p.png);
+        let n = 0;
+        for (let y = 0; y < d.height; y++) {
+          for (let x = 0; x < d.width; x++) {
+            if (x >= x0 && x <= x1 && y >= y0 && y <= y1) continue;
+            const i = (y * d.width + x) * 4;
+            if (Math.max(Math.abs(d.data[i] - base.data[i]), Math.abs(d.data[i + 1] - base.data[i + 1]), Math.abs(d.data[i + 2] - base.data[i + 2])) > 20) n++;
+          }
+        }
+        worst = Math.max(worst, n);
+      }
+      return { worst, oneTick: pics.every((p) => p.n === pics[0].n), size: base.width + 'x' + base.height };
+    }, { pics, box, clip });
+  };
+  const keys = ['showOverlay', 'showClock', 'showDate', 'showCount', 'finalTen', 'theme', 'overlayPos', 'overlaySize', 'celebration'];
+  const settings = () => page.evaluate((keys) => JSON.stringify(keys.map((k) => window.__AP.cfg[k])), keys);
+  check('the Display tab has "Preview 10 · 9 · 8" next to the 10 · 9 · 8 switch', await page.evaluate(() => {
+    const b = document.getElementById('previewTen');
+    const sw = document.getElementById('optFinal').closest('label');
+    return !!b && b.offsetWidth > 0 && /Preview 10 · 9 · 8/.test(b.textContent) && sw.nextElementSibling === b;
+  }));
+
+  for (const id of themes) {
+    await page.click(`#themeGrid .theme[data-id="${id}"]`);
+    const before = await settings();
+    const rows = await startPreview();
+    const i10 = rows.findIndex((r) => r.final && r.shown && r.n === '10');
+    const i9 = rows.findIndex((r, i) => i > i10 && r.n === '9');
+    const i8 = rows.findIndex((r, i) => i > i9 && r.n === '8');
+    check(`${id}: the preview puts 10 in the clock panel at once, then 9 as the clock's second turns`,
+      i10 >= 0 && i10 < 12 && i9 > i10 && rows[i9].t - rows[i10].t <= 1100 && rows[i9].clock !== rows[i9 - 1].clock && rows.slice(i10, i9).every((r) => r.final && r.n === '10'),
+      i9 > 0 ? `10 for ${Math.round(rows[i9].t - rows[i10].t)} ms, clock ${rows[i9 - 1].clock} -> ${rows[i9].clock}` : JSON.stringify(rows.slice(0, 3)));
+    const boxes = new Set(rows.slice(i10).filter((r) => r.final).map((r) => r.box));
+    check(`${id}: the panel does not move or change size from one second to the next`, i8 > i9 && boxes.size === 1, [...boxes].join(' | '));
+    const v = await look();
+    const mine = v.anims.filter((a) => a.startsWith(OWN[id]) || a.startsWith('ten-out'));
+    check(`${id}: its own animation is the one running, on the number and its layers`,
+      v.anims.includes(OWN[id]) && mine.length === v.anims.length && v.anims.filter((a) => a.includes('::')).length >= 2 && !v.anims.includes('tenpop'), v.anims.join(' '));
+    await sleep(150);
+    await shot(page, 'ten-' + id);
+    // (Should a new tick come in the middle, its frames are as good a sample: around the panel they
+    // must not differ either.)
+    const o = await outside();
+    check(`${id}: nothing is drawn outside the clock panel, all through a tick`, o.worst === 0, JSON.stringify(o));
+    if (id === 'arc') {
+      // A new theme mid-preview: its animation takes over, the old one is gone, the preview goes on.
+      await page.click('#themeGrid .theme[data-id="gamma"]');
+      await sleep(120);
+      const w = await look();
+      check('a theme chosen during the preview takes over at once, the old one stops', w.pv === v.pv && w.final && w.anims.includes('ten-gamma') && !w.anims.some((a) => a.startsWith('ten-arc')), w.anims.join(' '));
+      await page.click('#themeGrid .theme[data-id="arc"]');
+    }
+    if (id !== themes[themes.length - 1]) {
+      await page.click('#previewTen');
+      await noFinal();
+      const x = await look();
+      check(`${id}: clicked again, the preview stops and the panel is as it was`, !x.pv && !x.final && x.btn === 'Preview 10 · 9 · 8' && !/^\d+$/.test(x.n) && x.lbl === 'NEW YEAR IN', JSON.stringify({ pv: x.pv, final: x.final, n: x.n, btn: x.btn }));
+    } else {
+      const ended = await waitFor(page, () => !window.__AP.UI.tenPv && !document.getElementById('overlay').classList.contains('final'), null, 10000);
+      const x = await look();
+      check(`${id}: the preview stops by itself after 1, and the panel is as it was`, ended && x.btn === 'Preview 10 · 9 · 8' && !/^\d+$/.test(x.n) && x.lbl === 'NEW YEAR IN' && x.anims.length === 0, JSON.stringify({ n: x.n, lbl: x.lbl, btn: x.btn, anims: x.anims }));
+    }
+    check(`${id}: the preview changed no setting`, (await settings()) === before, await settings());
+  }
+
+  // With the clock panel switched off, the preview still shows it, and hides it again after.
+  await page.keyboard.press('o');
+  await waitFor(page, () => document.getElementById('overlay').hidden, null, 2000);
+  await page.click('#previewTen');
+  check('with the clock panel off, the preview shows it while it runs', await waitFor(page, () => !document.getElementById('overlay').hidden && document.getElementById('overlay').classList.contains('final'), null, 1500));
+  await page.click('#previewTen');
+  check('and hides it again when it stops, still switched off', await waitFor(page, () => document.getElementById('overlay').hidden, null, 1500) && await page.evaluate(() => window.__AP.cfg.showOverlay === false));
+  await page.keyboard.press('o');
+  await waitFor(page, () => !document.getElementById('overlay').hidden, null, 2000);
+
+  // Never during a test run: refused, and a test run that starts stops a running preview.
+  await page.click('#previewTen');
+  await waitFor(page, () => document.getElementById('overlay').classList.contains('final'), null, 1500);
+  await page.click('.tab[data-tab="test"]');
+  await page.click('[data-test="slip"]');
+  check('a test run that starts stops the preview', await waitFor(page, () => !!window.__AP.Engine.test && !window.__AP.UI.tenPv && !document.getElementById('overlay').classList.contains('final'), null, 3000));
+  await page.click('.tab[data-tab="display"]');
+  await page.click('#previewTen');
+  await sleep(400);
+  const t = await look();
+  check('during a test run Preview 10 · 9 · 8 is refused and says why', !t.pv && !t.final && /Not during a test run/.test(t.toasts), JSON.stringify({ pv: t.pv, final: t.final, toasts: t.toasts }));
+  await page.evaluate(() => window.__AP.Engine.endTest('Stopped by the test.'));
+  await waitFor(page, () => !window.__AP.Engine.test && document.getElementById('video').paused, null, 4000);
+}
+
 const scenarios = {
 
   async boot() {
@@ -2215,6 +2382,8 @@ const scenarios = {
       }
       await s.page.click('#themeGrid .theme[data-id="hotrod"]');
       check('choosing a theme restyles the app', await s.page.evaluate(() => document.documentElement.dataset.theme === 'hotrod' && getComputedStyle(document.documentElement).getPropertyValue('--acc2').trim() === '#e02b35'));
+      await tenPreviews(s, themes);
+      await s.page.click('#themeGrid .theme[data-id="hotrod"]');
       const hidden = (id) => waitFor(s.page, (id) => document.getElementById(id).hidden, id, 2000);
       const shown = (id) => waitFor(s.page, (id) => !document.getElementById(id).hidden, id, 2000);
       await s.page.keyboard.press('o');

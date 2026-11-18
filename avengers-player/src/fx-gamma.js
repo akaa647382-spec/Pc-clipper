@@ -1,21 +1,31 @@
 /*!
  * Avengers Player: 'gamma', a gamma surge at the instant of the snap.
  *
- * A green thunderclap: a short flash, and heavy shockwave rings slam out along the ground from just
- * under the words. Jagged green-white lightning leaps between points around the words and along the
- * edges of the picture, striking again every so often (and in a second surge half-way through);
- * glowing embers and glassy shards rise; the words burn pale lime to green in a glow of their own,
- * with electricity crawling over them. At the end the arcs die down and the embers drift away.
+ * Smash, then strike. At midnight a green thunderclap cracks across the sky and the year comes down
+ * out of it: the digits plunge in at the top of the picture one after another, white-hot with green
+ * trails, and hit the ground one, two, three, four, each slamming a ring out from under it. As the
+ * last one lands the shock goes off: heavy rings slam out, the digits jolt and settle, arcs race away
+ * along the ground and glassy shards fly. Then lightning writes the title: for each letter in turn
+ * the air charges, a bolt feels its way down from the sky and hits it (now and then one fork hits
+ * two), the charge pours into the letter from where it was hit, and it flashes white-hot and cools to
+ * pale lime. From then on the words burn in a glow of their own that beats like a heart: lightning
+ * leaps around them and along the edges of the picture, electricity crawls over the letters, embers
+ * and shards rise, and half-way through it all surges again. At the end the arcs die down and the
+ * letters short out one by one, left to right, in a last crackle and a spray of sparks. (No year: the
+ * thunderclap is a bolt into the ground under the words, and the lightning writes the title.) The
+ * year is only ever the one given: there is no old year rolling over.
  *
- * Light only, the movie is under the canvas: everything but the words is added with 'lighter'.
- * Every bolt and particle path is worked out in create(), and the frame for a time t depends only on
- * the seed and t (nothing is simulated from frame to frame, so step() has nothing to do).
+ * Light only, the movie is under the canvas: everything but the letters is added with 'lighter'.
+ * Every bolt, letter and particle path is worked out in create(), and the frame for a time t depends
+ * only on the seed and t (nothing is simulated from frame to frame, so step() has nothing to do).
  *
  * Speed, measured on a software-rendered canvas: a long stroke costs about the same whatever its
- * width, a 1-pixel one a quarter of that, and a stretched image several times more per pixel than
+ * width, a 1-pixel one a sixth of that, and a stretched image several times more per pixel than
  * one drawn at its own size. So only a bolt's trunk gets a glow (its core and its branches are
- * 1-pixel lines), the words are never stamped stretched, and the big glows (around the words,
- * along the edges) are rendered once at their final size and only copied.
+ * 1-pixel lines), a letter is only stretched while it falls or is hit, its white heat is the small
+ * halo-less picture added on top (not a second picture with a halo), once every letter has settled
+ * the words are stamped in one piece, and the big glows (each letter's and each line's, the pool on
+ * the ground, the bloom of a hit, the edges) are rendered once at their final size and only copied.
  */
 (function (root) {
   'use strict';
@@ -31,9 +41,22 @@
   const BEAT = 1600;                    // while the words hold, the surge beats like a heart
   const WORD_BUDGET = 1500;             // points on the letters, for the light that plays over them
 
-  // The words: pale lime to green. HOT is the white heat they arrive with (and flash back to).
+  // How the words arrive and leave.
+  const FALL = 300;                     // a digit plunges from above the picture to the ground in this time (ms)
+  const LEAD = 70;                      // a bolt's leader feels its way down this long before it hits its letter
+  const LEAD_STEPS = 6;                 // ... and is drawn in this many stages
+  const WIPE = 90;                      // the charge pours into a letter from where the bolt hits, top to bottom
+  const TITLE_SPAN = 1300;              // the lightning writes the title in at most this time
+  const LEAVE_AT = 10600;               // the first letter crackles off ...
+  const LEAVE_SPAN = 1250;              // ... the last one this much later ...
+  const LEAVE_DUR = 300;                // ... and each takes this long to go out
+
+  // The words: pale lime to green. HOT is the white heat they flash back to in the surge (the words
+  // in one piece); FLASH is pure light in their shapes (no halo): added on a letter, it is the white
+  // heat a letter arrives with (white plus lime is white), and the flash as it is hit or lands.
   const FILL = { stops: [[0, '#f4ffd6'], [0.42, '#d8ff5a'], [1, '#17c25d']], halo: 'rgba(0,0,0,0.88)' };
   const HOT = { stops: [[0, '#ffffff'], [0.55, '#f3ffdc'], [1, '#c8ff92']], halo: 'rgba(0,0,0,0.7)' };
+  const FLASH = { stops: [[0, '#ffffff'], [0.5, '#f2ffe0'], [1, '#c4ffa0']], halo: null };
 
   const BOLT_BLOOM = 'rgb(30,210,100)';
   const BOLT_GLOW = 'rgb(80,255,150)';
@@ -87,6 +110,28 @@
     return radialTex(32, [[0, 'rgba(255,255,240,1)'], [0.18, 'rgba(' + rgb + ',1)'], [0.42, 'rgba(' + rgb + ',0.38)'], [1, 'rgba(' + rgb + ',0)']]);
   }
 
+  /** The green trail a falling digit leaves: bright where the digit is (the bottom), gone at the top. */
+  function trailTex() {
+    const c = makeCanvas(32, 256);
+    const g = c.getContext('2d');
+    const across = g.createLinearGradient(0, 0, 32, 0);
+    across.addColorStop(0, 'rgba(40,220,110,0)');
+    across.addColorStop(0.28, 'rgba(90,255,150,0.55)');
+    across.addColorStop(0.5, 'rgba(236,255,220,1)');
+    across.addColorStop(0.72, 'rgba(90,255,150,0.55)');
+    across.addColorStop(1, 'rgba(40,220,110,0)');
+    g.fillStyle = across;
+    g.fillRect(0, 0, 32, 256);
+    g.globalCompositeOperation = 'destination-in';
+    const along = g.createLinearGradient(0, 0, 0, 256);
+    along.addColorStop(0, 'rgba(0,0,0,0)');
+    along.addColorStop(0.6, 'rgba(0,0,0,0.35)');
+    along.addColorStop(1, 'rgba(0,0,0,1)');
+    g.fillStyle = along;
+    g.fillRect(0, 0, 32, 256);
+    return c;
+  }
+
   function textures() {
     if (TEX) return TEX;
     const streak = makeCanvas(256, 32);
@@ -105,6 +150,7 @@
       // white heat: the impact, where an arc touches, a shard catching the light
       hot: radialTex(64, [[0, 'rgba(255,255,255,1)'], [0.12, 'rgba(245,255,225,0.95)'], [0.32, 'rgba(190,255,130,0.45)'], [0.65, 'rgba(60,230,120,0.12)'], [1, 'rgba(0,120,50,0)']]),
       streak: streak,
+      trail: trailTex(),
       edge: [edgeTex(0), edgeTex(1), edgeTex(2), edgeTex(3)],
       ember: [emberTex('216,255,90'), emberTex('110,255,160'), emberTex('236,255,190')]
     };
@@ -113,7 +159,8 @@
 
   /**
    * The light that belongs to this screen and these words, rendered at device resolution so that a
-   * frame only copies it: the glow around the letters with its pool on the ground, and the four edges.
+   * frame only copies it: the glow of each letter (it comes and goes with its letter), the pool of
+   * light on the ground under the words, and the four edges.
    */
   function sized(env, geo) {
     const L = env.layout;
@@ -125,32 +172,55 @@
     const dpr = env.dpr;
     const S = env.scale;
     const P = geo.P;
-
-    // The glow: soft light stacked on the letters, and a wide pool of it on the ground under them.
-    const pad = L.titleSize * 0.8;
-    const poolW = W * 0.62;
-    const poolH = H * 0.22;
-    const x0 = Math.max(0, Math.floor(Math.min(geo.x0 - pad, geo.gx - poolW / 2)));
-    const x1 = Math.min(W, Math.ceil(Math.max(geo.x1 + pad, geo.gx + poolW / 2)));
-    const y0 = Math.max(0, Math.floor(geo.y0 - pad));
-    const y1 = Math.min(H, Math.ceil(geo.gy + poolH * 0.55));
-    const c = makeCanvas(Math.round((x1 - x0) * dpr), Math.round((y1 - y0) * dpr));
-    const g = c.getContext('2d');
-    g.setTransform(dpr, 0, 0, dpr, -x0 * dpr, -y0 * dpr);
-    g.globalCompositeOperation = 'lighter';
-    g.globalAlpha = 0.5;
-    g.drawImage(T.glow, geo.gx - poolW / 2, geo.gy - poolH * 0.45, poolW, poolH);
     const n = P.length >> 1;
     const every = Math.max(1, Math.round(n / 700));
     const area = every * geo.step * geo.step;          // letter area each sprite stands for
-    for (let i = 0; i < n; i += every) {
-      const x = P[i * 2];
-      const y = P[i * 2 + 1];
-      const s = (y > geo.split ? L.yearSize : L.titleSize) * 0.46;
-      g.globalAlpha = Math.min(0.5, 4.2 * area / (s * s));
-      g.drawImage(T.glow, x - s / 2, y - s / 2, s, s);
+
+    // The glow of the letters for which has(k) is true: soft light stacked on their points.
+    function glowOf(has) {
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+      for (let i = 0; i < n; i += every) {
+        const k = geo.pG[i];
+        if (k < 0 || !has(k)) continue;
+        const s = geo.G[k].size * 0.46;
+        const x = P[i * 2];
+        const y = P[i * 2 + 1];
+        if (x - s / 2 < x0) x0 = x - s / 2; if (x + s / 2 > x1) x1 = x + s / 2;
+        if (y - s / 2 < y0) y0 = y - s / 2; if (y + s / 2 > y1) y1 = y + s / 2;
+      }
+      if (!(x1 >= x0)) return null;
+      x0 = Math.floor(x0 - 1); x1 = Math.ceil(x1 + 1); y0 = Math.floor(y0 - 1); y1 = Math.ceil(y1 + 1);
+      const c = makeCanvas(Math.round((x1 - x0) * dpr), Math.round((y1 - y0) * dpr));
+      const g = c.getContext('2d');
+      g.setTransform(dpr, 0, 0, dpr, -x0 * dpr, -y0 * dpr);
+      g.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < n; i += every) {
+        const k = geo.pG[i];
+        if (k < 0 || !has(k)) continue;
+        const s = geo.G[k].size * 0.46;
+        g.globalAlpha = Math.min(0.5, 4.2 * area / (s * s));
+        g.drawImage(T.glow, P[i * 2] - s / 2, P[i * 2 + 1] - s / 2, s, s);
+      }
+      return { canvas: c, x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
     }
-    const radiance = { canvas: c, x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+    // each letter's own (it comes and goes with its letter), and each line's in one piece (for while
+    // the whole line simply stands there)
+    const glows = geo.G.map((g, k) => glowOf((j) => j === k));
+    const lineGlows = [0, 1].map((line) => glowOf((j) => geo.G[j].line === line));
+
+    // The pool of light on the ground under the words.
+    const poolW = W * 0.62;
+    const poolH = H * 0.22;
+    const px0 = Math.max(0, Math.floor(geo.gx - poolW / 2));
+    const px1 = Math.min(W, Math.ceil(geo.gx + poolW / 2));
+    const py0 = Math.max(0, Math.floor(geo.gy - poolH * 0.45));
+    const py1 = Math.max(py0 + 1, Math.min(H, Math.ceil(geo.gy + poolH * 0.55)));
+    const pc = makeCanvas(Math.round((px1 - px0) * dpr), Math.round((py1 - py0) * dpr));
+    const pg = pc.getContext('2d');
+    pg.setTransform(dpr, 0, 0, dpr, -px0 * dpr, -py0 * dpr);
+    pg.globalAlpha = 0.5;
+    pg.drawImage(T.glow, geo.gx - poolW / 2, geo.gy - poolH * 0.45, poolW, poolH);
+    const pool = { canvas: pc, x: px0, y: py0, w: px1 - px0, h: py1 - py0 };
 
     // The edges of the picture, each a strip of light.
     const ew = Math.round(90 * S);
@@ -163,8 +233,15 @@
       k.getContext('2d').drawImage(T.edge[e], 0, 0, k.width, k.height);
       edges.push({ canvas: k, x: e === 1 ? W - ew : 0, y: e === 3 ? H - ew : 0, w: w, h: h });
     }
+    // The bloom of green light round a letter as a bolt hits it, at its final size (copied, never stretched).
+    const bs = Math.ceil(L.titleSize * 2.4);
+    const bloom = makeCanvas(Math.round(bs * dpr), Math.round(bs * dpr));
+    bloom.getContext('2d').drawImage(T.glow, 0, 0, bloom.width, bloom.height);
+    const hs = Math.ceil(L.titleSize * 1.5);
+    const heat = makeCanvas(Math.round(hs * dpr), Math.round(hs * dpr));
+    heat.getContext('2d').drawImage(T.hot, 0, 0, heat.width, heat.height);
     SIZED.key = key;
-    SIZED.v = { radiance: radiance, edges: edges };
+    SIZED.v = { glows: glows, lineGlows: lineGlows, pool: pool, edges: edges, bloom: { canvas: bloom, s: bs }, heat: { canvas: heat, s: hs } };
     return SIZED.v;
   }
 
@@ -193,13 +270,34 @@
     const R = (a, b) => a + (b - a) * rnd();
     const hair = 1 / Math.max(0.5, env.dpr || 1);        // one device pixel: the cheapest line there is
 
-    /* -- where the words are: the box of each line, from the points on its letters -- */
+    /* -- the letters, the points on them, and which letter each point is on -- */
+    const G = env.glyphs();
+    const NG = G.length;
     const wp = env.wordPoints(WORD_BUDGET);
     const P = wp.pts;
     const NP = P.length >> 1;
     const step = Math.max(2, wp.step || 4);
     const year = !!L.year;
     const split = year ? (L.titleY + L.yearY) / 2 : Infinity;
+    const pG = new Int16Array(NP);
+    for (let i = 0; i < NP; i++) {
+      const x = P[i * 2];
+      const line = P[i * 2 + 1] < split ? 0 : 1;
+      let best = -1;
+      let bd = Infinity;
+      for (let k = 0; k < NG; k++) {
+        const g = G[k];
+        if (g.line !== line) continue;
+        const d = x < g.x0 ? g.x0 - x : x > g.x1 ? x - g.x1 : 0;
+        if (d < bd) { bd = d; best = k; }
+      }
+      pG[i] = best;
+    }
+    const gPts = [];                                          // the points on each letter
+    for (let k = 0; k < NG; k++) gPts.push([]);
+    for (let i = 0; i < NP; i++) if (pG[i] >= 0) gPts[pG[i]].push(i);
+
+    /* -- where the words are: the box of each line, from the points on its letters -- */
     let tx0 = Infinity, tx1 = -Infinity, ty0 = Infinity, ty1 = -Infinity;
     let yx0 = Infinity, yx1 = -Infinity, yy0 = Infinity, yy1 = -Infinity;
     for (let i = 0; i < NP; i++) {
@@ -227,7 +325,57 @@
     const gap = L.titleSize * 0.22;                           // how far the arcs keep off the letters
     const gx = L.cx;                                          // the impact: just under the words
     const gy = Math.min(H - 10 * S, yy1 + L.titleSize * 0.42);
-    const pre = sized(env, { P: P, step: step, split: split, gx: gx, gy: gy, x0: Math.min(tx0, yx0), x1: Math.max(tx1, yx1), y0: ty0 });
+    const pre = sized(env, { P: P, step: step, G: G, pG: pG, gx: gx, gy: gy });
+
+    /* -- when each letter arrives and leaves -- */
+    const born = new Float32Array(NG);        // the moment a digit lands or a letter is hit
+    const leave = new Float32Array(NG);       // the moment it starts to crackle off
+    const fallD = new Float32Array(NG);       // how far a digit falls
+    const rsT = new Float32Array(NG * 2).fill(-1e9);    // a letter's bolt striking again
+    const YG = [];
+    const TG = [];
+    for (let k = 0; k < NG; k++) (G[k].line === 1 ? YG : TG).push(k);
+    // The year smashes down first, digit after digit, coming in at the top of the picture.
+    let tland = FALL;
+    for (const k of YG) {
+      born[k] = tland;
+      fallD[k] = G[k].cy + G[k].size * 0.4;
+      tland += R(36, 58);
+    }
+    const landN = YG.length ? born[YG[YG.length - 1]] : 0;
+    const SMASH = landN;          // the last digit down: the shock (with no year: the thunderclap's bolt hits the ground)
+    // Then the lightning writes the title: one strike per letter, or one fork for two, quick within a
+    // word and with a breath between words.
+    const sameWord = (a, b) => G[b].x0 - G[a].x1 < G[a].size * 0.3;
+    const groups = [];
+    for (let j = 0; j < TG.length;) {
+      if (j > 0 && j + 1 < TG.length && sameWord(TG[j], TG[j + 1]) && rnd() < 0.3) { groups.push([TG[j], TG[j + 1]]); j += 2; }
+      else { groups.push([TG[j]]); j += 1; }
+    }
+    const at = [];
+    let tt = 0;
+    for (let q = 0; q < groups.length; q++) {
+      at.push(tt);
+      const last = groups[q][groups[q].length - 1];
+      tt += q + 1 < groups.length && sameWord(last, groups[q + 1][0]) ? R(70, 100) : R(170, 230);
+    }
+    const span = at.length ? at[at.length - 1] : 0;
+    const squeeze = span > TITLE_SPAN ? TITLE_SPAN / span : 1;
+    const T0 = YG.length ? landN + 330 : 300;                 // the first letter is hit
+    for (let q = 0; q < groups.length; q++) for (const k of groups[q]) born[k] = T0 + at[q] * squeeze;
+    const titleDone = TG.length ? T0 + span * squeeze : landN;
+    const settleAt = Math.max(titleDone, landN) + 1700;      // every letter cool and still: stamped in one piece
+    // each line's glow in one piece from when its last letter's flare has died down until its first letter goes
+    const lineStill = [[TG.length ? titleDone + 1000 : Infinity, Infinity], [YG.length ? landN + 1000 : Infinity, Infinity]];
+    // At the end they crackle off one by one, left to right across both lines.
+    const order = [];
+    for (let k = 0; k < NG; k++) order.push([G[k].cx / W + R(-0.035, 0.035), k]);
+    order.sort((a, b) => a[0] - b[0]);
+    order.forEach((o, r) => { leave[o[1]] = LEAVE_AT + (NG > 1 ? r / (NG - 1) : 0) * LEAVE_SPAN; });
+    for (let k = 0; k < NG; k++) lineStill[G[k].line][1] = Math.min(lineStill[G[k].line][1], leave[k]);
+    const pBorn = new Float32Array(NP);
+    const pLeave = new Float32Array(NP);
+    for (let i = 0; i < NP; i++) { pBorn[i] = pG[i] >= 0 ? born[pG[i]] : 0; pLeave[i] = pG[i] >= 0 ? leave[pG[i]] : LEAVE_AT; }
 
     /* -- lightning -- */
 
@@ -271,8 +419,23 @@
       for (let i = 2; i < pts.length; i += 2) path.lineTo(pts[i], pts[i + 1]);
     }
 
+    /** The first fraction f of a polyline. */
+    function addPart(path, pts, f) {
+      const n = pts.length / 2 - 1;
+      const upto = clamp(f, 0, 1) * n;
+      const whole = Math.floor(upto);
+      path.moveTo(pts[0], pts[1]);
+      for (let i = 1; i <= whole; i++) path.lineTo(pts[i * 2], pts[i * 2 + 1]);
+      const r = upto - whole;
+      if (r > 0.01 && whole < n) path.lineTo(lerp(pts[whole * 2], pts[whole * 2 + 2], r), lerp(pts[whole * 2 + 1], pts[whole * 2 + 3], r));
+    }
+
     const bolts = [];
-    /** Three versions of one arc (it jumps between them as it strikes again), each with branches. */
+    /**
+     * Three versions of one arc (it jumps between them as it strikes again), each with branches; a
+     * fork (s.fork) is a second trunk splitting off two thirds of the way down; an arc that has to
+     * find its way first (s.lead) also gets its leader, the trunk growing from its start in stages.
+     */
     function makeBolt(s) {
       const len = Math.hypot(s.bx - s.ax, s.by - s.ay) || 1;
       const v = [];
@@ -281,6 +444,16 @@
         const mp = new Path2D();
         addTo(mp, main);
         const n = main.length / 2 - 1;
+        let fork = null;
+        let fi = 0;
+        if (s.fork) {
+          fi = Math.round(n * R(0.58, 0.7));
+          const fx = main[fi * 2];
+          const fy = main[fi * 2 + 1];
+          const fl = Math.hypot(s.fork[0] - fx, s.fork[1] - fy);
+          fork = polyline(fx, fy, s.fork[0], s.fork[1], fl * R(-0.15, 0.15), 1, 0, s.jit * 1.2, Math.max(3, s.levels - 2));
+          addTo(mp, fork);
+        }
         const nb = s.branches ? Math.max(1, Math.round(s.branches * R(0.5, 1))) : 0;
         const bp = nb ? new Path2D() : null;
         for (let b = 0; b < nb; b++) {
@@ -301,9 +474,21 @@
           const pts = polyline(px, py, ex, ey, bl * R(-0.12, 0.12), 0, -1, s.jit * 1.3, Math.max(2, s.levels - 2));
           addTo(bp, pts);
         }
-        v.push({ main: mp, br: bp });
+        let lead = null;
+        if (s.lead && k === 0) {
+          lead = [];
+          const f0 = fi / n;
+          for (let q = 1; q < LEAD_STEPS; q++) {
+            const f = q / LEAD_STEPS;
+            const p = new Path2D();
+            addPart(p, main, f);
+            if (fork && f > f0) addPart(p, fork, (f - f0) / (1 - f0));
+            lead.push(p);
+          }
+        }
+        v.push({ main: mp, br: bp, lead: lead });
       }
-      return { v: v, ax: s.ax, ay: s.ay, bx: s.bx, by: s.by, len: len, w: s.w || 1, edge: s.edge == null ? -1 : s.edge };
+      return { v: v, ax: s.ax, ay: s.ay, bx: s.bx, by: s.by, fx: s.fork ? s.fork[0] : NaN, fy: s.fork ? s.fork[1] : NaN, len: len, w: s.w || 1, edge: s.edge == null ? -1 : s.edge };
     }
 
     // Where arcs can leap. Each gives the ends, how much it bows and which way, and how jagged it is.
@@ -316,6 +501,17 @@
       // the thunderclap: from beside the impact up to the edge of the picture
       rise(side) {
         return { ax: gx + side * R(0.1, 0.2) * W, ay: gy - R(0, 0.04) * H, bx: side < 0 ? -20 : W + 20, by: R(0.14, 0.42) * H, bow: R(0.05, 0.11) * W, ux: side, uy: 1, jit: 0.055, levels: 6, branches: 5, w: 1.2 };
+      },
+      // the thunderclap: the sky cracking open across the top of the picture, forks hanging down
+      sky() {
+        const xa = R(0.03, 0.2) * W;
+        const xb = R(0.8, 0.97) * W;
+        return { ax: xa, ay: R(0.03, 0.12) * H, bx: xb, by: R(0.03, 0.14) * H, bow: R(0.07, 0.13) * H, ux: 0, uy: 1, jit: 0.045, levels: 6, branches: 7, bu: [0, 1], w: 1.35 };
+      },
+      // the thunderclap with no year: a bolt from the sky into the ground under the words
+      down() {
+        const len = gy + 20;
+        return { ax: gx + R(-0.12, 0.12) * W, ay: -20, bx: gx, by: gy, bow: R(-0.08, 0.08) * len, ux: 1, uy: 0, jit: 0.05, levels: 6, branches: 6, bu: [0, 1], w: 1.3 };
       },
       // down one side of the words, bowing out
       side(side) {
@@ -378,9 +574,9 @@
     };
 
     // Every flash of every bolt: start (ms), duration, bolt, version, peak, kind (0 a strike that
-    // dies away, 1 one hop of a live arc that holds).
+    // dies away, 1 one hop of a live arc that holds, 2 a leader growing down before its strike).
     const fl = [];
-    const sparkAt = [];                                          // where strikes throw sparks
+    const sparkAt = [];                                          // where strikes throw sparks: t, x, y, count
     function strike(t0, s, peak, strokes) {
       const b = bolts.length;
       bolts.push(makeBolt(s));
@@ -391,7 +587,7 @@
         fl.push([t, dur, b, j % 3, peak * (1 - 0.12 * j), 0]);
         t += dur + R(15, 60);                                    // dark for an instant, then again
       }
-      sparkAt.push(t0, s.ax, s.ay, t0 + 10, s.bx, s.by);
+      sparkAt.push(t0, s.ax, s.ay, 3, t0 + 10, s.bx, s.by, 3);
     }
     function crawl(t0, s, peak, len) {
       const b = bolts.length;
@@ -403,22 +599,53 @@
         fl.push([t, hop + 8, b, j % 3, peak * Math.max(0.25, k), 1]);
       }
     }
+    /** A bolt from the sky that hits letter ks[0] (and, forked, ks[1]) at tc: it writes them. */
+    function letterStrike(tc, ks) {
+      const g = G[ks[0]];
+      const drop = Math.max(40, g.top);
+      const ax = clamp(g.cx + R(-0.32, 0.32) * drop, W * 0.02, W * 0.98);
+      const ay = -R(8, 30) * S;
+      const bx = g.cx + R(-0.12, 0.12) * (g.x1 - g.x0);
+      const by = g.top - g.size * 0.04;
+      const len = Math.hypot(bx - ax, by - ay);
+      const s = { ax: ax, ay: ay, bx: bx, by: by, bow: R(-0.1, 0.1) * len, ux: 1, uy: 0, jit: 0.06, levels: 6, branches: 4, bu: [0, 1], w: 1.35, lead: true };
+      if (ks.length > 1) { const h = G[ks[1]]; s.fork = [h.cx + R(-0.12, 0.12) * (h.x1 - h.x0), h.top - h.size * 0.04]; }
+      const b = bolts.length;
+      bolts.push(makeBolt(s));
+      fl.push([tc - LEAD, LEAD, b, 0, 0.62, 2]);
+      const n = 2;
+      let t = tc;
+      for (let j = 0; j < n; j++) {
+        const dur = j === n - 1 ? R(130, 210) : R(55, 85);
+        fl.push([t, dur, b, j % 3, (j === 0 ? 1.25 : 1) * (1 - 0.12 * j), 0]);
+        if (j > 0) for (const k of ks) { if (rsT[k * 2] < -1e8) rsT[k * 2] = t; else rsT[k * 2 + 1] = t; }
+        t += dur + R(15, 45);
+      }
+      sparkAt.push(tc, bx, by, 11);
+      if (s.fork) sparkAt.push(tc, s.fork[0], s.fork[1], 11);
+    }
 
-    // The thunderclap: arcs race out from the impact along the ground and up to the edges.
-    strike(0, spec.ground(-1), 1, 3);
-    strike(20, spec.ground(1), 1, 3);
-    strike(70, spec.rise(-1), 0.95, 2);
-    strike(110, spec.rise(1), 0.95, 2);
-    strike(330, spec.edge(3), 0.8, 1);
-    strike(430, spec.side(-1), 0.9, 2);
-    strike(500, spec.side(1), 0.9, 2);
-    strike(640, spec.edge(0), 0.8, 2);
-    strike(700, spec.edge(1), 0.8, 2);
-    strike(780, spec.crown(), 0.9, 2);
-    // Then the words crackle: live arcs hug them one after another, now here, now there ...
+    // The thunderclap at midnight: the sky cracks open (or, with no year, a bolt hits the ground) ...
+    if (YG.length) {
+      strike(0, spec.sky(), 1.15, 3);
+      strike(25, spec.edge(2), 0.9, 2);
+    } else {
+      strike(0, spec.down(), 1, 3);
+    }
+    // ... and where the year smashes down, arcs race out along the ground and up to the edges.
+    strike(SMASH, spec.ground(-1), 1, 2);
+    strike(SMASH + 20, spec.ground(1), 1, 2);
+    strike(SMASH + 40, spec.rise(-1), 0.95, 1);
+    strike(SMASH + 70, spec.rise(1), 0.95, 1);
+    // Then the lightning writes the title, letter by letter.
+    for (let q = 0; q < groups.length; q++) letterStrike(born[groups[q][0]], groups[q]);
+    // From then on the words crackle: live arcs hug them one after another, now here, now there ...
     const quiet = (t) => t > MID - 200 && t < MID + 520;                   // room for the surge
+    const after = titleDone + 150;
+    strike(after + 60, spec.edge(0), 0.8, 2);
+    strike(after + 120, spec.edge(1), 0.8, 2);
     let lastSide = 1;
-    for (let tq = 900; tq < STRIKES_END; ) {
+    for (let tq = after; tq < STRIKES_END;) {
       const late = smooth(STRIKES_END - 2800, STRIKES_END, tq);            // fewer and weaker at the end
       if (!quiet(tq)) {
         const r = rnd();
@@ -433,7 +660,7 @@
     }
     // ... and it strikes around them and along the edges of the picture.
     let arches = 0;
-    for (let tq = 1150; tq < STRIKES_END; ) {
+    for (let tq = after + 250; tq < STRIKES_END;) {
       const late = smooth(STRIKES_END - 2800, STRIKES_END, tq);
       if (!quiet(tq)) {
         const r = rnd();
@@ -458,24 +685,29 @@
     const fS = new Float32Array(NF), fD = new Float32Array(NF), fP = new Float32Array(NF);
     const fB = new Uint16Array(NF), fV = new Uint8Array(NF), fK = new Uint8Array(NF);
     for (let i = 0; i < NF; i++) { fS[i] = fl[i][0]; fD[i] = fl[i][1]; fB[i] = fl[i][2]; fV[i] = fl[i][3]; fP[i] = fl[i][4]; fK[i] = fl[i][5]; }
-    const actB = new Uint16Array(NF), actV = new Uint8Array(NF), actI = new Float32Array(NF);
+    const actB = new Uint16Array(NF), actV = new Uint8Array(NF), actI = new Float32Array(NF), actP = new Uint8Array(NF);
     const edgeBoost = new Float32Array(4);
 
     /* -- the shockwave rings: start, duration, reach, width, strength, flatness -- */
     const rings = [
-      [0, 1200, 0.62 * W, 13, 1, 0.2],
-      [120, 1450, 0.76 * W, 8, 0.75, 0.22],
-      [0, 900, 1.2 * Math.max(W, H), 3, 0.5, 1],                // the blast in the air, a full circle
-      [MID, 1100, 0.56 * W, 10, 0.85, 0.2],
-      [MID + 130, 1300, 0.68 * W, 6, 0.55, 0.22]
+      [SMASH, 1200, 0.62 * W, 13, 1, 0.2, gx, gy],
+      [SMASH + 120, 1450, 0.76 * W, 8, 0.75, 0.22, gx, gy],
+      [SMASH, 900, 1.2 * Math.max(W, H), 3, 0.5, 1, gx, gy],          // the blast in the air, a full circle
+      [MID, 1100, 0.56 * W, 10, 0.85, 0.2, gx, gy],
+      [MID + 130, 1300, 0.68 * W, 6, 0.55, 0.22, gx, gy]
     ];
+    // each digit slams a ring of its own out from under it as it lands
+    for (const k of YG) {
+      const g = G[k];
+      rings.push([born[k], 650, (g.x1 - g.x0) * 1.6, 7, 0.75, 0.24, g.cx, Math.min(H - 4 * S, g.bottom + g.size * 0.06)]);
+    }
     // a ripple along the ground on every beat, at the top of each pulse
     for (let tb = 1000 + BEAT / 4; tb < STRIKES_END - 600; tb += BEAT) {
-      if (Math.abs(tb - MID) > 700) rings.push([tb, 1400, 0.46 * W, 4, 0.32, 0.2]);
+      if (Math.abs(tb - MID) > 700) rings.push([tb, 1400, 0.46 * W, 4, 0.32, 0.2, gx, gy]);
     }
 
     /* -- embers (glowing points) and shards (glassy splinters), all on fixed paths -- */
-    const NE = 1100;
+    const NE = 1500;
     const eT = new Float32Array(NE), eX = new Float32Array(NE), eY = new Float32Array(NE);
     const eVX = new Float32Array(NE), eVY = new Float32Array(NE), eVT = new Float32Array(NE), eK = new Float32Array(NE);
     const eL = new Float32Array(NE), eS = new Float32Array(NE), eWA = new Float32Array(NE), eWF = new Float32Array(NE), eWP = new Float32Array(NE);
@@ -498,8 +730,20 @@
           R(30, 90) * S, R(1.6, 2.6), R(1.4, 3.2), R(5, 12) * S, rnd() < 0.25 ? 1 : 0);
       }
     }
-    burst(0, 130, 1150, 0.07);
+    burst(SMASH, 130, 1150, 0.07);
     burst(MID, 80, 850, 0.05);
+    // each digit kicks up a spray of sparks along the ground where it lands
+    for (const k of YG) {
+      const g = G[k];
+      const w = g.x1 - g.x0;
+      for (let i = 0; i < 14; i++) {
+        const side = rnd() < 0.5 ? -1 : 1;
+        const a = side < 0 ? Math.PI + R(0.05, 0.75) : -R(0.05, 0.75);
+        const v = R(150, 560) * S;
+        ember(born[k] + R(0, 50), g.cx + side * R(0.1, 0.5) * w, g.bottom + R(-0.02, 0.03) * g.size, Math.cos(a) * v, Math.sin(a) * v,
+          R(20, 60) * S, 3.2, R(0.5, 1.2), R(3, 6.5) * S, 1);
+      }
+    }
     // a steady rise from below the picture, and some already on their way up
     for (let i = 0; i < 280; i++) {
       const high = rnd() < 0.4;
@@ -510,29 +754,42 @@
     for (let i = 0; i < 14; i++) {
       ember(R(300, STRIKES_END - 1500), R(0.05, 0.95) * W, R(0.55, 1.05) * H, R(-12, 12) * S, -R(20, 50) * S, R(25, 60) * S, 0.5, R(3.5, 6), R(26, 52) * S, 2, 3);
     }
-    // sparks lifting off the letters
+    // sparks lifting off the letters (only once a letter is there)
     for (let i = 0; i < 120 && NP; i++) {
       const p = Math.floor(rnd() * NP);
-      ember(R(800, DURATION - 2000), P[p * 2], P[p * 2 + 1], R(-25, 25) * S, -R(20, 90) * S, R(30, 80) * S, 1, R(0.8, 2), R(3, 7) * S, 1);
+      const t0 = R(Math.max(800, pBorn[p] + 200), Math.max(pBorn[p] + 300, Math.min(DURATION - 2000, pLeave[p] - 300)));
+      ember(t0, P[p * 2], P[p * 2 + 1], R(-25, 25) * S, -R(20, 90) * S, R(30, 80) * S, 1, R(0.8, 2), R(3, 7) * S, 1);
     }
-    // at the end the energy leaves the letters as sparks drifting up and away
-    for (let i = 0; i < 110 && NP; i++) {
+    // at the end each letter shorts out with a spray of sparks ...
+    for (let k = 0; k < NG; k++) {
+      const pts = gPts[k];
+      if (!pts.length) continue;
+      for (let m = 0; m < 7; m++) {
+        const p = pts[Math.floor(rnd() * pts.length)];
+        const a = -Math.PI / 2 + R(-1.6, 1.6);
+        const v = R(160, 520) * S;
+        ember(leave[k] + R(0, 40), P[p * 2], P[p * 2 + 1], Math.cos(a) * v, Math.sin(a) * v, R(10, 40) * S, 3.2, R(0.4, 0.9), R(3, 6) * S, 1);
+      }
+    }
+    // ... and the energy leaves it as sparks drifting up and away
+    for (let i = 0; i < 150 && NP; i++) {
       const p = Math.floor(rnd() * NP);
-      ember(R(FADE_AT - 500, FADE_AT + 500), P[p * 2], P[p * 2 + 1], R(-30, 30) * S, -R(40, 140) * S, R(50, 110) * S, 0.9, R(1.4, 2.4), R(3.5, 8) * S, 1);
+      ember(pLeave[p] + R(0, 280), P[p * 2], P[p * 2 + 1], R(-30, 30) * S, -R(40, 150) * S, R(50, 110) * S, 0.9, R(1.0, 1.8), R(3.5, 8) * S, 1);
     }
-    // sparks thrown where an arc touches down
-    for (let i = 0; i < sparkAt.length; i += 3) {
+    // sparks thrown where an arc touches down (and where a bolt hits a letter, more of them)
+    for (let i = 0; i < sparkAt.length; i += 4) {
       const x = sparkAt[i + 1];
       const y = sparkAt[i + 2];
+      const c = sparkAt[i + 3];
       if (x < 0 || x > W || y < 0 || y > H) continue;
-      for (let k = 0; k < 3; k++) {
-        const a = R(0, 6.283);
-        const v = R(80, 380) * S;
+      for (let k = 0; k < c; k++) {
+        const a = c > 3 ? -Math.PI / 2 + R(-1.5, 1.5) : R(0, 6.283);
+        const v = R(c > 3 ? 140 : 80, c > 3 ? 560 : 380) * S;
         ember(sparkAt[i] + R(0, 40), x, y, Math.cos(a) * v, Math.sin(a) * v - 60 * S, R(10, 40) * S, 3, R(0.5, 1.1), R(3, 6) * S, 1);
       }
     }
 
-    const NS = 96;
+    const NS = 112;
     const sT = new Float32Array(NS), sX = new Float32Array(NS), sY = new Float32Array(NS), sVX = new Float32Array(NS), sVY = new Float32Array(NS);
     const sVT = new Float32Array(NS), sK = new Float32Array(NS), sL = new Float32Array(NS), sSz = new Float32Array(NS);
     const sA = new Float32Array(NS), sW = new Float32Array(NS), sP = new Float32Array(NS), sQ = new Float32Array(NS);
@@ -559,7 +816,15 @@
     for (let i = 0; i < 36; i++) {
       const a = -Math.PI / 2 + R(-1.1, 1.1);
       const v = R(0.3, 1) * 1300 * S;
-      shard(R(0, 80), gx + R(-0.08, 0.08) * W, gy + R(-0.01, 0.01) * H, Math.cos(a) * v * 1.2, Math.sin(a) * v, R(25, 70) * S, R(1.3, 2), R(2.4, 4.6), R(10, 24) * S);
+      shard(SMASH + R(0, 80), gx + R(-0.08, 0.08) * W, gy + R(-0.01, 0.01) * H, Math.cos(a) * v * 1.2, Math.sin(a) * v, R(25, 70) * S, R(1.3, 2), R(2.4, 4.6), R(10, 24) * S);
+    }
+    for (const k of YG) {
+      const g = G[k];
+      for (let i = 0; i < 3; i++) {
+        const a = -Math.PI / 2 + R(-1.2, 1.2);
+        const v = R(0.3, 1) * 760 * S;
+        shard(born[k] + R(0, 40), g.cx + R(-0.4, 0.4) * (g.x1 - g.x0), g.bottom, Math.cos(a) * v * 1.2, Math.sin(a) * v, R(25, 70) * S, R(1.4, 2.2), R(1.6, 3), R(7, 15) * S);
+      }
     }
     for (let i = 0; i < 18; i++) {
       const a = -Math.PI / 2 + R(-1, 1);
@@ -583,34 +848,139 @@
       if (c > cMax) cMax = c;
       wDist[i] = Math.hypot(x - gx, y - gy);
     }
+    const SHIMMER_AT = titleDone + 700;        // the shimmer starts once the words are written
     const NT = Math.min(200, NP);
     const twI = new Uint16Array(NT), twF = new Float32Array(NT), twP = new Float32Array(NT);
     for (let i = 0; i < NT; i++) { twI[i] = Math.floor(rnd() * NP); twF[i] = R(3.5, 8); twP[i] = R(0, 6.283); }
 
-    // Little arcs crawling over the letters, in crackling bursts.
+    // Little arcs crawling over the letters, in crackling bursts: as a letter is hit or lands, while
+    // the words hold, and as each letter goes out.
     const micro = [];
-    for (let tc = 900; tc < DURATION - 1900 && NP > 20; tc += R(80, 260)) {
-      const n = 2 + Math.floor(rnd() * 4);
-      for (let b = 0; b < n; b++) {
-        const i = Math.floor(rnd() * NP);
-        const dir = rnd() < 0.5 ? -1 : 1;
-        const k = 3 + Math.floor(rnd() * 9);
-        let j = i + dir * k;
-        if (j < 0 || j >= NP) j = i - dir * k;
-        if (j < 0 || j >= NP) continue;
-        const ax = P[i * 2], ay = P[i * 2 + 1], bx = P[j * 2], by = P[j * 2 + 1];
-        const dd = Math.hypot(bx - ax, by - ay);
-        if (dd < step * 2 || dd > step * 16) continue;     // the next row or across a gap: skip it
-        const a = new Path2D();
-        const c = new Path2D();
-        addTo(a, polyline(ax, ay, bx, by, R(-0.3, 0.3) * dd, 0, -1, 0.22, 3));
-        addTo(c, polyline(ax, ay, bx, by, R(-0.3, 0.3) * dd, 0, -1, 0.22, 3));
-        micro.push({ t: tc + R(-60, 120), d: R(70, 160), a: a, b: c });
-      }
+    function microArc(t0, d, i) {
+      const dir = rnd() < 0.5 ? -1 : 1;
+      const k = 3 + Math.floor(rnd() * 9);
+      let j = i + dir * k;
+      if (j < 0 || j >= NP) j = i - dir * k;
+      if (j < 0 || j >= NP) return;
+      const ax = P[i * 2], ay = P[i * 2 + 1], bx = P[j * 2], by = P[j * 2 + 1];
+      const dd = Math.hypot(bx - ax, by - ay);
+      if (dd < step * 2 || dd > step * 16) return;     // the next row or across a gap: skip it
+      // only on letters that are there for the whole of it
+      if (t0 < Math.max(pBorn[i], pBorn[j]) || t0 + d > Math.min(pLeave[i], pLeave[j]) + LEAVE_DUR * 0.6) return;
+      const a = new Path2D();
+      const c = new Path2D();
+      addTo(a, polyline(ax, ay, bx, by, R(-0.3, 0.3) * dd, 0, -1, 0.22, 3));
+      addTo(c, polyline(ax, ay, bx, by, R(-0.3, 0.3) * dd, 0, -1, 0.22, 3));
+      micro.push({ t: t0, d: d, a: a, b: c });
     }
+    for (let k = 0; k < NG; k++) {
+      const pts = gPts[k];
+      if (pts.length < 8) continue;
+      for (let m = 0; m < 3; m++) microArc(born[k] + R(10, 170), R(80, 170), pts[Math.floor(rnd() * pts.length)]);
+      for (let m = 0; m < 3; m++) microArc(leave[k] + R(0, 70), R(50, 100), pts[Math.floor(rnd() * pts.length)]);
+    }
+    for (let tc = Math.max(900, titleDone + 100); tc < LEAVE_AT && NP > 20; tc += R(80, 260)) {
+      const n = 2 + Math.floor(rnd() * 4);
+      for (let b = 0; b < n; b++) microArc(tc + R(-60, 120), R(70, 160), Math.floor(rnd() * NP));
+    }
+    micro.sort((a, b) => a.t - b.t);
 
     // Waves of light running out through the letters from the impact: [start, speed px/ms, width, strength].
     const waves = [[MID + 40, 1.7, 60, 1]];   // (the words arrive white hot: a wave would not show then)
+
+    /* -- each letter's state in the current frame -- */
+    const pV = new Float32Array(NG);          // how much of it is there (0 not yet / gone)
+    const pDy = new Float32Array(NG);         // moved down by
+    const pSx = new Float32Array(NG);         // stretched across ...
+    const pSy = new Float32Array(NG);         // ... and up and down (round its middle)
+    const pHot = new Float32Array(NG);        // white heat over it
+    const pBoost = new Float32Array(NG);      // extra light added on it
+    const pFall = new Float32Array(NG);       // a digit on its way down: how far (0..1), else -1
+    const tf = { dx: 0, dy: 0, sx: 1, sy: 1, op: 'source-over', crop: null };
+    const crop = [0, 0, 1, 1];
+    // The letter pictures' margins (their halos), as the engine makes them: for a crop at a given height.
+    const padOf = (halo) => ((halo ? Math.max(6, L.titleSize * 0.28) * 1.6 : 0) + L.titleSize * 0.04) / Math.min(1, env.dpr) + 2;
+    const PAD_HALO = padOf(true);
+    const PAD_NONE = padOf(false);
+    const wipeY = new Float32Array(NG);       // a letter being filled: down to here (else NaN)
+    let surge = 0;                            // the second surge's white heat over every letter
+
+    function poses(t) {
+      // the ground jolts each time a digit lands on it
+      let jolt = 0;
+      for (let j = 0; j < YG.length; j++) {
+        const u = t - born[YG[j]];
+        if (u > 0 && u < 360) jolt += (j === YG.length - 1 ? 1.2 : 0.55) * Math.exp(-u / 55) * Math.sin(u * 0.075);
+      }
+      surge = 0.6 * bump(t, MID + 90, 110);
+      for (let k = 0; k < NG; k++) {
+        const g = G[k];
+        let vis = 0, dy = 0, sx = 1, sy = 1, hot = 0, boost = 0, fall = -1;
+        const u = t - born[k];
+        if (g.line === 1 && u < 0 && u > -FALL) {
+          // plunging, faster and faster, stretched by the speed
+          const f = 1 + u / FALL;
+          dy = -fallD[k] * (1 - (0.3 * f + 0.7 * f * f));
+          const v = (0.3 + 1.4 * f) / 1.7;
+          sy = 1 + 0.16 * v;
+          sx = 1 - 0.06 * v;
+          vis = 1; hot = 1; fall = f;
+        } else if (u >= 0) {
+          vis = 1;
+          if (g.line === 1) {
+            // the smash: squashed flat, driven a little into the ground, then it springs back and settles
+            const e = Math.exp(-u / 70) * Math.cos(u * 0.037);
+            sy = 1 - 0.2 * e;
+            sx = 1 + 0.1 * e;
+            dy = (g.bottom - g.cy) * (1 - sy) + g.size * (0.045 * Math.exp(-u / 90) * Math.cos(u * 0.031) + 0.022 * jolt);
+            hot = Math.max(0, Math.exp(-u / 180) - 0.04);
+            boost = 0.9 * Math.exp(-u / 70);
+          } else {
+            // hit: knocked down a little, white-hot, cooling to lime (and flaring as its bolt strikes again)
+            dy = g.size * 0.05 * Math.exp(-u / 60) * Math.cos(u * 0.039);
+            sx = sy = 1 + 0.07 * Math.exp(-u / 55);
+            hot = Math.max(0, Math.exp(-u / 200) - 0.04);
+            boost = 0.95 * Math.exp(-u / 80);
+            for (let q = 0; q < 2; q++) {
+              const r = t - rsT[k * 2 + q];
+              if (r >= 0 && r < 420) { boost += 0.45 * Math.exp(-r / 70); hot = Math.max(hot, 0.7 * Math.exp(-r / 160)); }
+            }
+          }
+        }
+        // going out: it shorts out with a last white crackle, blinks like a failing tube and is gone
+        const w = t - leave[k];
+        if (vis && w > 0) {
+          boost += 0.9 * Math.exp(-w / 50);
+          if (w >= LEAVE_DUR) vis = 0;
+          else {
+            const h = hash01(Math.floor(t / 40) * 7 + k * 13);
+            vis = (1 - smooth(LEAVE_DUR * 0.35, LEAVE_DUR, w)) * (w < 50 ? 1 : h < 0.38 ? 0.06 : 0.6 + 0.4 * h);
+          }
+          dy -= g.size * 0.05 * smooth(0, LEAVE_DUR, w);
+        }
+        pV[k] = vis; pDy[k] = dy; pSx[k] = sx; pSy[k] = sy;
+        wipeY[k] = g.line === 0 && u >= 0 && u < WIPE ? lerp(g.top - g.size * 0.04, g.bottom + g.size * 0.3, smooth(0, WIPE, u * 1.12)) : NaN;
+        pHot[k] = Math.min(1, hot + surge); pBoost[k] = boost; pFall[k] = fall;
+      }
+    }
+
+    /**
+     * The transform for letter k in this frame (null when it simply stands where it belongs); while
+     * it is being filled, only the part above the front, in the picture with margin `pad`.
+     */
+    function pose(k, op, pad) {
+      const wy = wipeY[k];
+      const filling = wy === wy;
+      if (!op && !filling && Math.abs(pDy[k]) < 0.05 && Math.abs(pSx[k] - 1) < 0.002 && Math.abs(pSy[k] - 1) < 0.002) return null;
+      tf.dy = pDy[k]; tf.sx = pSx[k]; tf.sy = pSy[k]; tf.op = op || 'source-over';
+      if (filling) {
+        const g = G[k];
+        const half = g.size * 0.62 + pad;
+        crop[3] = clamp((wy - (g.cy - half)) / (2 * half), 0.01, 1);
+        tf.crop = crop;
+      } else tf.crop = null;
+      return tf;
+    }
 
     /* ---------------------------------------------------------- draw --- */
 
@@ -621,13 +991,21 @@
       for (let i = 0; i < NF; i++) {
         const tau = t - fS[i];
         if (tau < 0 || tau >= fD[i]) continue;
-        let on = 1;
-        if (fK[i] === 0 && tau > 25) on = Math.exp(-(tau - 25) / (fD[i] * 0.4));
-        const I = fP[i] * on * (0.7 + 0.3 * hash01(Math.floor(t / 34) * 13 + i));
+        let I;
+        let part = 255;
+        if (fK[i] === 2) {
+          part = Math.min(LEAD_STEPS - 2, Math.floor((tau / fD[i]) * (LEAD_STEPS - 1)));
+          I = fP[i] * (0.75 + 0.25 * hash01(Math.floor(t / 17) * 7 + i));
+        } else {
+          let on = 1;
+          if (fK[i] === 0 && tau > 25) on = Math.exp(-(tau - 25) / (fD[i] * 0.4));
+          I = fP[i] * on * (0.7 + 0.3 * hash01(Math.floor(t / 34) * 13 + i));
+        }
         if (I < 0.03) continue;
         actB[na] = fB[i];
         actV[na] = fV[i];
         actI[na] = I;
+        actP[na] = part;
         na++;
         const e = bolts[fB[i]].edge;
         if (e >= 0) edgeBoost[e] += I;
@@ -636,10 +1014,18 @@
     }
 
     function drawFlash(t) {
-      // a green thunderclap: the whole picture lights up for an instant, twice
-      const a = 0.16 * Math.exp(-t / 60) + 0.07 * bump(t, 125, 35);
-      if (t > 240 || a < 0.004) return 0;
-      ctx.globalAlpha = a;
+      // a green thunderclap: the whole picture lights up for an instant, twice; and once more as the
+      // year smashes down
+      let a = 0;
+      if (YG.length) {
+        a = 0.14 * Math.exp(-t / 70) + 0.05 * bump(t, 120, 30);
+        const u = t - SMASH;
+        if (u >= 0) a += 0.13 * Math.exp(-u / 45);
+      } else {
+        a = 0.16 * Math.exp(-t / 60) + 0.07 * bump(t, 125, 35);
+      }
+      if (t > (YG.length ? SMASH + 150 : 240) || a < 0.006) return 0;
+      ctx.globalAlpha = Math.min(0.18, a);
       ctx.fillStyle = 'rgb(70,255,150)';
       ctx.fillRect(0, 0, W, H);
       return 1;
@@ -653,14 +1039,42 @@
     }
 
     function drawRadiance(t, fade, boost) {
-      const base = (0.42 + 0.3 * throb(t)) * smooth(170, 700, t);
-      const flare = 0.6 * smooth(170, 300, t) * (1 - smooth(320, 1700, t)) + 0.55 * bump(t, MID + 100, 260);
-      const a = Math.min(1, base + flare + 0.15 * Math.min(1.5, boost)) * fade * (1 - smooth(FADE_AT - 700, FADE_AT + 600, t));
-      if (a < 0.01) return 0;
-      const r = pre.radiance;
-      ctx.globalAlpha = a;
-      ctx.drawImage(r.canvas, r.x, r.y, r.w, r.h);
-      return 1;
+      const beat = 0.42 + 0.3 * throb(t);
+      const common = 0.55 * bump(t, MID + 100, 260) + 0.15 * Math.min(1.5, boost);
+      let n = 0;
+      // each letter's own glow, there with it (a falling digit glows like a meteor); a line that simply
+      // stands there has its glow in one piece
+      const still0 = t >= lineStill[0][0] && t < lineStill[0][1];
+      const still1 = t >= lineStill[1][0] && t < lineStill[1][1];
+      for (let k = 0; k < NG; k++) {
+        const gl = pre.glows[k];
+        if (!gl || pV[k] <= 0.003 || (G[k].line ? still1 : still0)) continue;
+        const u = t - born[k];
+        const a = (u < 0 ? 0.8 : beat + 0.6 * Math.exp(-u / 300) + common) * pV[k] * fade;
+        if (a < 0.01) continue;
+        ctx.globalAlpha = Math.min(1, a);
+        ctx.drawImage(gl.canvas, gl.x, gl.y + pDy[k], gl.w, gl.h);
+        n++;
+      }
+      for (let line = 0; line < 2; line++) {
+        const gl = pre.lineGlows[line];
+        if (!gl || !(line ? still1 : still0)) continue;
+        ctx.globalAlpha = Math.min(1, (beat + common) * fade);
+        ctx.drawImage(gl.canvas, gl.x, gl.y, gl.w, gl.h);
+        n++;
+      }
+      // the pool of light on the ground, from the moment the year hits it
+      const u = t - SMASH;
+      if (u > 0) {
+        const a = (0.9 * beat + 0.7 * Math.exp(-u / 500) + common) * smooth(0, 90, u) * (1 - smooth(LEAVE_AT, LEAVE_AT + LEAVE_SPAN + LEAVE_DUR, t)) * fade;
+        if (a >= 0.01) {
+          const p = pre.pool;
+          ctx.globalAlpha = Math.min(1, a);
+          ctx.drawImage(p.canvas, p.x, p.y, p.w, p.h);
+          n++;
+        }
+      }
+      return n;
     }
 
     function drawEdges(fade) {
@@ -683,12 +1097,13 @@
         const g = rings[k];
         const u = (t - g[0]) / g[1];
         if (u <= 0 || u >= 1) continue;
-        const r = 20 * S + (g[2] - 20 * S) * easeOut(u);
+        const r0 = Math.min(20 * S, g[2] * 0.2);
+        const r = r0 + (g[2] - r0) * easeOut(u);
         const a = g[4] * Math.pow(1 - u, 1.7) * fade;
         const w = (g[3] * (1 - u) + 1.2) * S;
         ctx.beginPath();
-        ctx.ellipse(gx, gy, r, r * g[5], 0, 0, Math.PI * 2);
-        if (!lo && g[5] < 1) {
+        ctx.ellipse(g[6], g[7], r, r * g[5], 0, 0, Math.PI * 2);
+        if (!lo && g[5] < 1 && g[2] > 0.3 * W) {
           ctx.strokeStyle = RING_GLOW;
           ctx.lineWidth = w * 3.4;
           ctx.globalAlpha = Math.min(1, a * 0.26);
@@ -707,7 +1122,7 @@
     function drawImpact(t, fade) {
       let n = 0;
       for (let k = 0; k < 2; k++) {
-        const t0 = k ? MID : 0;
+        const t0 = k ? MID : SMASH;
         const tau = t - t0;
         if (tau < 0 || tau > 1000) continue;
         const str = k ? 0.65 : 1;
@@ -723,6 +1138,32 @@
       return n;
     }
 
+    /** The falling digits: a green trail above each, and the smear of its light a moment ago. */
+    function drawTrails(fade) {
+      let n = 0;
+      for (const k of YG) {
+        const f = pFall[k];
+        if (f < 0) continue;
+        const g = G[k];
+        const v = (0.3 + 1.4 * f) / 1.7;
+        const w = (g.x1 - g.x0) * 0.95;
+        const len = g.size * (0.9 + 2.2 * v);
+        const yb = g.cy + pDy[k] + g.size * 0.2;
+        ctx.globalAlpha = Math.min(1, 0.75 * v * fade);
+        ctx.drawImage(T.trail, g.cx - w / 2, yb - len, w, len);
+        n++;
+        // the smear of its light: the digit stretched upward from where it is, as by its speed
+        const reach = (g.bottom - g.cy);
+        tf.crop = null; tf.op = 'lighter'; tf.sx = pSx[k] * 0.97;
+        const st = pSy[k] * (1 + 0.8 * v);
+        tf.sy = st;
+        tf.dy = pDy[k] + reach * (pSy[k] - st);
+        env.glyph(g, 0.36 * fade, FLASH, tf);
+        n++;
+      }
+      return n;
+    }
+
     function drawBolts(fade, lo, na) {
       let n = 0;
       if (!lo) {
@@ -730,7 +1171,7 @@
         ctx.strokeStyle = BOLT_BLOOM;
         let blooms = 0;
         for (let k = 0; k < na && blooms < 2; k++) {
-          if (actI[k] < 0.65) continue;
+          if (actI[k] < 0.65 || actP[k] !== 255) continue;
           blooms++;
           const b = bolts[actB[k]];
           ctx.globalAlpha = Math.min(1, 0.1 * actI[k] * fade);
@@ -742,13 +1183,15 @@
       ctx.strokeStyle = BOLT_GLOW;
       for (let k = 0; k < na; k++) {
         const b = bolts[actB[k]];
-        ctx.globalAlpha = Math.min(1, 0.38 * actI[k] * fade);
-        ctx.lineWidth = 8 * S * b.w;
-        ctx.stroke(b.v[actV[k]].main);
+        const lead = actP[k] !== 255;
+        ctx.globalAlpha = Math.min(1, (lead ? 0.3 : 0.38) * actI[k] * fade);
+        ctx.lineWidth = (lead ? 5 : 8) * S * b.w;
+        ctx.stroke(lead ? b.v[actV[k]].lead[actP[k]] : b.v[actV[k]].main);
         n++;
       }
       ctx.strokeStyle = BOLT_MID;
       for (let k = 0; k < na; k++) {
+        if (actP[k] !== 255) continue;
         const b = bolts[actB[k]];
         ctx.globalAlpha = Math.min(1, 0.75 * actI[k] * fade);
         ctx.lineWidth = 2.4 * S * b.w;
@@ -758,11 +1201,12 @@
       ctx.lineWidth = hair;
       for (let k = 0; k < na; k++) {
         const v = bolts[actB[k]].v[actV[k]];
+        const lead = actP[k] !== 255;
         ctx.strokeStyle = BOLT_CORE;
-        ctx.globalAlpha = Math.min(1, 1.15 * actI[k] * fade);
-        ctx.stroke(v.main);
+        ctx.globalAlpha = Math.min(1, (lead ? 0.9 : 1.15) * actI[k] * fade);
+        ctx.stroke(lead ? v.lead[actP[k]] : v.main);
         n++;
-        if (v.br) {
+        if (v.br && !lead) {
           ctx.strokeStyle = BOLT_BRANCH;
           ctx.globalAlpha = Math.min(1, 0.9 * actI[k] * fade);
           ctx.stroke(v.br);
@@ -771,13 +1215,15 @@
       }
       // white heat where each arc touches
       for (let k = 0; k < na; k++) {
+        if (actP[k] !== 255) continue;
         const b = bolts[actB[k]];
         const I = actI[k] * fade;
         const s = 34 * S * (0.6 + I) * b.w;
         ctx.globalAlpha = Math.min(1, 0.6 * I);
-        ctx.drawImage(T.hot, b.ax - s / 2, b.ay - s / 2, s, s);
+        if (b.ay > -s / 2) { ctx.drawImage(T.hot, b.ax - s / 2, b.ay - s / 2, s, s); n++; }
         ctx.drawImage(T.hot, b.bx - s / 2, b.by - s / 2, s, s);
-        n += 2;
+        n++;
+        if (b.fx === b.fx) { ctx.drawImage(T.hot, b.fx - s / 2, b.fy - s / 2, s, s); n++; }
       }
       return n;
     }
@@ -868,23 +1314,98 @@
       return n;
     }
 
-    function drawWords(t, fade) {
-      const a = smooth(70, 150, t) * fade;
-      if (a <= 0.003) return 0;
-      // White heat cooling to green, and a flash of heat again in the surge. Stamped at full strength
-      // whenever possible and never scaled: a stretched or faded stamp costs two to five times what a
-      // plain copy does.
-      const hot = t < 450 ? 1 : Math.min(1, 1 - smooth(450, 800, t) + 0.6 * bump(t, MID + 90, 110));
-      if (hot >= 0.995) { env.words(a, HOT, 1); return 1; }
-      env.words(a, FILL, 1);
-      if (hot > 0.01) { env.words(a * hot, HOT, 1); return 2; }
-      return 1;
+    /** The letters themselves (source-over: each has its dark halo, so it reads on a bright scene). */
+    function drawLetters(t, fade) {
+      if (t >= settleAt && t < LEAVE_AT) {
+        // Every letter in place and cool: the words in one stamp (the very same picture). White heat
+        // again in the surge. Stamped at full strength whenever possible and never scaled: a
+        // stretched or faded stamp costs two to five times what a plain copy does.
+        const hot = Math.min(1, surge);
+        if (hot >= 0.995) { env.words(fade, HOT, 1); return 1; }
+        env.words(fade, FILL, 1);
+        if (hot > 0.01) { env.words(fade * hot, HOT, 1); return 2; }
+        return 1;
+      }
+      // One by one (each in its own state): the letter, its white heat added on in drawLetterLight().
+      let n = 0;
+      for (let k = 0; k < NG; k++) {
+        const a = pV[k] * fade;
+        if (a <= 0.003) continue;
+        env.glyph(G[k], a, FILL, pose(k, null, PAD_HALO));
+        n++;
+      }
+      return n;
+    }
+
+    /** Light on the letters: the flash as each is hit or lands, a white-hot burst there, the last crackle. */
+    function drawLetterLight(t, fade) {
+      let n = 0;
+      for (let k = 0; k < NG; k++) {
+        const g = G[k];
+        if (g.line === 0 && pV[k] <= 0.003) {
+          // the air where the letter will be charges up as the leader comes down to it
+          const c = t - born[k] + LEAD + 30;
+          if (c > 0 && c < LEAD + 30) {
+            const q = c / (LEAD + 30);
+            const bl = pre.bloom;
+            ctx.globalAlpha = 0.4 * q * q * fade;
+            ctx.drawImage(bl.canvas, g.cx - bl.s / 2, g.cy - bl.s / 2, bl.s, bl.s);
+            n++;
+          }
+          continue;
+        }
+        if (pV[k] <= 0.003) continue;
+        // its white heat and its flashes: pure light in its shape
+        const b = Math.min(1, pHot[k] * 0.92 + pBoost[k]) * pV[k] * fade;
+        if (b > 0.03 && !(t >= settleAt && t < LEAVE_AT)) { env.glyph(g, b, FLASH, pose(k, 'lighter', PAD_NONE)); n++; }
+        const u = t - born[k];
+        if (u >= 0 && u < (g.line === 1 ? 380 : 300)) {
+          if (g.line === 1) {
+            // the digit hits the ground: white heat at its foot, a flat flash along the ground
+            const w = g.x1 - g.x0;
+            const s = w * 1.5 * (0.7 + 0.3 * Math.exp(-u / 120));
+            ctx.globalAlpha = 0.8 * Math.exp(-u / 90) * fade;
+            ctx.drawImage(T.hot, g.cx - s / 2, g.bottom - s * 0.45, s, s);
+            const sw = w * (2 + 2.5 * easeOut(Math.min(1, u / 200)));
+            const sh = g.size * 0.22;
+            ctx.globalAlpha = 0.6 * Math.exp(-u / 140) * fade;
+            ctx.drawImage(T.streak, g.cx - sw / 2, g.bottom - sh / 2, sw, sh);
+            n += 2;
+          } else {
+            // the bolt hits the letter: a bloom of green light round it, white heat where it strikes,
+            // and the bright front of the charge pouring down through it
+            const bl = pre.bloom;
+            const ba = 0.85 * Math.exp(-u / 110) * fade;
+            if (ba > 0.02) {
+              ctx.globalAlpha = ba;
+              ctx.drawImage(bl.canvas, g.cx - bl.s / 2, g.cy + pDy[k] - bl.s / 2, bl.s, bl.s);
+              n++;
+            }
+            const ht = pre.heat;
+            const ha = 0.9 * Math.exp(-u / 70) * fade;
+            if (ha > 0.02) {
+              ctx.globalAlpha = ha;
+              ctx.drawImage(ht.canvas, g.cx - ht.s / 2, g.top - ht.s * 0.45, ht.s, ht.s);
+              n++;
+            }
+            const wy = wipeY[k];
+            const inside = wy === wy ? 1 - smooth(g.bottom - g.size * 0.08, g.bottom + g.size * 0.12, wy) : 0;
+            if (inside > 0.01) {
+              const fw = (g.x1 - g.x0) * 1.7;
+              const fh = g.size * 0.2;
+              ctx.globalAlpha = 0.9 * inside * fade;
+              ctx.drawImage(T.streak, g.cx - fw / 2, wy + pDy[k] - fh / 2, fw, fh);
+              n++;
+            }
+          }
+        }
+      }
+      return n;
     }
 
     function drawWordLight(t, fade, lo) {
       if (!NP) return 0;
-      const wa = smooth(120, 420, t) * fade;
-      if (wa <= 0.01) return 0;
+      const wa = fade;
       let n = 0;
       const spr = T.ember[2];
       const sz = step * 3;
@@ -899,21 +1420,21 @@
         const str = wv[3] * (1 - tau / 900) * wa;
         for (let i = 0; i < NP; i += stride + 2) {
           const d = (wDist[i] - r) / width;
-          if (d < -1.5 || d > 1.5) continue;
+          if (d < -1.5 || d > 1.5 || t < pBorn[i] || t > pLeave[i]) continue;
           ctx.globalAlpha = Math.min(1, Math.exp(-d * d * 1.6) * str);
           ctx.drawImage(spr, P[i * 2] - sz, P[i * 2 + 1] - sz, sz * 2, sz * 2);
           n++;
         }
       }
       // a shimmer sweeping across the words every few seconds
-      if (t > 1500 && t < FADE_AT + 300) {
-        const p = ((t - 1500) % 2600) / 1200;
+      if (t > SHIMMER_AT && t < FADE_AT + 300) {
+        const p = ((t - SHIMMER_AT) % 2600) / 1200;
         if (p <= 1) {
           const band = Math.max(20, (cMax - cMin) * 0.07);
           const at = cMin - band * 2 + p * (cMax - cMin + band * 4);
           for (let i = 0; i < NP; i += stride) {
             const d = (sweepC[i] - at) / band;
-            if (d < -1.6 || d > 1.6) continue;
+            if (d < -1.6 || d > 1.6 || t > pLeave[i]) continue;
             ctx.globalAlpha = Math.exp(-d * d * 2.2) * 0.5 * wa;
             ctx.drawImage(spr, P[i * 2] - sz, P[i * 2 + 1] - sz, sz * 2, sz * 2);
             n++;
@@ -925,6 +1446,7 @@
         const b = Math.sin(twP[k] + t * 0.001 * twF[k]);
         if (b < 0.82) continue;
         const i = twI[k];
+        if (t < pBorn[i] + 250 || t > pLeave[i]) continue;
         const q = (b - 0.82) / 0.18;
         const s = sz * (0.6 + 0.5 * q);
         ctx.globalAlpha = q * 0.8 * wa;
@@ -935,7 +1457,8 @@
       for (let m = 0; m < micro.length; m++) {
         const mc = micro[m];
         const tau = t - mc.t;
-        if (tau < 0 || tau > mc.d) continue;
+        if (tau < 0) break;                         // (in order of time)
+        if (tau > mc.d) continue;
         const a = (1 - tau / mc.d) * (0.6 + 0.4 * hash01(Math.floor(t / 30) + m)) * wa;
         const path = Math.floor(tau / 40) & 1 ? mc.b : mc.a;
         if (!lo) {
@@ -958,6 +1481,7 @@
       if (!(t >= 0) || t >= GONE_AT) return 0;
       const fade = 1 - smooth(FADE_AT, GONE_AT, t);
       const lo = env.low();
+      poses(t);
       const na = activeBolts(t);
       let boost = 0;
       for (let k = 0; k < na; k++) boost += actI[k];
@@ -971,15 +1495,17 @@
       n += drawEdges(fade);
       n += drawRings(t, fade, lo);
       n += drawImpact(t, fade);
+      n += drawTrails(fade);
       n += drawBolts(fade, lo, na);
       n += drawShards(t, fade, lo);
       n += drawEmbers(t, fade, lo, 0);
       ctx.restore();
-      n += drawWords(t, fade);
+      n += drawLetters(t, fade);
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
+      n += drawLetterLight(t, fade);
       n += drawWordLight(t, fade, lo);
       n += drawEmbers(t, fade, lo, 1);
       if (!lo) n += drawEmbers(t, fade, lo, 2);
@@ -990,20 +1516,20 @@
     return {
       step: function () { /* every frame is worked out from t alone */ },
       draw: draw,
-      // Before midnight: the words in both fills are made ahead of time (the points on them and the
-      // glow are already made by create()), and a few moments are drawn once so that everything is
-      // warmed up: the first frame at midnight has nothing slow left to do. All of it is cleared
-      // again in the same task, so none of it is ever seen.
+      // Before midnight: the letters in every fill (one picture each) and the words in one piece are
+      // made ahead of time (the points on them and the glows are already made by create()), and a few
+      // moments are drawn once so that everything is warmed up: the first frame at midnight has
+      // nothing slow left to do. All of it is cleared again in the same task, so none of it is seen.
       prime: function () {
         ctx.save();
         ctx.setTransform(env.dpr, 0, 0, env.dpr, 0, 0);
         try {
+          env.warm(FILL);
+          env.warm(FLASH);
           env.words(1, FILL, 1);
           env.words(1, HOT, 1);
-          draw(60);
-          draw(650);
-          draw(3000);
-          draw(MID + 120);
+          const moments = [40, 160, SMASH + 30, SMASH + 220, titleDone - 30, titleDone + 200, settleAt + 100, MID + 120, LEAVE_AT + 200];
+          for (const t of moments) draw(t);
         } finally {
           ctx.setTransform(1, 0, 0, 1, 0, 0);
           ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
