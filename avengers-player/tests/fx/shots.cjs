@@ -46,6 +46,7 @@ const TIMES = [150, 900, 1700, 2500, 5000, 8000, 9600, 10600, 12000];
           let last = performance.now();
           let done = false;
           demo.fx.onDone = () => { done = true; };
+          demo.fx.prime({ style, title: 'HAPPY NEW YEAR', year: '2027' });      // as the app does before midnight
           demo.fx.play({ style, title: 'HAPPY NEW YEAR', year: '2027' });
           const tick = (ts) => {
             times.push(ts - last); last = ts;

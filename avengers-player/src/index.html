@@ -357,14 +357,26 @@
         <label class="sw"><input type="checkbox" id="optFinal"><i></i><span>10 · 9 · 8 countdown animation <kbd>T</kbd><small>For the last ten seconds the countdown inside the clock panel grows and ticks 10, 9, 8… Nothing is drawn across the picture.</small></span></label>
 
         <h3 class="sec">Happy New Year animation</h3>
-        <div class="seg" id="optCelebration" role="radiogroup">
+        <div class="seg seg-grid" id="optCelebration" role="radiogroup">
           <button type="button" data-v="stark">Stark</button>
           <button type="button" data-v="fireworks">Fireworks</button>
+          <button type="button" data-v="arc">Arc Reactor</button>
+          <button type="button" data-v="gamma">Gamma</button>
+          <button type="button" data-v="warmachine">War Machine</button>
+          <button type="button" data-v="tva">TVA</button>
+          <button type="button" data-v="doom">Doom</button>
           <button type="button" data-v="minimal">Minimal</button>
           <button type="button" data-v="off">Off</button>
         </div>
         <p class="hint" id="celebHint">&nbsp;</p>
         <button id="previewCelebration" class="btn btn-ghost btn-sm" type="button">Preview the animation</button>
+
+        <h3 class="sec">Replay of the night</h3>
+        <label class="sw"><input type="checkbox" id="optReplay"><i></i><span>Save a replay of midnight and of the movie's start<small>For anyone who forgot to film it. Only these two moments are recorded, and only while the countdown runs: the movie starting by itself, and the last seconds before midnight with the snap and the celebration. What is on screen, with the film's sound. Saved in Videos › Avengers Player.</small></span></label>
+        <div class="grid2">
+          <label class="fld"><span>Before midnight</span><select id="optReplaySec"><option value="20">20 seconds</option><option value="40">40 seconds</option></select></label>
+        </div>
+        <button id="openReplays" class="btn btn-ghost btn-sm" type="button">Open the replay folder</button>
 
         <h3 class="sec">Waiting screen</h3>
         <label class="sw"><input type="checkbox" id="optStandby"><i></i><span>Show the standby countdown before the movie starts</span></label>
@@ -467,6 +479,7 @@
           <button id="smOwnPlus01" class="btn btn-ghost btn-sm" type="button" title="Start a tenth of a second later">+0.1 s</button>
           <button id="smOwnPlus1" class="btn btn-ghost btn-sm" type="button" title="Start one second later">+1 s</button>
         </div>
+        <button id="smHere" class="btn btn-ghost btn-wide" type="button" hidden>Start time from where the film is now</button>
         <button id="smTest" class="btn btn-ghost btn-wide" type="button">Test this start time (New Year's Eve from 11:59:00 PM)</button>
         <p class="hint" id="smArmedNote" hidden>Stop the countdown to change the start time.</p>
 

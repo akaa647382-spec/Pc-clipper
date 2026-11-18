@@ -44,6 +44,13 @@ contextBridge.exposeInMainWorld('apNative', {
   // the power cut test: cuts the whole app off, then starts it again as Windows does at sign-in
   powerCutNow: (offSec) => ipcRenderer.send('drill:powercut', Number(offSec) || 30),
 
+  // the replay of the night: the app's own window as a capture source, and its file written as it comes
+  replaySource: () => ipcRenderer.invoke('replay:source'),
+  replayBegin: (name, ext) => ipcRenderer.invoke('replay:begin', String(name), String(ext)),
+  replayChunk: (id, bytes) => ipcRenderer.invoke('replay:chunk', id, bytes),
+  replayEnd: (id, keep, ms) => ipcRenderer.invoke('replay:end', id, !!keep, Number(ms) || 0),
+  openReplays: () => ipcRenderer.invoke('replay:open-dir'),
+
   // power: sleep, wake, battery
   powerState: () => ipcRenderer.invoke('power:state'),
   onPower: (cb) => on('power:event', cb),

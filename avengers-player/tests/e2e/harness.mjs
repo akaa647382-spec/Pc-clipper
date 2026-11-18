@@ -53,7 +53,7 @@ export async function launch(profile, extraEnv) {
     args,
     cwd: ROOT,
     // ELECTRON_DISABLE_SANDBOX lets an instance restarted by the crash watchdog start as root on Linux too.
-    env: { ...process.env, AP_TEST: '1', AP_USER_DATA: profile, ...(process.platform === 'linux' ? { ELECTRON_DISABLE_SANDBOX: '1' } : {}), ...(extraEnv || {}) }
+    env: { ...process.env, AP_TEST: '1', AP_USER_DATA: profile, AP_VIDEOS_DIR: path.join(profile, 'videos'), ...(process.platform === 'linux' ? { ELECTRON_DISABLE_SANDBOX: '1' } : {}), ...(extraEnv || {}) }
   });
   const page = await app.firstWindow();
   const errors = [];

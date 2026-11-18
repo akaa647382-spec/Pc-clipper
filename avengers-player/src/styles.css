@@ -558,6 +558,11 @@ select.inline { padding: 2px 4px; font-size: 12px; }
 .seg button { background: none; border: 0; padding: 9px 4px; font: 600 12px/1 var(--sans); color: var(--muted); }
 .seg button + button { border-left: 1px solid var(--line); }
 .seg button.on { background: var(--acc); color: var(--acc-text); }
+/* Many choices: three to a row. */
+.seg-grid { grid-auto-flow: row; grid-template-columns: repeat(3, 1fr); }
+.seg-grid button { border-top: 1px solid var(--line); }
+.seg-grid button:nth-child(-n + 3) { border-top: 0; }
+.seg-grid button:nth-child(3n + 1) { border-left: 0; }
 
 /* themes */
 .themes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }

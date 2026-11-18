@@ -12,7 +12,7 @@ const path = require('path');
 
 /** Writes `text` to `file` and does not return before it is on the disk. Throws on failure. */
 function writeDurable(file, text) {
-  const buf = Buffer.from(String(text), 'utf8');
+  const buf = Buffer.isBuffer(text) ? text : Buffer.from(String(text), 'utf8');
   const fd = fs.openSync(file, 'w');
   try {
     let off = 0;

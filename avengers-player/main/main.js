@@ -14,6 +14,7 @@ const { spawn } = require('child_process');
 const os = require('os');
 const { Store, writeDurable } = require('./store');
 const { classifyLastRun } = require('./lastrun');
+const { withDuration } = require('./webm');
 
 const IS_TEST = process.env.AP_TEST === '1';
 const STARTED_AT = Date.now();                              // when this instance was started (the power cut test reports it)
@@ -501,6 +502,63 @@ function registerIpc() {
   ipcMain.handle('win:is-fullscreen', (e) => (own(e) ? win.isFullScreen() : false));
 
   ipcMain.handle('shell:show-item', (e, file) => { if (own(e) && typeof file === 'string') shell.showItemInFolder(file); });
+
+  /* ---- the replay of the night (the page records; this writes the file as it comes) ---- */
+  // Videos > Avengers Player. The automated tests point it at a folder of their own.
+  const replayDir = () => (IS_TEST && process.env.AP_VIDEOS_DIR ? process.env.AP_VIDEOS_DIR : path.join(app.getPath('videos'), 'Avengers Player'));
+  const replays = new Map();
+  let replayNext = 1;
+  ipcMain.handle('replay:source', (e) => (own(e) && win && !win.isDestroyed() ? win.getMediaSourceId() : null));
+  ipcMain.handle('replay:begin', (e, name, ext) => {
+    if (!own(e)) return null;
+    try {
+      const dir = replayDir();
+      fs.mkdirSync(dir, { recursive: true });
+      const base = String(name || 'Replay').replace(/[^A-Za-z0-9 .,()'-]/g, '').trim().slice(0, 80) || 'Replay';
+      const x = ext === 'webm' ? 'webm' : 'mp4';
+      let file = path.join(dir, base + '.' + x);
+      for (let i = 2; fs.existsSync(file) && i < 100; i++) file = path.join(dir, base + ' (' + i + ').' + x);
+      // Written as it comes: a crash or a power cut keeps what was recorded (in the .part file).
+      const part = file + '.part';
+      const fd = fs.openSync(part, 'w');
+      const id = replayNext++;
+      replays.set(id, { fd: fd, part: part, file: file });
+      log('main', 'replay: recording to ' + file);
+      return { id: id, file: file };
+    } catch (err) {
+      log('main', 'replay: cannot write (' + (err && err.message) + ')');
+      return null;
+    }
+  });
+  ipcMain.handle('replay:chunk', (e, id, bytes) => {
+    const r = own(e) ? replays.get(id) : null;
+    if (!r || !bytes) return false;
+    try { fs.writeSync(r.fd, Buffer.from(bytes.buffer || bytes, bytes.byteOffset || 0, bytes.byteLength)); return true; } catch (err) { return false; }
+  });
+  ipcMain.handle('replay:end', (e, id, keep, ms) => {
+    const r = own(e) ? replays.get(id) : null;
+    if (!r) return null;
+    replays.delete(id);
+    try { fs.closeSync(r.fd); } catch (err) { /* already closed */ }
+    try {
+      if (keep && fs.statSync(r.part).size > 0) {
+        // A recorded WebM file does not say how long it is: write that in, so players show it and seek.
+        if (/\.webm$/.test(r.file) && ms > 0) {
+          try { const fixed = withDuration(fs.readFileSync(r.part), ms); if (fixed) writeDurable(r.part, fixed); } catch (err) { log('main', 'replay: length not written (' + (err && err.message) + ')'); }
+        }
+        fs.renameSync(r.part, r.file);
+        log('main', 'replay: saved ' + r.file);
+        return r.file;
+      }
+      fs.unlinkSync(r.part);
+    } catch (err) { log('main', 'replay: could not finish (' + (err && err.message) + ')'); }
+    return null;
+  });
+  ipcMain.handle('replay:open-dir', (e) => {
+    if (!own(e)) return '';
+    try { fs.mkdirSync(replayDir(), { recursive: true }); } catch (err) { /* opened below if it exists */ }
+    return shell.openPath(replayDir());
+  });
   ipcMain.handle('shell:open-log', (e) => (own(e) ? shell.openPath(LOG_FILE) : ''));
 
   /* ---- internet time ---- */

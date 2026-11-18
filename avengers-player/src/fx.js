@@ -9,6 +9,16 @@
  *                blows away as dust again.
  *   'fireworks'  classic multicolour fireworks with a gold title.
  *
+ * More styles come from their own files (src/fx-*.js), registered with
+ *   APFx.register(id, { duration, name, create(env) -> { step(dt, t), draw(t) -> particles drawn } })
+ * where env gives the canvas (already cleared and scaled to CSS pixels), the size, a seeded random,
+ * where the words sit, the words themselves ready to stamp, points on the words, glow sprites and
+ * whether the PC is struggling (draw less then). See makeEnv below.
+ *
+ * Every frame has to fit in 1/60 s on a big screen: nothing may draw text or blurred shadows per
+ * frame (the words are drawn once and stamped), and the canvas never holds more than about 4.2
+ * million pixels (the browser scales it up on a bigger screen).
+ *
  * window.APFx.create(canvas) -> { resize, play, stop, running, onDone, renderAt }
  */
 (function (root) {
@@ -16,6 +26,9 @@
 
   const FONT = '"Bahnschrift", "DIN Alternate", "Segoe UI", system-ui, sans-serif';
   const DURATION = { stark: 12800, fireworks: 12000 };
+  const STYLES = Object.create(null);          // registered styles (src/fx-*.js)
+  const PIXEL_BUDGET = 4.2e6;                  // most canvas pixels filled per frame
+  const GOLD = { stops: [[0, '#fff3c4'], [0.45, '#ffc94a'], [1, '#e8871e']], halo: 'rgba(0,0,0,0.85)' };
   const STARK = {
     assembleEnd: 2400,      // words fully formed
     holdEnd: 8400,          // start blowing away
@@ -79,13 +92,20 @@
     let rocketSide = 0;
     let sprites = null;
     let peak = 0;
-    let slow = 0;            // smoothed frame time; when the machine struggles the soft glow is dropped
+    let low = false;         // the PC cannot keep 60 frames a second: the soft glow is dropped
+    let slowFor = 0;         // how long frames have been taking longer than a 60 Hz screen allows (s)
+    let custom = null;       // the running instance of a registered style
+    let wordsCache = Object.create(null);    // these three are kept until the size changes:
+    let sampleCache = Object.create(null);   // prime() fills them before midnight, so the first
+    let pointCache = Object.create(null);    // frame of the animation has nothing slow left to do
+    const spriteCache = Object.create(null);
 
     const api = {
       onDone: null,
       get running() { return running; },
       get peakParticles() { return peak; },
       resize: resize,
+      prime: prime,
       play: play,
       stop: stop,
       renderAt: renderAt
@@ -94,9 +114,15 @@
     function resize(cssW, cssH, dpr) {
       const w = Math.max(0, Math.floor(cssW || 0));
       const h = Math.max(0, Math.floor(cssH || 0));
-      const d = clamp(dpr || 1, 1, 2);
+      const d0 = clamp(dpr || 1, 1, 2);
+      // A big monitor at full sharpness has more pixels than a frame can fill in 1/60 s: the canvas
+      // keeps to PIXEL_BUDGET and the browser scales it up (soft light does not need more).
+      const d = w * h * d0 * d0 > PIXEL_BUDGET ? Math.max(0.5, Math.sqrt(PIXEL_BUDGET / Math.max(1, w * h))) : d0;
       if (w === W && h === H && d === DPR) return;
       W = w; H = h; DPR = d;
+      wordsCache = Object.create(null);
+      sampleCache = Object.create(null);
+      pointCache = Object.create(null);
       canvas.width = Math.max(1, Math.round(W * DPR));
       canvas.height = Math.max(1, Math.round(H * DPR));
       if (opts) prepare();                     // mid-animation: lay the words out again for the new size
@@ -162,7 +188,12 @@
     }
 
     /** Rasterises the words and returns one target point per grid cell they cover. */
-    function sampleTargets(L) {
+    function sampleTargets(L, want) {
+      const key = W + 'x' + H + '|' + L.title + '|' + L.year + '|' + (want || 0);
+      return sampleCache[key] || (sampleCache[key] = sampleTargetsNow(L, want));
+    }
+
+    function sampleTargetsNow(L, want) {
       const bandTop = Math.max(0, Math.floor(L.top));
       const bandH = Math.max(1, Math.min(H, Math.ceil(L.bottom)) - bandTop);
       const off = document.createElement('canvas');
@@ -175,7 +206,7 @@
       let data;
       try { data = g.getImageData(0, 0, off.width, off.height).data; } catch (e) { return { pts: [], step: 3, minX: 0, maxX: W }; }
       // Aim for roughly the same number of grains at every resolution.
-      const budget = clamp(Math.round((W * H) / 640), 900, 4200);
+      const budget = want || clamp(Math.round((W * H) / 640), 900, 4200);
       let step = Math.max(2, Math.round(Math.min(W / 1920, H / 1080) * 3.4));
       let pts = [];
       for (let attempt = 0; attempt < 6; attempt++) {
@@ -194,10 +225,43 @@
       return { pts: pts, step: step, minX: isFinite(minX) ? minX : 0, maxX: isFinite(maxX) ? maxX : W };
     }
 
+    /** A soft round glow in this colour (cached). */
+    function sprite(color) {
+      return spriteCache[color] || (spriteCache[color] = makeSprite(color));
+    }
+
+    /**
+     * Everything a registered style gets. Its ctx is already cleared and scaled to CSS pixels; it
+     * draws with W x H in mind and keeps to light (the movie is under the canvas).
+     */
+    function makeEnv() {
+      const seed = opts.seed == null ? 20270101 : opts.seed;
+      return {
+        ctx: ctx, W: W, H: H, dpr: DPR,
+        scale: Math.max(0.3, Math.min(W / 1920, H / 1080)),
+        layout: layout,                       // { title, year, titleSize, yearSize, titleY, yearY, top, bottom, cx }
+        rnd: mulberry32(seed ^ 0x51ED270B),   // the same seed draws the same animation
+        // The words, stamped from a ready-made picture: fill { stops: [[0, '#fff'], [1, '#08f']], halo: 'rgba(0,0,0,.85)' }.
+        words: (alpha, fill, scaleUp) => stampWords(alpha, scaleUp == null ? 1 : scaleUp, fill || GOLD),
+        // Points on the words (x, y pairs), at most `budget` of them, for particles that form the words.
+        wordPoints: (budget) => {
+          const b = Math.round(clamp(budget || 2000, 200, 5000));
+          const key = b + '|' + layout.title + '|' + layout.year;
+          if (!pointCache[key]) { const s = sampleTargets(layout, b); pointCache[key] = { pts: Float32Array.from(s.pts), step: s.step, minX: s.minX, maxX: s.maxX }; }
+          return pointCache[key];
+        },
+        sprite: sprite,
+        low: () => low,                       // true once the PC cannot keep 60 frames a second: draw less
+        clamp: clamp, lerp: lerp, smooth: smooth, easeOut: easeOut, easeIn: easeIn, mulberry32: mulberry32
+      };
+    }
+
     function prepare() {
-      if (!opts || W < 8 || H < 8) { layout = null; dust = null; return; }
+      if (!opts || W < 8 || H < 8) { layout = null; dust = null; custom = null; return; }
       layout = computeLayout();
       dust = null;
+      custom = null;
+      if (STYLES[opts.style]) { custom = STYLES[opts.style].create(makeEnv()) || null; return; }
       if (simple || opts.style !== 'stark') return;
       // The same seed always lays out the same dust, whatever happened before.
       const r = mulberry32((opts.seed == null ? 20270101 : opts.seed) ^ 0x9E3779B9);
@@ -292,6 +356,7 @@
 
     function step(dt, t) {
       if (simple || !opts || W < 8) return;
+      if (custom) { if (custom.step) custom.step(dt, t); return; }
       const stark = opts.style === 'stark';
       const until = stark ? STARK.holdEnd - 500 : 9300;
       while (t >= nextRocket && nextRocket <= until) {
@@ -330,17 +395,39 @@
 
     /* ----------------------------------------------------------- render --- */
 
-    function goldFill(g, L) {
+    /**
+     * The words in a fill, drawn once into a canvas of their own with one soft dark halo (it keeps
+     * them readable over a bright scene without boxing them in). Drawing text with a blurred shadow
+     * every frame is what made the animation drop to 30 frames a second on a big screen.
+     */
+    function wordsBitmap(fill) {
+      const key = JSON.stringify(fill) + '|' + layout.title + '|' + layout.year;
+      if (wordsCache[key]) return wordsCache[key];
+      const L = layout;
+      const pad = Math.ceil(L.titleSize * 0.9);
+      const top = Math.floor(L.top - pad);
+      const hgt = Math.ceil(L.bottom - L.top + pad * 2);
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(W * DPR));
+      c.height = Math.max(1, Math.round(hgt * DPR));
+      const g = c.getContext('2d');
+      g.setTransform(DPR, 0, 0, DPR, 0, -top * DPR);
+      if (fill.halo) {
+        g.shadowColor = fill.halo;
+        g.shadowBlur = Math.max(6, L.titleSize * 0.28);
+        g.shadowOffsetY = L.titleSize * 0.04;
+      }
       const grad = g.createLinearGradient(0, L.top, 0, L.bottom);
-      grad.addColorStop(0, '#fff3c4');
-      grad.addColorStop(0.45, '#ffc94a');
-      grad.addColorStop(1, '#e8871e');
-      return grad;
+      for (const st of fill.stops) grad.addColorStop(st[0], st[1]);
+      g.fillStyle = grad;
+      drawWords(g, L, (ch, x, y) => g.fillText(ch, x, y));
+      return (wordsCache[key] = { canvas: c, top: top, h: hgt });
     }
 
-    function drawSolidWords(alpha, scaleUp) {
+    function stampWords(alpha, scaleUp, fill) {
       const L = layout;
       if (!L || alpha <= 0.003) return;
+      const b = wordsBitmap(fill);
       ctx.save();
       if (scaleUp !== 1) {
         const cy = (L.top + L.bottom) / 2;
@@ -350,13 +437,12 @@
       }
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = alpha;
-      // One soft dark halo keeps the words readable over a bright scene without boxing them in.
-      ctx.shadowColor = 'rgba(0,0,0,0.85)';
-      ctx.shadowBlur = Math.max(6, L.titleSize * 0.28);
-      ctx.shadowOffsetY = L.titleSize * 0.04;
-      ctx.fillStyle = goldFill(ctx, L);
-      drawWords(ctx, L, (ch, x, y) => ctx.fillText(ch, x, y));
+      ctx.drawImage(b.canvas, 0, b.top, W, b.h);
       ctx.restore();
+    }
+
+    function drawSolidWords(alpha, scaleUp) {
+      stampWords(alpha, scaleUp, GOLD);
     }
 
     function drawPulse(t) {
@@ -433,7 +519,7 @@
           }
           ctx.globalAlpha = a;
           ctx.fillRect(x - s / 2, y - s / 2, s, s);
-          if ((i & 1) === 0 && slow < 0.026) {
+          if ((i & 1) === 0 && !low) {
             const gs = s * 4.2;
             ctx.globalAlpha = a * 0.3;
             ctx.drawImage(sprite, x - gs / 2, y - gs / 2, gs, gs);
@@ -504,6 +590,11 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       if (!opts || !layout || W < 8 || H < 8) return;
       ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      if (custom) {
+        const n = custom.draw(t) || 0;
+        if (n > peak) peak = n;
+        return;
+      }
       const total = DURATION[opts.style] || DURATION.stark;
       if (simple) {
         drawSolidWords(smooth(200, 1200, t) * (1 - smooth(total - 1500, total - 200, t)), 1);
@@ -533,7 +624,12 @@
       const t = Math.max(0, ts - startTs);
       const dt = clamp((ts - lastTs) / 1000, 0, 0.05);     // a stalled tab must not explode the simulation
       lastTs = ts;
-      slow = slow ? slow * 0.92 + dt * 0.08 : dt;
+      // Frames slower than a 60 Hz screen allows (19 ms) for a third of a second: the glow goes, and
+      // stays off for the rest of the animation so the picture does not flicker between the two.
+      if (!low && t > 300) {
+        slowFor = dt > 0.019 ? slowFor + dt : Math.max(0, slowFor - dt * 0.5);
+        if (slowFor > 0.33) low = true;
+      }
       try {
         step(dt, t);
         draw(t);
@@ -558,6 +654,7 @@
       opts = null;
       layout = null;
       dust = null;
+      custom = null;
       rockets = [];
       sparks = [];
       flashes = [];
@@ -567,19 +664,43 @@
       }
     }
 
-    function play(o) {
-      finish(false);
+    /**
+     * Does the slow part of starting an animation (laying out and measuring the words, preparing
+     * the dust) ahead of time, so that play() at midnight starts on the very next frame.
+     */
+    function prime(o) {
+      if (running || W < 8 || H < 8) return;
+      try {
+        opts = options(o);
+        prepare();
+        if (layout) wordsBitmap(GOLD);
+        if (custom && custom.prime) custom.prime();
+      } catch (e) { /* only a head start */ }
+      opts = null;
+      layout = null;
+      dust = null;
+      custom = null;
+    }
+
+    function options(o) {
       o = o || {};
-      opts = {
-        style: o.style === 'fireworks' ? 'fireworks' : 'stark',
+      return {
+        style: STYLES[o.style] ? o.style : o.style === 'fireworks' ? 'fireworks' : 'stark',
         title: o.title == null ? 'HAPPY NEW YEAR' : String(o.title),
         year: o.year == null ? '' : String(o.year),
         seed: typeof o.seed === 'number' ? o.seed : null
       };
+    }
+
+    function play(o) {
+      finish(false);
+      o = o || {};
+      opts = options(o);
       // The user picked this animation on purpose (Minimal and Off exist for those who want less),
       // so it plays in full even when Windows has its own animations switched off.
       simple = false;
-      slow = 0;
+      low = false;
+      slowFor = 0;
       resetSim();
       prepare();
       running = true;
@@ -609,6 +730,14 @@
 
   root.APFx = {
     create: create,
-    duration: function (style) { return DURATION[style] || DURATION.stark; }
+    duration: function (style) { return DURATION[style] || DURATION.stark; },
+    /** Adds a style: def = { name, duration (ms), create(env) -> { step(dt, t), draw(t) } }. */
+    register: function (id, def) {
+      if (!id || !def || typeof def.create !== 'function') return;
+      STYLES[id] = def;
+      DURATION[id] = def.duration || 12000;
+    },
+    styles: function () { return ['stark', 'fireworks'].concat(Object.keys(STYLES)); },
+    name: function (id) { return STYLES[id] ? STYLES[id].name || id : id === 'fireworks' ? 'Fireworks' : 'Stark'; }
   };
 })(typeof window !== 'undefined' ? window : this);

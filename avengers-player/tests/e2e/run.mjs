@@ -2277,6 +2277,102 @@ const scenarios = {
     } finally { await s.close(); }
   },
 
+  async restart() {
+    // "I think I started it wrong": the start time changes while the movie plays, without stopping the countdown.
+    const s = await launch(newProfile());
+    try {
+      await loadMovie(s.page, MOVIE);
+      await setSnap(s.page, SNAP);
+      await armIn(s.page, -30);
+      check('armed and playing in sync', await waitSynced(s.page, 10000));
+      await sleep(1500);
+      const before = await s.page.evaluate(() => ({ start: window.__AP.Engine.session.startEpoch, target: window.__AP.cfg.armedTarget }));
+      await s.page.click('.tab[data-tab="setup"]');
+      const ui = await s.page.evaluate(() => ({ off: document.getElementById('smAuto').disabled || document.getElementById('smOwnPlus1').disabled, note: document.getElementById('smArmedNote').textContent, shown: !document.getElementById('smArmedNote').hidden, here: !document.getElementById('smHere').hidden }));
+      check('while armed the start time can be changed, and Setup says what that does', !ui.off && ui.shown && /The countdown is running: a new start time moves the film at once/.test(ui.note) && ui.here, JSON.stringify(ui));
+
+      // One second later: the film jumps back one second and stays on the clock.
+      await s.page.click('#smOwnPlus1');
+      check('+1 s while playing: the film is re-cued and locks on again', await waitFor(s.page, () => window.__AP.Engine.events.some((e) => /Start time changed while armed/.test(e.text)), null, 3000) && await waitSynced(s.page, 8000));
+      await sleep(1500);
+      let v = await s.page.evaluate(() => { const { Engine, cfg } = window.__AP; const vid = document.getElementById('video'); return { start: Engine.session.startEpoch, target: cfg.armedTarget, armed: cfg.armed, mode: cfg.startMode, off: vid.currentTime - Engine.expected(), drift: Engine.st.drift }; });
+      check('the movie now counts as started one second later, same target, still armed', v.start - before.start === 1000 && v.target === before.target && v.armed && v.mode === 'own', JSON.stringify(v));
+      check('and the film is where the clock says with it', Math.abs(v.off) < 0.12 && Math.abs(v.drift) < 0.06, JSON.stringify(v));
+      const toasts = await s.page.evaluate(() => document.getElementById('toasts').textContent);
+      check('it says so: “New start time …: the film jumps 1.0 s back and stays on the clock”', /New start time \d+:\d\d:\d\d(\.\d{3})? [AP]M: the film jumps 1\.0 s back and stays on the clock\./.test(toasts), toasts.slice(0, 300));
+
+      // A start time this file is too short for is refused, and nothing changes.
+      await s.page.click('label:has(#smClassic)');
+      await sleep(600);
+      v = await s.page.evaluate(() => ({ mode: window.__AP.cfg.startMode, start: window.__AP.Engine.session.startEpoch, toasts: document.getElementById('toasts').textContent }));
+      check('9:29:30 PM with a 3:20 clip: refused, the start time stays', v.mode === 'own' && v.start === before.start + 1000 && /too short for that start time/.test(v.toasts), JSON.stringify(v));
+
+      // Paused on purpose, then "Start time from where the film is now": the film goes on from where it is.
+      await s.page.click('.tab[data-tab="mission"]');
+      await s.page.keyboard.press('Space');
+      await waitPhase(s.page, 'slipped', 2000);
+      await s.page.click('#slipStay');
+      await sleep(3000);
+      const paused = await s.page.evaluate(() => document.getElementById('video').currentTime);
+      await s.page.click('.tab[data-tab="setup"]');
+      const clickAt = Date.now();
+      await s.page.click('#smHere');
+      check('“Start time from where the film is now”: the film locks on again', await waitSynced(s.page, 8000));
+      await sleep(1000);
+      v = await s.page.evaluate(() => { const { Engine, cfg } = window.__AP; return { t: document.getElementById('video').currentTime, start: Engine.session.startEpoch, armed: cfg.armed, target: cfg.armedTarget, off: document.getElementById('video').currentTime - Engine.expected() }; });
+      const ran = (Date.now() - clickAt) / 1000;
+      check('it went on from where it was paused, not from where the old start time said', Math.abs(v.t - (paused + ran)) < 0.6 && v.start - before.start > 3500, 'paused at ' + paused.toFixed(2) + ' s, now ' + v.t.toFixed(2) + ' s after ' + ran.toFixed(1) + ' s; start moved ' + ((v.start - before.start) / 1000).toFixed(2) + ' s');
+      check('still armed, same target, on the clock', v.armed && v.target === before.target && Math.abs(v.off) < 0.12, JSON.stringify(v));
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally { await s.close(); }
+  },
+
+  async replay() {
+    // The replay of the night, in the New Year's Eve simulation from 11:59:00 PM: nothing is recorded
+    // until 20 s before midnight, then midnight, the snap and the celebration are saved as a clip.
+    const ENDGAME = path.join(MEDIA, 'original-length.mp4');
+    if (!fs.existsSync(ENDGAME)) { console.log('  note  long test clips missing: run scripts/make-test-media.sh'); return; }
+    const profile = newProfile();
+    const dir = path.join(profile, 'videos');
+    const files = () => { try { return fs.readdirSync(dir); } catch (e) { return []; } };
+    const s = await launch(profile);
+    try {
+      await loadMovie(s.page, ENDGAME);
+      if (await waitFor(s.page, () => !document.getElementById('modal').hidden && /Finding the snap/.test(document.getElementById('modalTitle').textContent), null, 15000)) {
+        await s.page.click('#modalActions button');
+        await waitFor(s.page, () => !window.__AP.SnapCam.busy && document.getElementById('modal').hidden, null, 8000);
+      }
+      await setSnap(s.page, '2:30:31.668');
+      await s.page.evaluate(() => window.__AP.Versions.confirm());
+      await s.page.click('.tab[data-tab="display"]');
+      check('the replay is on by default, 40 s before midnight', await s.page.evaluate(() => document.getElementById('optReplay').checked && document.getElementById('optReplaySec').value === '40'));
+      await s.page.selectOption('#optReplaySec', '20');
+      await s.page.click('.tab[data-tab="test"]');
+      await s.page.selectOption('#tsNightStart', 'set');
+      await s.page.selectOption('#tsNightAt', 'snap');
+      await s.page.click('[data-test="night"]');
+      await sleep(25000);
+      check('11:59:25 PM: nothing is recorded yet', files().length === 0, files().join(', '));
+      check('20 s before midnight the recording starts', await waitFor(s.page, () => window.__AP.Engine.events.some((e) => /Replay: recording midnight \(rehearsal\)/.test(e.text)), null, 20000));
+      check('20 s after midnight it is saved', await waitFor(s.page, () => window.__AP.Engine.events.some((e) => /Replay saved: /.test(e.text)), null, 60000));
+      const saved = files();
+      const clip = saved.find((f) => /^Rehearsal \d{4}-\d\d-\d\d \d\d\.\d\d - midnight\.(mp4|webm)$/.test(f));
+      check('one clip, named as a rehearsal of midnight, nothing half written', !!clip && saved.length === 1, saved.join(', '));
+      if (clip) {
+        const file = path.join(dir, clip);
+        let probe = null;
+        try { probe = JSON.parse(execSync('ffprobe -v error -show_entries format=duration:stream=codec_type,width,height -of json ' + JSON.stringify(file)).toString()); } catch (e) { probe = null; }
+        const dur = probe && probe.format ? +probe.format.duration : NaN;
+        const kinds = probe ? probe.streams.map((x) => x.codec_type).sort().join(',') : '';
+        const vid = probe ? probe.streams.find((x) => x.codec_type === 'video') : null;
+        check('the clip runs from 20 s before to 20 s after midnight, picture and sound', Math.abs(dur - 40) < 3 && kinds === 'audio,video' && vid && vid.width > 300,
+          'duration ' + (Number.isFinite(dur) ? dur.toFixed(1) : 'unknown') + ' s, streams ' + kinds + (vid ? ', ' + vid.width + 'x' + vid.height : '') + ', ' + Math.round(fs.statSync(file).size / 1024) + ' KB');
+      }
+      await s.page.click('#nightEnd');
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally { await s.close(); }
+  },
+
   async standbyfit() {
     // The standby screen weeks ahead: "44d 01:12:21.185" fits the screen, also a narrow window, and
     // its glow is not cut off at the edges of its box (that drew a rectangle behind the numbers).

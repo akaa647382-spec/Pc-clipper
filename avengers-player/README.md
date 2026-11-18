@@ -43,8 +43,14 @@ version is installed at a time: installing one over the other asks first, then r
 | **My own time** | at the time you type (*9:29:29.5* is read as the evening), or nudge with −1 s, −0.1 s, +0.1 s, +1 s | earlier or later by the same amount |
 
 Every countdown, the standby screen, the late join, recovery and a restart after a crash follow the choice. The
-Mission tab and the pre-flight list say where the snap lands with it. The start time cannot be changed while the
-countdown is armed; a file too short for the chosen start is refused.
+Mission tab and the pre-flight list say where the snap lands with it. A file too short for the chosen start is refused.
+
+**Changed your mind while the movie plays?** The start time can be changed while the countdown runs ("I think I
+started it wrong"). Pick another choice, nudge it, or type a time: the countdown keeps its target, the film jumps to
+where it should be with the new start (*New start time 9:29:30 PM: the film jumps 1.7 s back and stays on the
+clock*), and the snap lands accordingly. **Start time from where the film is now** works the other way round: the
+film stays exactly where it is, and the start time is worked out from it, so the countdown follows the film from
+there.
 
 **Test it.** *Test this start time* (Setup), or the Snap test with *Start time as set*, *Automatic start* or *Start at
 9:29:30 PM* (Test tab), jumps to just before midnight with that start and says exactly where the snap lands, for
@@ -226,7 +232,7 @@ where the film really is, so you can see that it is off; it ticks with the clock
 | **O** | Show or hide the whole overlay (hide it if everyone has a phone out anyway) |
 | **N** | Countdown mode on or off |
 | **T** | The 10 · 9 · 8 animation in the clock panel for the last ten seconds, on or off |
-| **H** | Happy New Year animation: Stark (gold dust forms the words, then blows away), Fireworks, Minimal, Off |
+| **H** | Happy New Year animation: Stark (gold dust forms the words, then blows away), Fireworks, Arc Reactor, Gamma, War Machine, TVA, Doom, Minimal, Off |
 | **A** | Sound language: switches between the sound tracks of the movie |
 | **C** | Subtitles on or off |
 | **Z** / **X** | Subtitles earlier / later |
@@ -237,6 +243,28 @@ where the film really is, so you can see that it is off; it ticks with the clock
 | **Space**, **←** **→**, **↑** **↓**, **M** | Play/pause, skip 10 s, volume, mute |
 
 Position, size, 12/24-hour clock, seven app themes (Arc Reactor, Hot Rod, Infinity, Gamma, War Machine, TVA, Doom) and which side the control panel sits on are in the **Display** tab.
+
+## The Happy New Year animation
+
+**Display → Happy New Year animation** chooses what plays at midnight: **Stark** (golden dust assembles into HAPPY
+NEW YEAR and blows away again), **Fireworks**, five theme animations (**Arc Reactor**: rings of cyan light spin up
+around a blazing core; **Gamma**: a thunderclap of green light, shockwaves and lightning; **War Machine**: a
+targeting display locks onto the words and a salvo of tracers bursts above them; **TVA**: an amber timeline
+branches across the screen while a door of light opens; **Doom**: a turning circle of runes in green fire and the
+words in polished steel), **Minimal** (a small banner) or **Off**. *Preview the animation* plays it now.
+
+They are built to run at 60 frames a second on big screens too: the words are drawn once and reused, the animation gets ready a
+few seconds before midnight, and if a PC still cannot keep up, the soft glow is the first thing to go.
+
+## Replay of the night
+
+For anyone who forgot to film it. While the countdown runs, the app records two moments of what is on screen, with
+the film's own sound: **the movie starting by itself** (the last 10 seconds of the standby countdown and the first
+15 of the film) and **midnight** (the last 20 or 40 seconds before it, the snap and the celebration, until 20 seconds
+after). Nothing else is recorded, ever. The clips are saved in **Videos › Avengers Player** (*New Year 2027 -
+midnight*, *New Year 2027 - the movie starts*); the New Year's Eve simulation saves *Rehearsal* clips the same way,
+so you can see it work beforehand. **Display → Replay of the night** switches it off or chooses 20 or 40 seconds;
+*Open the replay folder* opens it. The clips are MP4 (H.264) where the PC records it, otherwise WebM.
 
 ## Subtitles
 

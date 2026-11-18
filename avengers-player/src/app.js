@@ -63,6 +63,7 @@
       onFfProgress() {},
       async appInfo() { return { version: 'dev', electron: '', chrome: '', platform: 'browser', logFile: '', isTest: false }; },
       showItem() {}, openLog() {}, log() {}, crashNow() {}, powerCutNow() {}, lastRun() { return null; },
+      async replaySource() { return null; }, async replayBegin() { return null; }, async replayChunk() { return false; }, async replayEnd() { return null; }, async openReplays() { return ''; },
       async powerState() { return { onBattery: false }; },
       onPower() {}
     };
@@ -86,6 +87,7 @@
     showOverlay: true, showClock: true, showDate: true, showCount: true, showSyncBadge: false, finalTen: true,
     overlayPos: 'tl', overlaySize: 'm',
     celebration: 'stark',
+    replay: true, replaySec: 40,          // the replay of the night (see Replay)
     standbyScreen: true,
     autoRecover: true, autoRecoverSec: 10,
     autoRestart: true,
@@ -122,6 +124,7 @@
     c.audioLang = C.LANG_NAMES[C.normLang(c.audioLang)] ? C.normLang(c.audioLang) : 'eng';
     if (!Number.isInteger(c.audioPickPos)) c.audioPickPos = -1;
     if (!(c.autoRecoverSec >= 1 && c.autoRecoverSec <= 120)) c.autoRecoverSec = 10;
+    if (c.replaySec !== 20 && c.replaySec !== 40) c.replaySec = 40;
     if (!(Math.abs(c.subDelay) < 600)) c.subDelay = 0;
     if (!(c.subScale > 0.9 && c.subScale < 1.1)) c.subScale = 1;
     if (c.subSyncKey.length > 1200 || !['', 'synced', 'fine', 'close', 'unsure', 'mixed', 'undone', 'hand'].includes(c.subSyncState)) { c.subSyncKey = ''; c.subSyncState = ''; }
@@ -1242,6 +1245,45 @@
     },
 
     /**
+     * The start time was changed while the countdown runs ("I think I started it wrong"). The
+     * countdown keeps its target; the film goes straight to where it should be with the new start
+     * time and stays locked to the clock. With how 'here' the start time was worked out from where
+     * the film is, so the film stays where it is. Undone when the file is too short for the new
+     * start time or the movie would already be over with it.
+     */
+    changeStart(prev, how) {
+      const undo = (why) => {
+        cfg.startMode = prev.mode; cfg.startOwnSec = prev.own; cfg.startOwnSet = prev.ownSet;
+        save();
+        UI.renderSettings();
+        toast(why, 'bad');
+      };
+      const target = Number.isFinite(cfg.armedTarget) ? cfg.armedTarget : this.session ? this.session.targetEpoch : NaN;
+      if (!Number.isFinite(target)) { undo('There is no countdown to change.'); return; }
+      if (Media.ready && video.duration < startLead() + 2) { undo('This file is too short for that start time.'); return; }
+      const s = this.sessionFor(target);
+      const now = Clock.now();
+      if (s.endEpoch != null && now >= s.endEpoch - 1000) { undo('With that start time the movie would already be over.'); return; }
+      this.session = s;
+      cfg.armedEnd = s.endEpoch != null ? s.endEpoch : null;
+      saveNow();
+      const shift = Math.round((startLead() - prev.lead) * 1000) / 1000;        // + : an earlier start, the film moves ahead
+      const running = now >= s.startEpoch;
+      const lands = landsText(s);
+      const said = !running ? 'The movie now starts at ' + clockOf(s.startEpoch) + ': ' + lands + '.'
+        : how === 'here' ? 'The countdown follows the film from here: it counts as started at ' + clockOf(s.startEpoch) + '. ' + lands.charAt(0).toUpperCase() + lands.slice(1) + '.'
+          : 'New start time ' + clockOf(s.startEpoch) + ': the film ' + (Math.abs(shift) < 0.0005 ? 'stays where it is' : 'jumps ' + fmtOff(Math.abs(shift)) + (shift > 0 ? ' ahead' : ' back')) +
+            ' and stays on the clock. ' + lands.charAt(0).toUpperCase() + lands.slice(1) + '.';
+      this.logEvent('Start time changed while armed: ' + startName(cfg.startMode, s) + ' (' + dateTimeOf(s.startEpoch) + ')' + (how === 'here' ? ', from where the film was' : '') + '; ' + lands);
+      UI.renderSettings();
+      UI.onMode();
+      UI.dirty.all = true;
+      UI.dirty.preflight = true;
+      if (this.mode === 'armed' && Media.ready) this.recalibrate(running ? 'start time' : 'arm').catch((e) => this.logEvent('Recalibration failed: ' + (e && e.message)));
+      toast(said, 'good', 7000);
+    },
+
+    /**
      * An armed countdown that is still waiting for the start lets go of the film for a moment
      * (the app looks for the snap in a movie that was just imported). It stays armed on disk, so
      * a crash in that moment restarts armed; arm({ restore: true }) takes the film back.
@@ -1896,6 +1938,7 @@
       const now = Clock.now();
       SubSync.tick(perf);
       SnapCam.autoTick(perf);
+      try { Replay.tick(now); } catch (e) { /* a replay must never stop the film */ }
       // Armed on disk but not in memory, with a movie loaded and nothing going on: that must never
       // last. Whatever let go of the film, the countdown takes it back.
       if (this.mode !== 'armed' && cfg.armed && Number.isFinite(cfg.armedTarget) && Media.ready && !Media.loading && !SnapCam.busy && !this.test && !Modal.isOpen) {
@@ -2167,6 +2210,124 @@
         actions: [{ label: 'OK', primary: true, onClick: () => Modal.close() }],
         onEscape: () => Modal.close()
       });
+    }
+  };
+
+  /* ======================================================== replay of the night === */
+
+  /**
+   * For anyone who forgot to film it. Nothing is recorded except two moments, and only while the
+   * countdown runs (or in the New Year's Eve simulation, saved as a rehearsal): the movie starting
+   * by itself (the last 10 s of the standby countdown and 15 s of film) and midnight (the last 20 or
+   * 40 s before it, the snap and the celebration). What is on screen is recorded, with the film's
+   * own sound, and written to Videos > Avengers Player as it comes (see replay:* in main.js).
+   */
+  const Replay = {
+    rec: null,                 // the recording under way
+    done: Object.create(null), // the moments already recorded (or tried) in this session
+
+    /** The moments of this countdown that are recorded, on its clock. */
+    moments(s) {
+      return [
+        { kind: 'start', at: s.startEpoch, from: s.startEpoch - 10000, to: s.startEpoch + 15000 },
+        { kind: 'midnight', at: s.targetEpoch, from: s.targetEpoch - (cfg.replaySec === 20 ? 20000 : 40000), to: s.targetEpoch + 20000 }
+      ];
+    },
+
+    /** Recording is allowed: the real countdown, or the New Year's Eve simulation. */
+    allowed() {
+      if (cfg.replay === false || !native.isNative || !Media.ready || Engine.mode !== 'armed' || !Engine.session) return false;
+      return !Engine.test || Engine.test.kind === 'night';
+    },
+
+    tick(now) {
+      const r = this.rec;
+      if (r) {
+        if (r.started && (now >= r.end || !this.allowed() || r.session !== Engine.session.targetEpoch)) this.stop();
+        return;
+      }
+      if (!this.allowed()) return;
+      const sim = !!Engine.test;
+      for (const m of this.moments(Engine.session)) {
+        const key = m.kind + '@' + m.at + (sim ? '#' + Engine.test.t0 : '');
+        if (this.done[key] || now < m.from || now >= m.to - 3000) continue;
+        this.done[key] = true;
+        this.start(m, sim);
+        break;
+      }
+    },
+
+    /**
+     * H.264 in MP4 where the PC records it (usually in hardware: light, 60 frames a second).
+     * Otherwise VP8, the lightest to encode in software, at 30 frames a second: the film playing
+     * on the clock matters more than the replay.
+     */
+    pickType() {
+      const types = [['video/mp4;codecs=avc1.640028,mp4a.40.2', 60], ['video/mp4;codecs=avc1.4d0028,mp4a.40.2', 60], ['video/mp4;codecs=avc1,mp4a.40.2', 60],
+        ['video/webm;codecs=vp8,opus', 30], ['video/mp4', 30], ['video/webm', 30]];
+      for (const t of types) { try { if (MediaRecorder.isTypeSupported(t[0])) return { type: t[0], fps: t[1] }; } catch (e) { /* next */ } }
+      return null;
+    },
+
+    fileName(m, sim) {
+      const t = new Date(m.at);
+      const pad = (n) => String(n).padStart(2, '0');
+      const what = m.kind === 'midnight' ? (isNewYearMoment(m.at) ? 'midnight' : 'the target') : 'the movie starts';
+      if (sim) {
+        const d = new Date();
+        return 'Rehearsal ' + d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + '.' + pad(d.getMinutes()) + ' - ' + what;
+      }
+      const year = isNewYearMoment(Engine.session.targetEpoch) ? new Date(Engine.session.targetEpoch).getFullYear() : null;
+      return year ? 'New Year ' + year + ' - ' + what : 'Avengers Player ' + t.getFullYear() + '-' + pad(t.getMonth() + 1) + '-' + pad(t.getDate()) + ' - ' + what;
+    },
+
+    async start(m, sim) {
+      const rec = this.rec = { kind: m.kind, end: m.to, session: Engine.session.targetEpoch, sim: sim, started: false, parts: Promise.resolve(), tracks: [] };
+      const give = (why) => {
+        rec.tracks.forEach((t) => { try { t.stop(); } catch (e) { /* gone */ } });
+        if (this.rec === rec) this.rec = null;
+        Engine.logEvent('Replay: could not record ' + (m.kind === 'midnight' ? 'midnight' : 'the start') + ' (' + why + ')');
+      };
+      try {
+        const pick = window.MediaRecorder ? this.pickType() : null;
+        const source = await native.replaySource();
+        if (!pick || !source) { give('not available on this PC'); return; }
+        const type = pick.type;
+        const screen = await navigator.mediaDevices.getUserMedia({ audio: false, video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: source, maxWidth: 1920, maxHeight: 1080, maxFrameRate: pick.fps } } });
+        rec.tracks.push(...screen.getTracks());
+        let sound = [];
+        try { sound = video.captureStream().getAudioTracks(); } catch (e) { sound = []; }    // the film's own sound
+        rec.tracks.push(...sound);
+        if (this.rec !== rec) { give('stopped'); return; }
+        const out = await native.replayBegin(this.fileName(m, sim), type.startsWith('video/mp4') ? 'mp4' : 'webm');
+        if (!out) { give('the replay folder cannot be written'); return; }
+        rec.out = out;
+        const recorder = rec.recorder = new MediaRecorder(new MediaStream([...screen.getVideoTracks(), ...sound]), { mimeType: type, videoBitsPerSecond: pick.fps === 60 ? 12000000 : 8000000, audioBitsPerSecond: 192000 });
+        recorder.ondataavailable = (e) => {
+          if (!e.data || !e.data.size) return;
+          rec.parts = rec.parts.then(() => e.data.arrayBuffer()).then((b) => native.replayChunk(out.id, new Uint8Array(b))).catch(() => {});
+        };
+        recorder.start(1000);
+        rec.started = true;
+        rec.startedAt = performance.now();
+        Engine.logEvent('Replay: recording ' + (m.kind === 'midnight' ? 'midnight' : 'the movie starting') + (sim ? ' (rehearsal)' : '') + ' to ' + out.file);
+      } catch (e) {
+        give(e && (e.name || e.message) || 'error');
+      }
+    },
+
+    async stop() {
+      const rec = this.rec;
+      this.rec = null;
+      if (!rec || !rec.recorder) return;
+      await new Promise((res) => { rec.recorder.onstop = res; try { rec.recorder.stop(); } catch (e) { res(); } });
+      rec.tracks.forEach((t) => { try { t.stop(); } catch (e) { /* gone */ } });
+      await rec.parts;
+      const file = await native.replayEnd(rec.out.id, true, performance.now() - rec.startedAt);
+      if (!file) return;
+      const name = String(file).split(/[\\/]/).pop();
+      toast((rec.sim ? 'Rehearsal replay saved: ' : 'Replay saved: ') + 'Videos › Avengers Player › ' + name, 'good', 9000);
+      Engine.logEvent('Replay saved: ' + file);
     }
   };
 
@@ -3934,8 +4095,32 @@
       try { return FxLib.duration(s) || 14000; } catch (e) { return 14000; }
     },
 
-    play(targetEpoch) {
+    /** Whether this animation can play here (the theme animations come in files of their own). */
+    has(id) {
+      if (id === 'minimal' || id === 'off' || id === 'stark' || id === 'fireworks') return true;
+      try { return !!FxLib && FxLib.styles().includes(id); } catch (e) { return false; }
+    },
+
+    /** What the words say at `targetEpoch`. */
+    words(targetEpoch) {
+      const newYear = isNewYearMoment(targetEpoch);
+      return {
+        title: newYear ? 'HAPPY NEW YEAR' : !Engine.session || onTarget(Engine.session) ? 'RIGHT ON TIME' : 'TARGET REACHED',
+        year: newYear ? String(new Date(targetEpoch).getFullYear()) : ''
+      };
+    },
+
+    /** Seconds before the moment: the slow part of starting the animation is done now, not at midnight. */
+    prime(targetEpoch) {
       const style = cfg.celebration;
+      if (!this.fx || style === 'off' || style === 'minimal' || !this.has(style)) return;
+      this.resize();
+      const w = this.words(targetEpoch);
+      try { this.fx.prime({ style: style, title: w.title, year: w.year }); } catch (e) { /* only a head start */ }
+    },
+
+    play(targetEpoch) {
+      const style = this.has(cfg.celebration) ? cfg.celebration : 'stark';
       if (style === 'off') return;
       const newYear = isNewYearMoment(targetEpoch);
       const title = newYear ? 'HAPPY NEW YEAR' : !Engine.session || onTarget(Engine.session) ? 'RIGHT ON TIME' : 'TARGET REACHED';
@@ -3985,9 +4170,18 @@
     { id: 'tva', name: 'TVA', c: ['#1d130a', '#c8622a', '#f4a23c'] },
     { id: 'doom', name: 'Doom', c: ['#0d1610', '#1f7a47', '#c4ccd2'] }
   ];
+  /** The animations, in the order of the Display tab (the H key goes through them). */
+  const CELEB_ORDER = ['stark', 'fireworks', 'arc', 'gamma', 'warmachine', 'tva', 'doom', 'minimal', 'off'];
+  const CELEB_NAMES = { stark: 'Stark', fireworks: 'Fireworks', arc: 'Arc Reactor', gamma: 'Gamma', warmachine: 'War Machine', tva: 'TVA', doom: 'Doom', minimal: 'Minimal', off: 'Off' };
+  const celebName = (id) => CELEB_NAMES[id] || id;
   const CELEB_HINT = {
     stark: 'Golden dust sweeps in and assembles into HAPPY NEW YEAR, then blows away. The snap, in reverse.',
     fireworks: 'Classic fireworks with a gold title.',
+    arc: 'The reactor powers up: rings of cyan light spin up around a blazing core, and the words light up in its glow.',
+    gamma: 'A gamma surge: a thunderclap of green light, shockwaves and crackling lightning around the words.',
+    warmachine: 'Target locked: a tactical display locks onto the words, then a salvo of tracers bursts above them.',
+    tva: 'Branching time: an amber timeline branches across the screen while a door of light opens behind the words.',
+    doom: 'Sorcery and steel: a turning circle of runes in green fire, and the words in polished steel.',
     minimal: 'A small banner only. Nothing covers the scene.',
     off: 'No animation. The date under the clock still rolls over to January 1.'
   };
@@ -4339,7 +4533,7 @@
     /** Setup → Start time: the three choices, with where the snap lands for each. */
     renderStartTime() {
       // Armed also while the countdown is reloading the film or has lent it out (cfg.armed).
-      const armed = Engine.mode === 'armed' || cfg.armed || !!Engine.test;
+      const armed = Engine.mode === 'armed' || cfg.armed;
       // (At startup, and while an armed countdown reloads the film, there may be no armed session yet.)
       const s = Engine.test ? Engine.computeFree()
         : Engine.mode === 'armed' && Engine.session ? Engine.session
@@ -4353,9 +4547,14 @@
       el.smAuto.checked = cfg.startMode === 'auto';
       el.smClassic.checked = cfg.startMode === 'classic';
       el.smOwn.checked = cfg.startMode === 'own';
-      [el.smAuto, el.smClassic, el.smOwn, el.smOwnInput, el.smOwnApply, el.smOwnMinus1, el.smOwnMinus01, el.smOwnPlus01, el.smOwnPlus1].forEach((n) => { n.disabled = armed; });
-      setHidden(el.smArmedNote, !armed);
-      setText(el.smArmedNote, Engine.test && !cfg.armed ? 'End the test run to change the start time.' : 'Stop the countdown to change the start time.');
+      // Only a test run holds the start time. A running countdown takes a new one at once ("I think
+      // I started it wrong"): the film goes to where it should be with it (Engine.changeStart).
+      const locked = !!Engine.test;
+      [el.smAuto, el.smClassic, el.smOwn, el.smOwnInput, el.smOwnApply, el.smOwnMinus1, el.smOwnMinus01, el.smOwnPlus01, el.smOwnPlus1, el.smHere].forEach((n) => { n.disabled = locked; });
+      setHidden(el.smArmedNote, !(locked || armed));
+      setText(el.smArmedNote, locked ? 'End the test run to change the start time.'
+        : 'The countdown is running: a new start time moves the film at once to where it should be with it, and the countdown carries on.');
+      setHidden(el.smHere, !Media.ready);
       // The fixed choice is 2:30:30 before the target: 9:29:30 PM for midnight.
       const classicAt = clockOf(at('classic'));
       const opt = el.tsStartMode.querySelector('option[value="classic"]');
@@ -4403,6 +4602,9 @@
       el.optAutoRecoverSec.value = String(cfg.autoRecoverSec);
       el.optLock.checked = cfg.lockControls;
       el.optAutoRestart.checked = cfg.autoRestart !== false;
+      el.optReplay.checked = cfg.replay !== false;
+      el.optReplaySec.value = String(cfg.replaySec);
+      el.optReplaySec.disabled = cfg.replay === false;
       el.optNetTime.checked = cfg.useNetTime;
       el.optAudioLang.value = cfg.audioLang;
       el.subSize.value = cfg.subSize;
@@ -4434,7 +4636,7 @@
       const canTry = later != null && Engine.mode !== 'armed' && !Engine.test && Math.abs(cfg.snapSec - later) > 0.5;
       setHidden(el.snapShiftTry, !canTry);
       if (canTry) setText(el.snapShiftTry, 'Snap not there? Try ' + C.fmtDuration(later, { forceHours: true }) + ' (' + fmtSpan(extra) + ' later)');
-      $$('button', el.optCelebration).forEach((b) => b.classList.toggle('on', b.dataset.v === cfg.celebration));
+      $$('button', el.optCelebration).forEach((b) => { b.classList.toggle('on', b.dataset.v === cfg.celebration); b.hidden = !Celebration.has(b.dataset.v); });
       setText(el.celebHint, CELEB_HINT[cfg.celebration] || '');
       el.overlay.className = 'overlay pos-' + cfg.overlayPos + ' size-' + cfg.overlaySize;
       el.stage.dataset.ov = cfg.overlayPos;
@@ -4556,6 +4758,11 @@
       const lateNow = Late.position(now) != null;
       if (lateNow !== this.lateNow) { this.lateNow = lateNow; this.renderArmButton(); }
 
+      // A few seconds before the moment, the animation gets ready, so it starts on the very frame.
+      if (s && Engine.mode === 'armed' && s.targetEpoch - now < 12000 && s.targetEpoch - now > 0 && this.primedFor !== s.targetEpoch) {
+        this.primedFor = s.targetEpoch;
+        Celebration.prime(s.targetEpoch);
+      }
       // The instant of the snap: fire the celebration within one frame of it.
       if (s && Engine.mode === 'armed' && this.prevNow && this.prevNow < s.targetEpoch && now >= s.targetEpoch && now - s.targetEpoch < 4000) {
         // Fired on the clock, not on the film: also when someone has just slipped, or the app was
@@ -5175,6 +5382,9 @@
 
     /* display tab */
     bindToggle(el.optOverlay, 'showOverlay');
+    bindToggle(el.optReplay, 'replay', () => UI.renderSettings());
+    bindSelect(el.optReplaySec, 'replaySec', (v) => +v);
+    el.openReplays.addEventListener('click', () => { try { native.openReplays(); } catch (e) { /* the browser build */ } });
     bindToggle(el.optClock, 'showClock');
     bindToggle(el.optDate, 'showDate');
     bindToggle(el.optCount, 'showCount');
@@ -5272,11 +5482,14 @@
       UI.dirty.all = true;
     };
     // Start time: automatic (the snap in the file decides), 9:29:30 PM, or the user's own.
-    const setStartMode = (mode) => {
-      if (Engine.mode === 'armed' || cfg.armed || Engine.test) { toast(Engine.test && !cfg.armed ? 'End the test run to change the start time' : 'Stop the countdown to change the start time'); UI.renderSettings(); return; }
-      const before = startLead();
+    const startBefore = () => ({ mode: cfg.startMode, own: cfg.startOwnSec, ownSet: cfg.startOwnSet, lead: startLead() });
+    const setStartMode = (mode, prev, how) => {
+      if (Engine.test) { toast('End the test run to change the start time'); UI.renderSettings(); return; }
+      prev = prev || startBefore();
       cfg.startMode = mode;
-      if (Math.abs(startLead() - before) >= 0.0005) cfg.rehearsed = {};      // a rehearsal was of the start time used then
+      if (Math.abs(startLead() - prev.lead) >= 0.0005) cfg.rehearsed = {};      // a rehearsal was of the start time used then
+      // While the countdown runs, the film goes straight to where it should be with the new start.
+      if (Engine.mode === 'armed' || cfg.armed) { Engine.changeStart(prev, how); return; }
       save();
       Engine.session = Engine.computeFree();
       UI.renderSettings();
@@ -5293,20 +5506,28 @@
       setStartMode(r.value);
     }));
     const ownFromInput = () => C.leadForStartTime(C.parseClockTime(el.smOwnInput.value), (Engine.session || Engine.computeFree()).targetEpoch, 60, 6 * 3600);
-    const setOwn = (lead) => {
-      if (Engine.mode === 'armed' || cfg.armed || Engine.test) { toast(Engine.test && !cfg.armed ? 'End the test run to change the start time' : 'Stop the countdown to change the start time'); UI.renderSettings(); return; }
+    const setOwn = (lead, how) => {
+      if (Engine.test) { toast('End the test run to change the start time'); UI.renderSettings(); return; }
       if (!(lead >= 60 && lead <= 6 * 3600)) {
         const sess = Engine.session || Engine.computeFree();
         el.smOwnInput.classList.add('bad');
         toast('Type a start time between six hours and one minute before ' + targetWord(sess) + ', such as ' + C.fmtClockMs(sess.targetEpoch - 9030000, cfg.use24h), 'bad');
         return;
       }
-      const before = startLead();
+      const prev = startBefore();
       cfg.startOwnSec = Math.round(lead * 1000) / 1000;
       cfg.startOwnSet = true;
-      if (cfg.startMode === 'own' && Math.abs(startLead() - before) >= 0.0005) cfg.rehearsed = {};
-      setStartMode('own');
+      if (cfg.startMode === 'own' && Math.abs(startLead() - prev.lead) >= 0.0005) cfg.rehearsed = {};
+      setStartMode('own', prev, how);
     };
+    // "Start time from where the film is now": the start time is worked out from the film's position,
+    // so nothing jumps and the countdown follows the film from here (one's own start time).
+    el.smHere.addEventListener('click', () => {
+      if (Engine.test) { toast('End the test run to change the start time'); return; }
+      if (!Media.ready) return;
+      const target = cfg.armed && Number.isFinite(cfg.armedTarget) ? cfg.armedTarget : (Engine.session || Engine.computeFree()).targetEpoch;
+      setOwn((target - Clock.now()) / 1000 + video.currentTime, 'here');
+    });
     el.smOwnApply.addEventListener('click', () => setOwn(ownFromInput()));
     el.smOwnInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { setOwn(ownFromInput()); el.smOwnInput.blur(); } });
     el.smOwnInput.addEventListener('input', () => el.smOwnInput.classList.toggle('bad', !(ownFromInput() > 0)));
@@ -5492,9 +5713,9 @@
         case 'z': SubsUI.nudge(-0.1); break;
         case 'x': SubsUI.nudge(0.1); break;
         case 'h': {
-          const order = ['stark', 'fireworks', 'minimal', 'off'];
+          const order = CELEB_ORDER.filter((id) => Celebration.has(id));
           setCfg('celebration', order[(order.indexOf(cfg.celebration) + 1) % order.length]);
-          toast('New Year animation: ' + cfg.celebration);
+          toast('New Year animation: ' + celebName(cfg.celebration));
           break;
         }
         case 'l': setCfg('lockControls', !cfg.lockControls); toast(cfg.lockControls ? 'Controls locked while armed' : 'Controls unlocked'); break;
@@ -5578,7 +5799,7 @@
   }
 
   // For the automated tests and for debugging from the developer tools.
-  window.__AP = { Engine: Engine, Clock: Clock, cfg: cfg, Media: Media, AudioTracks: AudioTracks, AudioFix: AudioFix, SnapCam: SnapCam, Late: Late, Missed: Missed, Power: Power, Recovery: Recovery, NetTime: NetTime, SubsUI: SubsUI, SubSync: SubSync, UI: UI, Celebration: Celebration, Versions: Versions, C: C, saveNow: saveNow };
+  window.__AP = { Engine: Engine, Clock: Clock, cfg: cfg, Media: Media, AudioTracks: AudioTracks, AudioFix: AudioFix, SnapCam: SnapCam, Late: Late, Missed: Missed, Power: Power, Recovery: Recovery, Replay: Replay, NetTime: NetTime, SubsUI: SubsUI, SubSync: SubSync, UI: UI, Celebration: Celebration, Versions: Versions, C: C, saveNow: saveNow };
 
   boot();
 })();
