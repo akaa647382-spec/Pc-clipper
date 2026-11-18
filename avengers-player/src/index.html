@@ -277,8 +277,9 @@
         <p class="hint">The tests move the app's own clock, not your PC's: the real countdown stays armed and comes back when a test ends.</p>
         <div class="tcard">
           <h4><span>1</span>New Year's Eve simulation</h4>
-          <p>Exactly like the night: the app's clock is set to December 31 at the moment you pick and runs on from there. The standby screen counts down, the movie starts by itself, the clock and the date run in the corner, the snap lands on midnight, the date rolls over to January 1 and the celebration plays. No test bar, no pass or fail. Press F for fullscreen to see it as you will on the night.</p>
+          <p>Exactly like the night: the app's clock is set to December 31 at the moment you pick and runs on from there. The standby screen counts down, the movie starts by itself, the clock and the date run in the corner, the snap lands on midnight, the date rolls over to January 1 and the celebration plays. No test bar, no pass or fail. Press F for fullscreen to see it as you will on the night. Pick the start time to watch: as set, the automatic one, or 9:29:30 PM (only the simulation uses it).</p>
           <div class="row">
+            <select id="tsNightStart" aria-label="Start time for the simulation"><option value="set" selected>Start time as set</option><option value="auto">Automatic start</option><option value="classic">Start at 9:29:30 PM</option></select>
             <select id="tsNightAt" aria-label="Where the simulation begins"><option value="start" selected>9:29:00 PM: watch it start by itself</option><option value="snap">11:59:00 PM: watch the snap at midnight</option><option value="five">11:55:00 PM: the last five minutes</option></select>
             <button class="btn btn-primary btn-sm" data-test="night" type="button">Start</button>
             <button id="nightEnd" class="btn btn-warn btn-sm" type="button" hidden>End the simulation</button>

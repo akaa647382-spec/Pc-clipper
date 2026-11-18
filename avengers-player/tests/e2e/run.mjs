@@ -2625,6 +2625,27 @@ const scenarios = {
       check('no film strip and no test result after it', !(await s.page.evaluate(() => !!window.__AP.SnapCam.view)) && /No test run yet/.test((await look()).results));
       await s.page.click('#nightEnd');
       check('ended', await waitFor(s.page, () => !window.__AP.Engine.test && window.__AP.Clock.testOffsetMs === 0, null, 4000));
+
+      // The night with the movie starting at 9:29:30 PM (only the simulation uses it).
+      await s.page.selectOption('#tsNightStart', 'classic');
+      await s.page.selectOption('#tsNightAt', 'start');
+      check('with “Start at 9:29:30 PM” the first choice reads “9:29:00 PM: watch it start by itself at 9:29:30 PM”',
+        await waitFor(s.page, () => /^9:29:00 PM: watch it start by itself at 9:29:30 PM$/.test(document.querySelector('#tsNightAt option[value="start"]').textContent), null, 3000),
+        await s.page.$eval('#tsNightAt option[value="start"]', (o) => o.textContent));
+      await s.page.click('[data-test="night"]');
+      const nv = await s.page.evaluate(() => {
+        const { Engine, cfg } = window.__AP;
+        const st = new Date(Engine.session.startEpoch);
+        return { h: st.getHours(), m: st.getMinutes(), sec: st.getSeconds(), ms: st.getMilliseconds(), mode: cfg.startMode,
+          start: document.getElementById('ktStart').textContent, lands: document.getElementById('ktSnap').textContent };
+      });
+      check('the simulated night starts the movie at 9:29:30.000 PM, and the snap lands 1.668 s after midnight', nv.h === 21 && nv.m === 29 && nv.sec === 30 && nv.ms === 0 &&
+        /Dec 31 · 9:29:30 PM/.test(nv.start) && /^1\.668 s after midnight$/.test(nv.lands), JSON.stringify(nv));
+      check('it starts by itself at 9:29:30 PM and runs on the clock', await waitSynced(s.page, 45000) &&
+        await s.page.evaluate(() => { const { Engine, Clock } = window.__AP; const since = Clock.now() - Engine.session.startEpoch; return since > 0 && since < 3000 && new Date(Engine.session.startEpoch).getSeconds() === 30; }));
+      check('the real countdown keeps its own start time', (await s.page.evaluate(() => window.__AP.cfg.startMode)) === 'auto');
+      await s.page.click('#nightEnd');
+      check('ended again', await waitFor(s.page, () => !window.__AP.Engine.test && window.__AP.Clock.testOffsetMs === 0, null, 4000));
       check('no page errors', s.errors.length === 0, s.errors.join(' | '));
     } finally { await s.close(); }
   },

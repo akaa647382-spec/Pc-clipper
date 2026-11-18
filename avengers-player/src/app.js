@@ -4360,9 +4360,12 @@
       const classicAt = clockOf(at('classic'));
       const opt = el.tsStartMode.querySelector('option[value="classic"]');
       if (opt) setText(opt, 'Start at ' + classicAt);
-      // The simulation from the minute before the movie starts.
+      const nightOpt = el.tsNightStart.querySelector('option[value="classic"]');
+      if (nightOpt) setText(nightOpt, 'Start at ' + classicAt);
+      // The simulation from the minute before the movie starts, with the start time picked for it.
+      const nightPick = el.tsNightStart.value !== 'set' ? el.tsNightStart.value : undefined;
       const startOpt = el.tsNightAt.querySelector('option[value="start"]');
-      const startAt = target - Math.round(startLead() * 1000);
+      const startAt = target - Math.round(startLead(nightPick) * 1000);
       if (startOpt) setText(startOpt, clockOf(Math.floor((startAt - 20000) / 60000) * 60000) + ': watch it start by itself at ' + clockOf(startAt));
       // The late test that joins a minute before the target, to watch the snap.
       const lateOpt = el.tsLateBy.querySelector('option[value="snap"]');
@@ -5125,13 +5128,19 @@
     /* test tab */
     $$('[data-test]').forEach((b) => b.addEventListener('click', () => {
       const kind = b.dataset.test;
-      if (kind === 'night') { Engine.startTest('night', 0, undefined, { at: el.tsNightAt.value }); return; }
+      if (kind === 'night') {
+        // The simulation can try another start time (9:29:30 PM, say); the real countdown keeps its own.
+        const pick = el.tsNightStart.value;
+        Engine.startTest('night', 0, pick !== 'set' ? pick : undefined, { at: el.tsNightAt.value });
+        return;
+      }
       if (kind === 'late') { Engine.startTest('late', 0, undefined, { by: el.tsLateBy.value }); return; }
       const lead = kind === 'start' ? +el.tsLeadStart.value : kind === 'snap' ? +el.tsLeadSnap.value : 0;
       const pick = kind === 'snap' ? el.tsStartMode.value : 'set';
       Engine.startTest(kind, lead, pick !== 'set' ? pick : undefined);
     }));
     el.thEnd.addEventListener('click', () => Engine.endTest('Stopped by you.'));
+    el.tsNightStart.addEventListener('change', () => UI.renderStartTime());     // the first choice says when it starts
     el.nightEnd.addEventListener('click', () => Engine.endTest('Ended by you.'));
     // A drill takes the app away for a while: never across the start, the target or the snap.
     // (`offSec`: how long it is gone; `spare`: room for starting again and getting back in sync.)

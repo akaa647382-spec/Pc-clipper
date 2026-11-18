@@ -5,7 +5,7 @@ for the whole two and a half hours, and lands the snap on **12:00:00 AM**: the v
 found in your own file and put on midnight to the millisecond. It works with any copy of *Avengers: Endgame* or
 *Avengers Endgame: Encore*: Remux, Blu-ray or WEB rip, 4K or 1080p, whatever its exact length.
 
-**[Download the installer](../download/Avengers-Player-Setup-1.10.3.exe)** (Windows 10 / 11, 64-bit, about 93 MB).
+**[Download the installer](../download/Avengers-Player-Setup-1.10.4.exe)** (Windows 10 / 11, 64-bit, about 93 MB).
 You bring your own copy of the movie. Nothing is uploaded anywhere.
 
 Older version, kept as it was: **[1.3.0 (legacy)](../download/Avengers-Player-Setup-1.3.0-legacy.exe)**. Only one
@@ -15,8 +15,8 @@ version is installed at a time: installing one over the other asks first, then r
 
 ## Install
 
-1. Run `Avengers-Player-Setup-1.10.3.exe`. It installs for your user only, so there is no administrator prompt.
-   If Avengers Player is already installed, Setup says so first and asks: *update it to version 1.10.3?*, *install
+1. Run `Avengers-Player-Setup-1.10.4.exe`. It installs for your user only, so there is no administrator prompt.
+   If Avengers Player is already installed, Setup says so first and asks: *update it to version 1.10.4?*, *install
    it again?* (the same version), or, when the installed one is newer, *replace it with this version?* **Yes** puts
    the new version into the folder of the old one (your settings, snap points and an armed countdown stay as they
    are); **No** leaves everything as it is and closes Setup. On a PC without it, Setup simply installs it.
@@ -72,7 +72,9 @@ and again at 20, 10 and 5 percent.
 at the moment you pick (9:29:00 PM to watch the movie start by itself, 11:59:00 PM to watch the snap) and runs on
 from there. The standby screen counts down, the movie starts by itself, the clock and the date run in the corner,
 the snap lands on midnight, the date rolls over and the celebration plays. No test bar, no pass or fail; your PC's
-clock and a real countdown are not touched. Press F for fullscreen and watch it as you will on the night.
+clock and a real countdown are not touched. Press F for fullscreen and watch it as you will on the night. Pick the
+start time the simulation uses: the one set in Setup, the automatic one, or **9:29:30 PM** (the simulation then
+starts the movie at 9:29:30 PM and you see where the snap lands with it; your real countdown keeps its own).
 
 **The movie launches at the exact millisecond, and every second moves with the clock.** The start time is shown
 to the millisecond (for example *9:29:28.348 PM*). The countdown to it changes its seconds on the same frame as the
