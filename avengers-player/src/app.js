@@ -4177,13 +4177,13 @@
   const CELEB_HINT = {
     stark: 'Golden dust sweeps in and assembles into HAPPY NEW YEAR, then blows away. The snap, in reverse.',
     fireworks: 'Classic fireworks with a gold title.',
-    arc: 'A cyan reactor powers up, its shockwave lights up the words, then its rings break into drifting sparks.',
-    hotrod: 'Red and gold: the words are forged in molten gold, with sparks and heat.',
-    infinity: 'Deep space in violet: an infinity loop of light draws itself around the words.',
-    gamma: 'A green thunderclap and shockwave, then lightning crackles around glowing lime words as embers and shards rise.',
-    warmachine: 'A tactical display boots and locks onto the words in steel, then red tracers burst into silver flak above them.',
-    tva: 'An amber timeline branches across the screen as a door of light opens behind the words, ringed by a clock dial.',
-    doom: 'A circle of runes in green fire turns and burns around the words in polished steel, then collapses into a green flash.',
+    arc: 'An arc reactor ignites; its shockwave strikes each letter on like a neon tube, then energy fills the year digit by digit.',
+    hotrod: 'Red and gold: 2027 is struck digit by digit from molten metal, then a welding torch writes HAPPY NEW YEAR in sparks.',
+    infinity: 'A violet infinity loop draws itself; stardust pours from its crossing into 2027 digit by digit, then into the greeting.',
+    gamma: 'Green gamma storm: the new year smashes down digit by digit, then lightning bolts write HAPPY NEW YEAR one letter at a time.',
+    warmachine: 'A tactical HUD boots, a target box locks each letter as a scan renders it in steel, then the year\'s counter rolls and locks.',
+    tva: 'Amber TVA bureau: an old split-flap clock flips over to the new year, then HAPPY NEW YEAR types out on a terminal.',
+    doom: 'Green fire burns the title in letter by letter, then the rune circle surges and brands the year, centre digits first.',
     minimal: 'A small banner only. Nothing covers the scene.',
     off: 'No animation. The date under the clock still rolls over to January 1.'
   };

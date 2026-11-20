@@ -18,7 +18,7 @@ Where things stand, so the next session can carry on without the chat history.
 
 ## Release 1.11.0 (Friday), in this order
 
-1. **Stark goes back to exactly how it was**: undo the Stark part of `src/fx.js` from commit `ee37e40`
+1. **Done (commit `261bb86`, pixel-identical to the original).** Stark goes back to exactly how it was: undo the Stark part of `src/fx.js` from commit `ee37e40`
    (the second gust for the year, `STARK.yearLag`, the line-by-line solid words). Keep the letter API
    (`env.glyphs` / `env.textGlyphs` / `env.glyph` / `env.warm`), the pixel-grid words picture and the
    Fireworks changes.
@@ -38,8 +38,8 @@ Where things stand, so the next session can carry on without the chat history.
 
    **The Final Countdown follows the chosen New Year animation, not the app theme** (the user's
    decision): choosing Arc Reactor gives the Arc Reactor countdown, and so on, in that animation's font
-   and look. Stark, Fireworks and Minimal get countdowns of their own (Stark: gold with a shimmer of
-   dust; Fireworks: a colourful burst; Minimal: a plain fade). With the animation Off, the countdown still
+   and look. Stark keeps the original default countdown, exactly as before; Fireworks and Minimal get
+   countdowns of their own (Fireworks: a colourful burst; Minimal: a plain fade). With the animation Off, the countdown still
    plays (only the midnight animation is off), in the app theme's style; its own switch (T) turns it off. In the CSS, key the countdown styles on a `data-ten` attribute set from
    `cfg.celebration` instead of `html[data-theme]`, and make the e2e checks pick animations, not themes. Fonts ship inside the app (offline): take the
    woff2 files from the `@fontsource/*` npm packages and keep their licence files (OFL / Apache).
