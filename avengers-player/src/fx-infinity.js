@@ -72,7 +72,7 @@
   /* -------------------------------------------------------------- colours --- */
 
   // The words: white at the top, through lilac, to violet at the foot, in a deep violet halo.
-  const FILL = { stops: [[0, '#ffffff'], [0.34, '#f0e8ff'], [0.68, '#c6a6ff'], [1, '#9c76ff']], halo: 'rgba(15,7,36,0.92)' };
+  const FILL = { stops: [[0, '#d4bfff'], [0.42, '#f1e9ff'], [1, '#ffffff']], halo: 'rgba(40,12,96,0.92)' };
   // White-hot letters with no halo, added on top as a letter condenses (and when a ripple passes).
   const HOT = { stops: [[0, '#ffffff'], [1, '#efe6ff']] };
   // Lilac light in the shape of a letter, no halo: the first glow of a letter as its dust gathers.
@@ -1248,5 +1248,5 @@
     return { step: function () {}, draw: draw, prime: prime };
   }
 
-  APFx.register('infinity', { name: 'Infinity', duration: DURATION, create: create });
+  APFx.register('infinity', { name: 'Infinity', duration: DURATION, font: { family: 'AP Syncopate', weight: 700, tracking: 0.05 }, create: create });
 })(typeof window !== 'undefined' ? window : this);

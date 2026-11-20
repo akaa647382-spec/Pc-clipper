@@ -1629,5 +1629,5 @@
     return { step: function () {}, draw: draw, prime: prime };
   }
 
-  APFx.register('tva', { name: 'TVA', duration: DURATION, create: create });
+  APFx.register('tva', { name: 'TVA', duration: DURATION, font: { family: 'AP Orbitron', weight: 900, tracking: 0.08 }, create: create });
 })(typeof window !== 'undefined' ? window : this);

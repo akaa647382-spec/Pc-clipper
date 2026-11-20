@@ -31,14 +31,14 @@
   const FADE_FROM = DURATION - 1500;              // everything fades out from here
   const TAU = Math.PI * 2;
   // The words: white at the top to reactor cyan at the bottom, with a deep navy halo.
-  const FILL = { stops: [[0, '#ffffff'], [0.5, '#dcfaff'], [1, '#4fd6ff']], halo: 'rgba(0,8,20,0.9)' };
+  const FILL = { stops: [[0, '#ffffff'], [0.5, '#e8fcff'], [1, '#93ebff']], halo: 'rgba(0,8,20,0.9)', stroke: { width: 0.024, stops: [[0, '#a6f5ff'], [1, '#1fb6f5']] } };
   // A tube striking: white-hot with a cyan bloom round it (added as light, never on its own).
   const HOT = { stops: [[0, '#ffffff'], [0.55, '#f6feff'], [1, '#c4f5ff']], halo: 'rgba(95,227,255,0.9)' };
   // A tube glowing without having caught (its blinks at ignition, its last glow going out): cyan
   // neon light, added on top.
   const GLOW = { stops: [[0, '#d8fbff'], [0.5, '#8cecff'], [1, '#4fd6ff']], halo: 'rgba(60,200,255,0.85)' };
   // A digit filling with the reactor's light: deeper cyan, with the words' dark halo so it reads.
-  const CHARGE = { stops: [[0, '#9cefff'], [0.5, '#5fe3ff'], [1, '#22b8f5']], halo: 'rgba(0,8,20,0.9)' };
+  const CHARGE = { stops: [[0, '#9cefff'], [0.5, '#5fe3ff'], [1, '#22b8f5']], halo: 'rgba(0,8,20,0.9)', stroke: { width: 0.024, stops: [[0, '#a6f5ff'], [1, '#1fb6f5']] } };
   // (All of them have a halo, so the pictures of a letter are cut into cells of the same size
   // and a crop at one height cuts them all at the same place.)
 
@@ -1515,5 +1515,5 @@
     };
   }
 
-  APFx.register('arc', { name: 'Arc Reactor', duration: DURATION, create: create });
+  APFx.register('arc', { name: 'Arc Reactor', duration: DURATION, font: { family: 'AP Michroma', weight: 400, tracking: 0.06 }, create: create });
 })(typeof window !== 'undefined' ? window : this);

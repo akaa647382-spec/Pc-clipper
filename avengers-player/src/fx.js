@@ -711,7 +711,8 @@
       const list = lineGlyphs(L, line, text);
       // The halo exactly as in the words picture (shadows are measured in the picture's pixels).
       const blur = fill.halo ? Math.max(6, L.titleSize * 0.28) : 0;
-      const pad = (blur * 1.6 + L.titleSize * 0.04) / Math.min(1, DPR) + 2 + (fill.stroke ? L.yearSize * fill.stroke.width * 1.2 : 0);
+      // (An outline fits inside this margin, so the cells keep the size styles rely on.)
+      const pad = (blur * 1.6 + L.titleSize * 0.04) / Math.min(1, DPR) + 2;
       // Cells in device pixels, on the screen's pixel grid: a letter is copied 1:1, never resampled.
       const cells = [];
       let total = 0;

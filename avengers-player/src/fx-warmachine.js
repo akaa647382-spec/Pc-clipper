@@ -41,9 +41,10 @@
 
   // Brushed steel: white at the top to steel silver, with the bands of polished metal.
   const FILL = {
-    stops: [[0, '#ffffff'], [0.3, '#f4f4f7'], [0.48, '#e8eaef'], [0.58, '#d3d6dd'], [0.64, '#b4b8c2'], [0.68, '#9da1ad'],
-      [0.76, '#bec1ca'], [0.83, '#aeb2bc'], [0.9, '#c8cbd3'], [1, '#a0a0ac']],
-    halo: 'rgba(2,3,6,0.92)'
+    stops: [[0, '#f1f3f7'], [0.3, '#cbcfd7'], [0.48, '#a6abb5'], [0.58, '#80868f'], [0.64, '#636973'], [0.72, '#7d838e'],
+      [0.86, '#6a707b'], [1, '#4f555f']],
+    halo: 'rgba(2,3,6,0.92)',
+    stroke: { width: 0.016, color: '#e0464c' }
   };
   // The same words in plain white without a halo: laid over the steel to polish it.
   const SHEEN = { stops: [[0, '#ffffff'], [1, '#f6f8ff']], halo: '' };
@@ -1504,5 +1505,5 @@
     };
   }
 
-  APFx.register('warmachine', { name: 'War Machine', duration: DURATION, create: create });
+  APFx.register('warmachine', { name: 'War Machine', duration: DURATION, font: { family: 'AP Black Ops One', weight: 400, tracking: 0.09 }, create: create });
 })(typeof window !== 'undefined' ? window : this);

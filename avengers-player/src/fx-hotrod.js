@@ -238,8 +238,8 @@
     const nY = YL.length;
     const TS = L.titleSize;
     const YS = nY ? L.yearSize : TS;
-    const GOLDF = lineFill(L, POLISH, HALO);
-    const BRONZEF = lineFill(L, BRONZE, HALO);
+    const GOLDF = Object.assign(lineFill(L, POLISH, HALO), { stroke: { width: 0.018, color: '#8a1410' } });
+    const BRONZEF = Object.assign(lineFill(L, BRONZE, HALO), { stroke: { width: 0.018, color: '#5c130c' } });
     let minX = Infinity;
     let maxX = -Infinity;
     for (const g of glyphs) { if (g.x0 < minX) minX = g.x0; if (g.x1 > maxX) maxX = g.x1; }
@@ -1084,5 +1084,5 @@
     };
   }
 
-  FX.register('hotrod', { name: 'Hot Rod', duration: DURATION, create: create });
+  FX.register('hotrod', { name: 'Hot Rod', duration: DURATION, font: { family: 'AP Russo One', weight: 400, slant: 0.18, tracking: 0.09 }, create: create });
 })(typeof window !== 'undefined' ? window : this);

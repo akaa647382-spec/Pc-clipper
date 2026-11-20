@@ -54,7 +54,7 @@
   // The words: pale lime to green. HOT is the white heat they flash back to in the surge (the words
   // in one piece); FLASH is pure light in their shapes (no halo): added on a letter, it is the white
   // heat a letter arrives with (white plus lime is white), and the flash as it is hit or lands.
-  const FILL = { stops: [[0, '#f4ffd6'], [0.42, '#d8ff5a'], [1, '#17c25d']], halo: 'rgba(0,0,0,0.88)' };
+  const FILL = { stops: [[0, '#f4ffd6'], [0.42, '#d8ff5a'], [1, '#17c25d']], halo: 'rgba(0,0,0,0.88)', stroke: { width: 0.05, color: '#03200e' } };
   const HOT = { stops: [[0, '#ffffff'], [0.55, '#f3ffdc'], [1, '#c8ff92']], halo: 'rgba(0,0,0,0.7)' };
   const FLASH = { stops: [[0, '#ffffff'], [0.5, '#f2ffe0'], [1, '#c4ffa0']], halo: null };
 
@@ -1539,5 +1539,5 @@
     };
   }
 
-  FX.register('gamma', { name: 'Gamma', duration: DURATION, create: create });
+  FX.register('gamma', { name: 'Gamma', duration: DURATION, font: { family: 'AP Anton', weight: 400, tracking: 0.08, scale: 1.12 }, create: create });
 })(typeof window !== 'undefined' ? window : this);

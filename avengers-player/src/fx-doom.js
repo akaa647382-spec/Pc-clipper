@@ -400,7 +400,7 @@
       }
       let last = 0;
       for (const s of stops) { s[0] = Math.max(last, clamp(s[0], 0, 1)); last = s[0]; }
-      return { stops: stops, halo: HALO };
+      return { stops: stops, halo: HALO, stroke: { width: 0.03, stops: [[0, '#b6ffd6'], [0.45, '#45e08a'], [1, '#0d6634']] }, texture: { kind: 'scratches', color: '#ffffff', alpha: 0.42, count: 260, seed: 11 } };
     })();
 
     /* --- one table of random numbers: every choice below is read from it or from rnd --- */
@@ -1941,5 +1941,5 @@
     };
   }
 
-  FX.register('doom', { name: 'Doom', duration: DURATION, create: create });
+  FX.register('doom', { name: 'Doom', duration: DURATION, font: { family: 'AP Cinzel', weight: 900, tracking: 0.06 }, create: create });
 })(typeof window !== 'undefined' ? window : this);
