@@ -24,6 +24,13 @@
  * Every letter is a picture of its own with its whole halo, so a letter alone looks finished, and
  * all of them in place look exactly like env.words().
  *
+ * A style can bring its own typeface: APFx.register(id, { font: { family, weight, tracking, slant,
+ * scale } }) (family = a face declared in fonts.css; tracking = the gap between letters as a share of
+ * the size, 0.14 by default; slant = a forward lean, 0.18 is about 10 degrees; scale = a size factor).
+ * A fill can also carry an outline, { stroke: { width, color | stops } } (width as a share of the size,
+ * outside the letter), and a texture inside the letters, { texture: { kind: 'scratches', color,
+ * alpha, count, seed } }.
+ *
  * Every frame has to fit in 1/60 s on a big screen: nothing may draw text or blurred shadows per
  * frame (the words are drawn once and stamped), and the canvas never holds more than about 4.2
  * million pixels (the browser scales it up on a bigger screen).
@@ -34,8 +41,22 @@
   'use strict';
 
   const FONT = '"Bahnschrift", "DIN Alternate", "Segoe UI", system-ui, sans-serif';
+  const DEFAULT_FACE = { family: FONT, weight: 800, tracking: 0.14, slant: 0, scale: 1 };
+  /** A style's typeface, with the defaults filled in (its family first, the default ones as fallback). */
+  function makeFace(f) {
+    if (!f || !f.family) return DEFAULT_FACE;
+    return {
+      family: "'" + String(f.family).replace(/'/g, '') + "', " + FONT,
+      weight: f.weight || 400,
+      tracking: f.tracking == null ? 0.14 : f.tracking,
+      slant: f.slant || 0,
+      scale: f.scale || 1
+    };
+  }
   const DURATION = { stark: 12800, fireworks: 12000 };
   const STYLES = Object.create(null);          // registered styles (src/fx-*.js)
+  const FACES = Object.create(null);           // their typefaces
+  const faceOf = (style) => FACES[style] || DEFAULT_FACE;
   const PIXEL_BUDGET = 4.2e6;                  // most canvas pixels filled per frame
   const GOLD = { stops: [[0, '#fff3c4'], [0.45, '#ffc94a'], [1, '#e8871e']], halo: 'rgba(0,0,0,0.85)' };
   const STARK = {
@@ -150,14 +171,104 @@
 
     /* ---------------------------------------------------------- layout --- */
 
-    function font(size) { return '800 ' + size + 'px ' + FONT; }
+    let face = DEFAULT_FACE;   // the typeface of the style being drawn (set in prepare())
+
+    function font(size) { return face.weight + ' ' + size + 'px ' + face.family; }
+
+    /** One letter at (x, cy), leaning like the current face; op = 'stroke' outlines it instead. */
+    function letter(g, ch, x, cy, op) {
+      if (face.slant) {
+        g.save();
+        g.translate(0, cy);
+        g.transform(1, 0, -face.slant, 1, 0, 0);
+        g.translate(0, -cy);
+        if (op === 'stroke') g.strokeText(ch, x, cy); else g.fillText(ch, x, cy);
+        g.restore();
+      } else if (op === 'stroke') g.strokeText(ch, x, cy);
+      else g.fillText(ch, x, cy);
+    }
+
+    /** The texture of a fill (scratches), drawn over (x0..x1) of the words band, in screen coordinates. */
+    function paintTexture(g, tex, L, x0, x1) {
+      if (!tex || tex.kind !== 'scratches') return;
+      const r = mulberry32((tex.seed || 7) ^ 0x2B1D);
+      const n = Math.round(tex.count || 220);
+      const s = L.titleSize;
+      g.save();
+      g.lineCap = 'round';
+      g.strokeStyle = tex.color || '#ffffff';
+      for (let i = 0; i < n; i++) {
+        const x = r() * W;
+        const y = L.top + r() * (L.bottom - L.top);
+        const len = s * (0.05 + r() * 0.3);
+        const a = (r() - 0.5) * 0.9;
+        const w = 0.5 + r() * 1.1;
+        const k = 0.35 + r() * 0.65;
+        if (x + len < x0 || x - len > x1) continue;
+        g.globalAlpha = (tex.alpha == null ? 0.35 : tex.alpha) * k;
+        g.lineWidth = w;
+        g.beginPath();
+        g.moveTo(x, y);
+        g.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len);
+        g.stroke();
+      }
+      g.restore();
+    }
+
+    /**
+     * The letters of a fill that has an outline or a texture, drawn into g in screen coordinates
+     * (each { ch, x, cy, size }): the outline carries the halo, the colour goes on top of it, and the
+     * texture is laid on the letters' colour only (never on the outline or the halo).
+     */
+    function paintRich(g, items, fill, L, x0, x1, area) {
+      const grad = (stops) => { const gr = g.createLinearGradient(0, L.top, 0, L.bottom); for (const st of stops) gr.addColorStop(st[0], st[1]); return gr; };
+      const halo = () => { if (fill.halo) { g.shadowColor = fill.halo; g.shadowBlur = Math.max(6, L.titleSize * 0.28); g.shadowOffsetY = L.titleSize * 0.04; } };
+      const noHalo = () => { g.shadowColor = 'rgba(0,0,0,0)'; g.shadowBlur = 0; g.shadowOffsetY = 0; };
+      g.save();
+      g.textBaseline = 'middle';
+      g.textAlign = 'left';
+      g.lineJoin = 'round';
+      if (fill.stroke) {
+        halo();
+        g.strokeStyle = fill.stroke.stops ? grad(fill.stroke.stops) : (fill.stroke.color || '#000');
+        for (const it of items) { g.font = font(it.size); g.lineWidth = it.size * fill.stroke.width * 2; letter(g, it.ch, it.x, it.cy, 'stroke'); }
+        noHalo();
+      } else {
+        halo();
+      }
+      // The colour of the letters (with the halo when there is no outline).
+      g.fillStyle = grad(fill.stops);
+      for (const it of items) { g.font = font(it.size); letter(g, it.ch, it.x, it.cy, 'fill'); }
+      noHalo();
+      if (fill.texture) {
+        // The texture goes on a copy of the letters' colour alone (area = the device pixels being
+        // painted), laid back over them, so it never lands on the outline or the halo.
+        const t = document.createElement('canvas');
+        t.width = Math.max(1, Math.ceil(area.w));
+        t.height = Math.max(1, Math.ceil(area.h));
+        const tg = t.getContext('2d');
+        const m = g.getTransform();
+        tg.setTransform(m.a, m.b, m.c, m.d, m.e - area.x, m.f - area.y);
+        tg.textBaseline = 'middle';
+        tg.textAlign = 'left';
+        const gr = tg.createLinearGradient(0, L.top, 0, L.bottom);
+        for (const st of fill.stops) gr.addColorStop(st[0], st[1]);
+        tg.fillStyle = gr;
+        for (const it of items) { tg.font = font(it.size); letter(tg, it.ch, it.x, it.cy, 'fill'); }
+        tg.globalCompositeOperation = 'source-atop';
+        paintTexture(tg, fill.texture, L, x0, x1);
+        g.setTransform(1, 0, 0, 1, 0, 0);
+        g.drawImage(t, area.x, area.y);
+      }
+      g.restore();
+    }
 
     /** Draws one line with wide letter spacing, centred on (cx, cy). Returns its width. */
     function drawLine(g, text, size, cx, cy, draw) {
       g.font = font(size);
       g.textBaseline = 'middle';
       g.textAlign = 'left';
-      const gap = size * 0.14;
+      const gap = size * face.tracking;
       const widths = [];
       let total = 0;
       for (const ch of text) { const w = g.measureText(ch).width; widths.push(w); total += w + gap; }
@@ -176,7 +287,7 @@
       const probe = ctx;
       probe.save();
       probe.setTransform(1, 0, 0, 1, 0, 0);
-      let titleSize = clamp(H * (year ? 0.09 : 0.12), 12, 400);
+      let titleSize = clamp(H * (year ? 0.09 : 0.12) * face.scale, 12, 400);
       const fit = (text, size) => {
         const w = drawLine(probe, text, size, 0, 0, null);
         return w > W * 0.88 ? size * (W * 0.88) / w : size;
@@ -203,7 +314,7 @@
 
     /** Rasterises the words and returns one target point per grid cell they cover. */
     function sampleTargets(L, want) {
-      const key = W + 'x' + H + '|' + L.title + '|' + L.year + '|' + (want || 0);
+      const key = W + 'x' + H + '|' + faceKey() + '|' + L.title + '|' + L.year + '|' + (want || 0);
       return sampleCache[key] || (sampleCache[key] = sampleTargetsNow(L, want));
     }
 
@@ -216,7 +327,7 @@
       const g = off.getContext('2d', { willReadFrequently: true });
       g.fillStyle = '#fff';
       g.translate(0, -bandTop);
-      drawWords(g, L, (ch, x, y) => g.fillText(ch, x, y));
+      drawWords(g, L, (ch, x, y) => letter(g, ch, x, y, 'fill'));
       let data;
       try { data = g.getImageData(0, 0, off.width, off.height).data; } catch (e) { return { pts: [], step: 3, minX: 0, maxX: W }; }
       // Aim for roughly the same number of grains at every resolution.
@@ -260,7 +371,7 @@
         // Points on the words (x, y pairs), at most `budget` of them, for particles that form the words.
         wordPoints: (budget) => {
           const b = Math.round(clamp(budget || 2000, 200, 5000));
-          const key = b + '|' + layout.title + '|' + layout.year;
+          const key = b + '|' + faceKey() + '|' + layout.title + '|' + layout.year;
           if (!pointCache[key]) { const s = sampleTargets(layout, b); pointCache[key] = { pts: Float32Array.from(s.pts), step: s.step, minX: s.minX, maxX: s.maxX }; }
           return pointCache[key];
         },
@@ -280,8 +391,26 @@
       };
     }
 
+    /** A font still on its way: once it arrives, the words are made again with it (never baked in a fallback). */
+    function whenFontLoads() {
+      const fonts = root.document && root.document.fonts;
+      if (face === DEFAULT_FACE || !fonts || fonts.check(font(40))) return;
+      const want = opts;
+      fonts.load(font(40), 'HAPPY NEW YEAR 0123456789').then(() => {
+        wordsCache = Object.create(null);
+        sampleCache = Object.create(null);
+        pointCache = Object.create(null);
+        glyphCache = Object.create(null);
+        if (opts && opts === want) prepare();
+      }, () => { /* the fallback stays */ });
+    }
+
+    function faceKey() { return face === DEFAULT_FACE ? '' : face.family + face.weight + face.tracking + face.slant + face.scale; }
+
     function prepare() {
       if (!opts || W < 8 || H < 8) { layout = null; dust = null; custom = null; return; }
+      face = faceOf(opts.style);
+      whenFontLoads();
       layout = computeLayout();
       dust = null;
       custom = null;
@@ -479,7 +608,7 @@
      * every frame is what made the animation drop to 30 frames a second on a big screen.
      */
     function wordsBitmap(fill) {
-      const key = JSON.stringify(fill) + '|' + layout.title + '|' + layout.year;
+      const key = JSON.stringify(fill) + '|' + faceKey() + '|' + layout.title + '|' + layout.year;
       if (wordsCache[key]) return wordsCache[key];
       const L = layout;
       const pad = Math.ceil(L.titleSize * 0.9);
@@ -497,10 +626,23 @@
         g.shadowBlur = Math.max(6, L.titleSize * 0.28);
         g.shadowOffsetY = L.titleSize * 0.04;
       }
-      const grad = g.createLinearGradient(0, L.top, 0, L.bottom);
-      for (const st of fill.stops) grad.addColorStop(st[0], st[1]);
-      g.fillStyle = grad;
-      drawWords(g, L, (ch, x, y) => g.fillText(ch, x, y));
+      if (fill.stroke || fill.texture) {
+        // Made from the letter pictures, in the same order: the words and the letters match exactly
+        // (copied as they are: no second halo).
+        g.setTransform(1, 0, 0, 1, 0, 0);
+        g.shadowColor = 'rgba(0,0,0,0)';
+        g.shadowBlur = 0;
+        g.shadowOffsetY = 0;
+        const sets = [glyphSet(fill, 0, L.title)].concat(L.year ? [glyphSet(fill, 1, L.year)] : []);
+        for (const set of sets) {
+          for (const cell of set.cells) g.drawImage(set.canvas, cell.at, 0, cell.w, cell.h, cell.x0, cell.y0 - topDev, cell.w, cell.h);
+        }
+      } else {
+        const grad = g.createLinearGradient(0, L.top, 0, L.bottom);
+        for (const st of fill.stops) grad.addColorStop(st[0], st[1]);
+        g.fillStyle = grad;
+        drawWords(g, L, (ch, x, y) => letter(g, ch, x, y, 'fill'));
+      }
       return (wordsCache[key] = { canvas: c, top: topDev / DPR, h: c.height / DPR });
     }
 
@@ -539,7 +681,7 @@
       ctx.save();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.font = font(size);
-      const gap = size * 0.14;
+      const gap = size * face.tracking;
       const chars = Array.from(text);
       const widths = chars.map((ch) => ctx.measureText(ch).width);
       ctx.restore();
@@ -564,21 +706,22 @@
      */
     function glyphSet(fill, line, text) {
       const L = layout;
-      const key = JSON.stringify(fill) + '|' + line + '|' + text + '|' + L.title + '|' + L.year;
+      const key = JSON.stringify(fill) + '|' + faceKey() + '|' + line + '|' + text + '|' + L.title + '|' + L.year;
       if (glyphCache[key]) return glyphCache[key];
       const list = lineGlyphs(L, line, text);
       // The halo exactly as in the words picture (shadows are measured in the picture's pixels).
       const blur = fill.halo ? Math.max(6, L.titleSize * 0.28) : 0;
-      const pad = (blur * 1.6 + L.titleSize * 0.04) / Math.min(1, DPR) + 2;
+      const pad = (blur * 1.6 + L.titleSize * 0.04) / Math.min(1, DPR) + 2 + (fill.stroke ? L.yearSize * fill.stroke.width * 1.2 : 0);
       // Cells in device pixels, on the screen's pixel grid: a letter is copied 1:1, never resampled.
       const cells = [];
       let total = 0;
       let tall = 0;
       for (const g of list) {
         const half = g.size * 0.62;                 // a little more than the letters reach above and below the middle
-        const x0 = Math.floor((g.x0 - g.size * 0.06 - pad) * DPR);
+        const lean = Math.abs(face.slant) * half;    // a slanted letter reaches further sideways
+        const x0 = Math.floor((g.x0 - g.size * 0.06 - lean - pad) * DPR);
         const y0 = Math.floor((g.cy - half - pad) * DPR);
-        const cell = { at: total, x0: x0, y0: y0, w: Math.ceil((g.x1 + g.size * 0.06 + pad) * DPR) - x0, h: Math.ceil((g.cy + half + pad) * DPR) - y0 };
+        const cell = { at: total, x0: x0, y0: y0, w: Math.ceil((g.x1 + g.size * 0.06 + lean + pad) * DPR) - x0, h: Math.ceil((g.cy + half + pad) * DPR) - y0 };
         cells.push(cell);
         total += cell.w + 2;
         if (cell.h > tall) tall = cell.h;
@@ -596,6 +739,11 @@
         g2.rect(cell.at, 0, cell.w, cell.h);
         g2.clip();
         g2.setTransform(DPR, 0, 0, DPR, cell.at - cell.x0, -cell.y0);
+        if (fill.stroke || fill.texture) {
+          paintRich(g2, [{ ch: g.ch, x: g.x0, cy: g.cy, size: g.size }], fill, L, cell.x0 / DPR, (cell.x0 + cell.w) / DPR, { x: cell.at, y: 0, w: cell.w, h: cell.h });
+          g2.restore();
+          return;
+        }
         if (fill.halo) {
           g2.shadowColor = fill.halo;
           g2.shadowBlur = blur;
@@ -607,7 +755,7 @@
         g2.font = font(g.size);
         g2.textBaseline = 'middle';
         g2.textAlign = 'left';
-        g2.fillText(g.ch, g.x0, g.cy);
+        letter(g2, g.ch, g.x0, g.cy, 'fill');
         g2.restore();
       });
       return (glyphCache[key] = { canvas: c, cells: cells });
@@ -958,7 +1106,15 @@
       if (!id || !def || typeof def.create !== 'function') return;
       STYLES[id] = def;
       DURATION[id] = def.duration || 12000;
+      if (def.font && def.font.family) {
+        const f = FACES[id] = makeFace(def.font);
+        // Start loading the font now (fonts.css declares it), long before midnight.
+        const fonts = root.document && root.document.fonts;
+        if (fonts) fonts.load(f.weight + ' 40px ' + f.family, 'HAPPY NEW YEAR 0123456789').catch(() => {});
+      }
     },
+    /** A style's typeface for CSS, e.g. "'AP Michroma', …" and its weight (the default one for built-ins). */
+    face: function (id) { const f = FACES[id] || DEFAULT_FACE; return { family: f.family, weight: f.weight }; },
     styles: function () { return ['stark', 'fireworks'].concat(Object.keys(STYLES)); },
     name: function (id) { return STYLES[id] ? STYLES[id].name || id : id === 'fireworks' ? 'Fireworks' : 'Stark'; }
   };
