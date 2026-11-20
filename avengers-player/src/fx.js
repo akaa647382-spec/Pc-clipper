@@ -4,9 +4,9 @@
  * It draws on a transparent canvas lying over the movie, so it never paints a backdrop: every
  * frame starts from a clear canvas and only adds light.
  *
- *   'stark'      golden dust sweeps in from the left and assembles into HAPPY NEW YEAR, a second
- *                gust from the right builds the year (the film's dust effect in reverse), it
- *                shimmers while red and gold fireworks bloom in the top corners, then blows away.
+ *   'stark'      golden dust sweeps in and assembles into the words (the film's dust effect in
+ *                reverse), shimmers while red and gold fireworks bloom in the top corners, then
+ *                blows away as dust again.
  *   'fireworks'  classic multicolour fireworks: the year blasts out of a gold burst, then the
  *                letters of the title pop in one by one with a crackle of sparks.
  *
@@ -42,8 +42,7 @@
     assembleEnd: 2400,      // words fully formed
     holdEnd: 8400,          // start blowing away
     sweep: 1500,            // the disintegration wave crosses the words in this time
-    fly: 2100,              // how long one grain takes to fade once released
-    yearLag: 550            // the year's gust comes this much after the title's
+    fly: 2100               // how long one grain takes to fade once released
   };
   // gold, deep gold, ember, hot-rod red, arc-reactor cyan
   const DUST_COLORS = ['#ffe2a0', '#f9b233', '#ff8a2a', '#ff4d4d', '#8fefff'];
@@ -304,20 +303,16 @@
         order: []
       };
       const scale = Math.max(0.3, Math.min(W / 1920, H / 1080));
-      // Between the two lines: grains below it build the year.
-      const split = layout.year ? (layout.titleY + layout.titleSize / 2 + layout.yearY - layout.yearSize / 2) / 2 : Infinity;
       for (let i = 0; i < n; i++) {
         const tx = s.pts[i * 2] + (r() - 0.5) * s.step * 0.5;
         const ty = s.pts[i * 2 + 1] + (r() - 0.5) * s.step * 0.5;
         const along = (tx - d.minX) / d.span;
-        const year = ty > split;
         d.tx[i] = tx;
         d.ty[i] = ty;
-        // The title blows in from the left on a rising, spreading wind; a moment later a second
-        // gust from the right builds the year, right to left.
-        d.sx[i] = year ? W * (1.05 + r() * 0.5) : -W * (0.05 + r() * 0.5);
+        // Blown in from the left on a rising, spreading wind.
+        d.sx[i] = -W * (0.05 + r() * 0.5);
         d.sy[i] = ty + (r() - 0.35) * H * 0.75;
-        d.delay[i] = 120 + (year ? (1 - along) : along) * 760 + r() * 520 + (year ? STARK.yearLag : 0);
+        d.delay[i] = 120 + along * 760 + r() * 520;
         d.dur[i] = 880 + r() * 620;
         d.ph[i] = r() * Math.PI * 2;
         d.amp[i] = (20 + r() * 90) * scale;
@@ -697,7 +692,7 @@
       const d = dust;
       if (!d || !d.n) return 0;
       const scale = Math.max(0.3, Math.min(W / 1920, H / 1080));
-      const holdT = t - STARK.assembleEnd - (layout.year ? STARK.yearLag : 0);
+      const holdT = t - STARK.assembleEnd;
       // A glint that sweeps across the words every couple of seconds.
       const band = d.span * 0.09;
       const glintX = holdT > 0 && t < STARK.holdEnd ? d.minX - band * 3 + ((holdT % 2500) / 2500) * (d.span + band * 6) : -1e9;
@@ -826,11 +821,9 @@
       let live = 0;
       if (opts.style === 'stark') {
         drawPulse(t);
-        // The solid words fade in underneath as the dust settles, so they read instantly: the
-        // title as its dust lands, the year as its own gust lands.
-        const keep = 1 - smooth(STARK.holdEnd, STARK.holdEnd + STARK.sweep * 0.8, t);
-        drawLineGlyphs(0, smooth(STARK.assembleEnd - 800, STARK.assembleEnd + 200, t) * keep * 0.62);
-        drawLineGlyphs(1, smooth(STARK.assembleEnd - 800 + STARK.yearLag, STARK.assembleEnd + 200 + STARK.yearLag, t) * keep * 0.62);
+        // The solid words fade in underneath as the dust settles, so they read instantly.
+        const under = smooth(STARK.assembleEnd - 800, STARK.assembleEnd + 200, t) * (1 - smooth(STARK.holdEnd, STARK.holdEnd + STARK.sweep * 0.8, t));
+        drawSolidWords(under * 0.62, 1);
         live += drawFireworks();
         live += drawDust(t);
       } else {
