@@ -1687,6 +1687,7 @@ const scenarios = {
       return { target: target, fake: JSON.stringify({ ok: true, offsetMs: target - Date.now() - secs * 1000, uncertaintyMs: 12, method: 'ntp', servers: [] }) };
     };
     const popup = (page) => page.evaluate(() => !document.getElementById('modal').hidden && /Better luck next year/.test(document.getElementById('modalTitle').textContent));
+    const congrats = (page) => page.evaluate(() => !document.getElementById('modal').hidden && /You did it/.test(document.getElementById('modalTitle').textContent));
     const toMidnight = (page, target) => page.evaluate((t) => t - window.__AP.Clock.now(), target);
     const onTime = (page) => waitFor(page, () => Math.abs(window.__AP.Clock.netOffsetMs) > 1000, null, 20000);
 
@@ -1737,8 +1738,42 @@ const scenarios = {
       check('midnight passed with the countdown done: no "Better luck next year"', !(await popup(s.page)), Math.round(ms) + ' ms');
       check('the snap moment was reached on the clock', await s.page.evaluate(() => window.__AP.Engine.events.some((e) => /Target moment reached/.test(e.text))));
       check('and the moment is marked as dealt with', await s.page.evaluate((x) => window.__AP.cfg.newYearSeen === x, t.target));
+      // Hit: the film was on the clock at midnight. Congratulated once the movie is over (here: stopped).
+      check('the film was on the clock at midnight: the hit is kept', await s.page.evaluate((x) => window.__AP.cfg.madeIt === x, t.target), JSON.stringify(await s.page.evaluate(() => ({ at: window.__AP.cfg.madeIt, d: window.__AP.cfg.madeItDrift }))));
+      check('the Mission card says the snap hit midnight (no "RIGHT ON TIME", no "ON TIME")', await waitFor(s.page, () => /^THE SNAP HIT MIDNIGHT$/.test(document.getElementById('stLabel').textContent) && /HAPPY NEW YEAR/.test(document.getElementById('stBig').textContent), null, 3000), await s.page.textContent('#stLabel') + ' | ' + await s.page.textContent('#stBig'));
+      check('the overlay says HAPPY NEW YEAR and the year', await s.page.evaluate((y) => document.getElementById('ovCountLbl').textContent === 'HAPPY NEW YEAR' && document.getElementById('ovCountVal').textContent === y, String(new Date(t.target).getFullYear())));
+      check('no congratulations while the movie still plays', !(await congrats(s.page)));
       await s.page.click('#armBtn');
       await s.page.click('#armBtn');
+      check('stopped after midnight: congratulated, after the animation', await waitFor(s.page, () => !document.getElementById('modal').hidden && /You did it/.test(document.getElementById('modalTitle').textContent), null, 25000) &&
+        await s.page.evaluate(() => !(window.__AP.Celebration.fx && window.__AP.Celebration.fx.running)));
+      const made = await s.page.evaluate(() => ({ title: document.getElementById('modalTitle').textContent, body: document.getElementById('modalBody').textContent }));
+      const year = String(new Date(t.target).getFullYear());
+      check('with the year, and how close to the clock the snap landed', made.title === 'You did it. Happy New Year ' + year + '!' && made.body.startsWith(year) &&
+        /The snap landed on the stroke of midnight, (to the millisecond|\d+ ms from the clock)\./.test(made.body), JSON.stringify(made));
+      await shot(s.page, 'newyear-madeit');
+      await s.page.click('#modalActions .btn-primary');
+      await sleep(1500);
+      check('it is said once', !(await congrats(s.page)) && await s.page.evaluate(() => window.__AP.cfg.madeIt === 0));
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally { await s.close(); }
+
+    // 2b. A hit, and the film runs to its end: congratulated after the movie.
+    t = until(25);
+    s = await launch(newProfile(), { AP_FAKE_NTP: t.fake });
+    try {
+      await onTime(s.page);
+      await loadMovie(s.page, MOVIE);
+      await setSnap(s.page, 190);                       // the 200 s clip ends 10 s after midnight
+      await waitFor(s.page, () => !document.getElementById('late').hidden, null, 10000);
+      await s.page.click('#lateBtn');
+      check('joined: the countdown runs', await waitSynced(s.page, 20000));
+      const ms = await toMidnight(s.page, t.target);
+      await sleep(Math.max(0, ms) + 2000);
+      check('at midnight the film was on the clock: the hit is kept', await s.page.evaluate((x) => window.__AP.cfg.madeIt === x, t.target));
+      check('no congratulations while the movie plays', !(await congrats(s.page)));
+      check('the movie runs to its end, then: "You did it"', await waitFor(s.page, () => !document.getElementById('modal').hidden && /You did it/.test(document.getElementById('modalTitle').textContent), null, 40000) &&
+        await s.page.evaluate(() => window.__AP.Engine.events.some((e) => /The movie finished/.test(e.text)) && window.__AP.Engine.mode === 'free'));
       check('no page errors', s.errors.length === 0, s.errors.join(' | '));
     } finally { await s.close(); }
 
@@ -2494,6 +2529,19 @@ const scenarios = {
         if (id === 'tva') await shot(s.page, 'celebration-tva');
         await s.page.evaluate(() => window.__AP.Celebration.stop());
       }
+      // The words: never "RIGHT ON TIME". The Preview and a test run rehearse the night.
+      const words = await s.page.evaluate(() => {
+        const A = window.__AP;
+        const soon = A.Clock.real() + 60000;
+        const keep = [A.cfg.targetMode, A.cfg.customTarget];
+        const out = { y: String(new Date(A.Clock.real()).getFullYear() + 1), now: A.Celebration.words(soon) };
+        A.cfg.targetMode = 'custom'; A.cfg.customTarget = (new Date(A.Clock.real()).getFullYear() + 1) + '-03-14T15:00';
+        out.own = A.Celebration.words(soon);
+        A.cfg.targetMode = keep[0]; A.cfg.customTarget = keep[1];
+        return out;
+      });
+      check('the Preview and a test run say HAPPY NEW YEAR and the coming year', words.now.title === 'HAPPY NEW YEAR' && words.now.year === words.y, JSON.stringify(words));
+      check('a target of one\'s own that is not New Year says TARGET REACHED', words.own.title === 'TARGET REACHED' && words.own.year === '', JSON.stringify(words.own));
       // Animation sound: off by default; switched on, every animation is heard, Stark's rockets too.
       const sfxCount = () => s.page.evaluate(() => (window.__AP.Sfx ? window.__AP.Sfx.count : -1));
       check('the animation sound is there and off by default', await s.page.evaluate(() =>
@@ -3049,6 +3097,8 @@ const scenarios = {
       check('at midnight the target is reached, as on the night', await waitFor(s.page, () => window.__AP.Engine.events.some((e) => /Target moment reached/.test(e.text)), null, 80000));
       v = await look();
       check('the date has rolled over to January 1', v.mon === 0 && v.day === 1, JSON.stringify(v));
+      check('the Mission card says the snap hit midnight, as on the night', await waitFor(s.page, () => /^SIMULATION · THE SNAP HIT MIDNIGHT$/.test(document.getElementById('stLabel').textContent), null, 3000), await s.page.textContent('#stLabel'));
+      check('a rehearsal is not kept as a hit', await s.page.evaluate(() => window.__AP.cfg.madeIt === 0));
       await sleep(1500);
       check('no film strip and no test result after it', !(await s.page.evaluate(() => !!window.__AP.SnapCam.view)) && /No test run yet/.test((await look()).results));
       await s.page.click('#nightEnd');

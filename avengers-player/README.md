@@ -199,6 +199,12 @@ small reminder at the top. In the ten minutes before the start, a player that is
 If midnight comes and the countdown is not running (never started, or late and never joined), the app says
 **Better luck next year**, once. If the countdown was running, it says nothing of the kind.
 
+If the film was on the clock at midnight (within 60 ms), the Mission card says **THE SNAP HIT MIDNIGHT**, and once the
+movie is over (it ran to its end, or the countdown was stopped after midnight) the app congratulates you, once:
+**You did it. Happy New Year 2027!**, with how close to the clock the snap landed. Closed before the end, the app says
+it the next time it opens that day. Test runs and the Preview show the New Year words too (HAPPY NEW YEAR and the
+coming year), so they look like the real night; only a target of your own that is not New Year says TARGET REACHED.
+
 ## If someone slips
 
 While the countdown is armed, a pause or a click on the timeline does not ruin the night. A small box appears in the

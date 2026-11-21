@@ -103,7 +103,8 @@
     armed: false, armedTarget: null, armedEnd: null, moviePath: '', movieName: '', wasFullscreen: false,
     learnedLatency: 0.07, learnedSeekLead: 0.6,
     rehearsed: {},
-    newYearSeen: 0              // the New Year midnight already passed (and, if missed, said so)
+    newYearSeen: 0,             // the New Year midnight already passed (and, if missed, said so)
+    madeIt: 0, madeItDrift: 0, madeItSnap: true   // a New Year hit, not yet congratulated (see MadeIt)
   };
 
   const cfg = (() => {
@@ -133,6 +134,7 @@
     c.learnedSeekLead = clamp(+c.learnedSeekLead || 0.6, 0.4, 6);
     if (typeof c.rehearsed !== 'object' || Array.isArray(c.rehearsed)) c.rehearsed = {};
     if (!Number.isFinite(c.newYearSeen)) c.newYearSeen = 0;
+    if (!Number.isFinite(c.madeIt) || !Number.isFinite(c.madeItDrift)) { c.madeIt = 0; c.madeItDrift = 0; }
     // The snap point each film file was given: only well-formed entries survive, in a fresh object.
     const byFile = {};
     if (c.snapByFile && typeof c.snapByFile === 'object' && !Array.isArray(c.snapByFile)) {
@@ -255,6 +257,18 @@
     : (Math.abs(sec) < 60 ? Math.abs(sec).toFixed(3) + ' s' : C.fmtDuration(Math.abs(sec), { ms: true })) + ' ' + (sec > 0 ? 'after' : 'before'));
   /** Whether the snap comes on the target in session `s`. */
   const onTarget = (s) => Math.abs(snapLate(s)) < 0.0005;
+  /**
+   * The words of the moment `targetEpoch`. New Year: HAPPY NEW YEAR and its year. A test run and the
+   * Preview rehearse the real night, so they say what the night will say: HAPPY NEW YEAR and the
+   * coming year, unless the countdown is set to a target of one's own that is not New Year (then
+   * TARGET REACHED, as on that target itself).
+   */
+  const momentWords = (targetEpoch) => {
+    if (isNewYearMoment(targetEpoch)) return { title: 'HAPPY NEW YEAR', year: String(new Date(targetEpoch).getFullYear()) };
+    const own = customTargetMs();
+    if (Number.isFinite(own) && !isNewYearMoment(own)) return { title: 'TARGET REACHED', year: '' };
+    return { title: 'HAPPY NEW YEAR', year: String(Number.isFinite(own) ? new Date(own).getFullYear() : new Date(Clock.real()).getFullYear() + 1) };
+  };
   /** "the snap lands 1.668 s after midnight", with a word when the snap point itself is unchecked. */
   const landsText = (s) => 'the snap lands ' + (onTarget(s) ? 'on ' : lateText(snapLate(s)) + ' ') + targetWord(s) +
     (snapConfirmed() || (!Media.info && !!cfg.snapConfirmedFor && cfg.snapConfirmedFor.endsWith('|' + cfg.snapSec.toFixed(3))) ? '' : ' (if the snap point is right: it has not been checked yet)');
@@ -1320,6 +1334,7 @@
       this.setPhase('idle');
       this.logEvent('Countdown stopped');
       UI.onMode();
+      MadeIt.over();
     },
 
     /** Drops everything in flight (used when another movie is loaded). The saved armed flag is kept. */
@@ -1496,6 +1511,7 @@
       this.session = this.computeFree();
       this.setPhase('idle');
       UI.onMode();
+      MadeIt.over();
     },
 
     /* ---- slips ----------------------------------------------------------- */
@@ -2217,6 +2233,74 @@
     }
   };
 
+  /* ============================================================= made it === */
+
+  /**
+   * The countdown hit New Year: at midnight the film was on the clock (within 60 ms, the Snap test's
+   * bar). Once the movie is over (it ran to its end, or the countdown was stopped after midnight)
+   * the person is congratulated, once, after the animation. Kept on disk, so a restart in between
+   * loses nothing; if the app was closed before the end, it is said when the app is next opened
+   * that day. The New Year's Eve simulation shows it on the Mission card only; other tests, nothing.
+   */
+  const MadeIt = {
+    DAY_MS: 24 * 3600000,
+    simAt: 0,          // the simulated midnight the film was on the clock at (a rehearsal: not kept)
+    due: false,        // the movie is over: say it as soon as nothing else is on screen
+
+    /** The instant of the target in an armed countdown: was the film on the clock? */
+    reached(s) {
+      if (!s || !isNewYearMoment(s.targetEpoch)) return;
+      const d = Engine.st.drift;
+      const on = Engine.phase === 'synced' && d != null && Math.abs(d) <= 0.06;
+      if (Engine.test) { this.simAt = on && Engine.test.kind === 'night' ? s.targetEpoch : 0; return; }
+      if (!on) return;
+      cfg.madeIt = s.targetEpoch;
+      cfg.madeItDrift = Math.round(d * 1000) / 1000;
+      cfg.madeItSnap = onTarget(s);
+      saveNow();
+      Engine.logEvent('New Year hit: the film was ' + fmtMs(d) + ' from the clock at midnight');
+    },
+
+    /** Whether the film was on the clock at the target of `s`. */
+    hit(s) { return !!s && (Engine.test ? this.simAt === s.targetEpoch : cfg.madeIt === s.targetEpoch); },
+
+    /** The movie is over: the end of the file, or the countdown stopped. */
+    over() { if (cfg.madeIt && Clock.now() >= cfg.madeIt) this.due = true; },
+
+    /** At start-up: a New Year hit with the app closed before the movie was over. */
+    boot() {
+      if (!cfg.madeIt || cfg.armed) return;
+      if (Date.now() >= cfg.madeIt && Date.now() - cfg.madeIt < this.DAY_MS) this.due = true;
+      else { cfg.madeIt = 0; save(); }
+    },
+
+    tick() {
+      if (!this.due || Engine.test || Modal.isOpen || SnapCam.busy || SnapCam.view) return;
+      if ((Celebration.fx && Celebration.fx.running) || !el.banner.hidden) return;     // the animation first
+      this.due = false;
+      const t = cfg.madeIt;
+      if (!t) return;
+      const d = cfg.madeItDrift;
+      const snap = cfg.madeItSnap;
+      cfg.madeIt = 0;
+      saveNow();
+      const year = new Date(t).getFullYear();
+      const off = Math.abs(d) < 0.0005 ? 'to the millisecond' : '<b>' + fmtOff(d) + '</b> from the clock';
+      const replay = !!Replay.midnightFile;
+      Engine.logEvent('Congratulations shown: New Year ' + year + ' hit');
+      Modal.open({
+        title: 'You did it. Happy New Year ' + year + '!',
+        html: '<div class="made-year">' + year + '</div>' +
+          (snap ? 'The snap landed on the stroke of midnight, ' + off + '.' : 'At midnight the film was in step with the clock, ' + off + '.') +
+          ' What a way to start the year.' +
+          (replay ? '<br><br>The replay of midnight is in <b>Videos › Avengers Player</b>.' : ''),
+        actions: (replay ? [{ label: 'Open the replay folder', onClick: () => { try { native.openReplays(); } catch (e) { /* the browser build */ } Modal.close(); } }] : [])
+          .concat([{ label: 'OK', primary: true, onClick: () => Modal.close() }]),
+        onEscape: () => Modal.close()
+      });
+    }
+  };
+
   /* ======================================================== replay of the night === */
 
   /**
@@ -2228,6 +2312,7 @@
    */
   const Replay = {
     rec: null,                 // the recording under way
+    midnightFile: '',          // where the replay of the real midnight was saved
     done: Object.create(null), // the moments already recorded (or tried) in this session
 
     /** The moments of this countdown that are recorded, on its clock. */
@@ -2334,6 +2419,7 @@
       const file = await native.replayEnd(rec.out.id, true, performance.now() - rec.startedAt);
       if (!file) return;
       const name = String(file).split(/[\\/]/).pop();
+      if (rec.kind === 'midnight' && !rec.sim) this.midnightFile = file;
       toast((rec.sim ? 'Rehearsal replay saved: ' : 'Replay saved: ') + 'Videos › Avengers Player › ' + name, 'good', 9000);
       Engine.logEvent('Replay saved: ' + file);
     }
@@ -4110,13 +4196,7 @@
     },
 
     /** What the words say at `targetEpoch`. */
-    words(targetEpoch) {
-      const newYear = isNewYearMoment(targetEpoch);
-      return {
-        title: newYear ? 'HAPPY NEW YEAR' : !Engine.session || onTarget(Engine.session) ? 'RIGHT ON TIME' : 'TARGET REACHED',
-        year: newYear ? String(new Date(targetEpoch).getFullYear()) : ''
-      };
-    },
+    words(targetEpoch) { return momentWords(targetEpoch); },
 
     /** Seconds before the moment: the slow part of starting the animation is done now, not at midnight. */
     prime(targetEpoch) {
@@ -4131,9 +4211,7 @@
     play(targetEpoch) {
       const style = this.has(cfg.celebration) ? cfg.celebration : 'stark';
       if (style === 'off') return;
-      const newYear = isNewYearMoment(targetEpoch);
-      const title = newYear ? 'HAPPY NEW YEAR' : !Engine.session || onTarget(Engine.session) ? 'RIGHT ON TIME' : 'TARGET REACHED';
-      const year = newYear ? String(new Date(targetEpoch).getFullYear()) : '';
+      const { title, year } = momentWords(targetEpoch);
       this.stop();
       this.sound(style === 'minimal' || !this.fx ? 'minimal' : style, title, year);
       if (style === 'minimal' || !this.fx) {
@@ -4826,6 +4904,7 @@
       const newYear = s ? isNewYearMoment(s.targetEpoch) : true;
       const dateLine = C.DAYS_LONG[date.getDay()] + ', ' + C.MONTHS_LONG[date.getMonth()] + ' ' + date.getDate() + ', ' + date.getFullYear();
       Missed.tick(now, s);
+      MadeIt.tick();
 
       if (view === 'import') {
         setText(el.imClock, cp.ampm ? cp.hms + ' ' + cp.ampm : cp.hms);
@@ -4866,6 +4945,7 @@
         // Fired on the clock, not on the film: also when someone has just slipped, or the app was
         // opened a split second before midnight. Only a film that has not started stays quiet.
         if (Engine.phase !== 'standby' && Engine.phase !== 'idle') Celebration.play(s.targetEpoch);
+        MadeIt.reached(s);
         Engine.logEvent('Target moment reached' + (Engine.st.drift != null ? ', film ' + fmtMs(Engine.st.drift) + ' from the clock' : ''));
       }
       this.prevNow = now;
@@ -4902,8 +4982,9 @@
             setText(el.ovCountVal, ten ? String(ten) : parts.d > 0 || parts.h > 0 ? C.fmtCountdown(cdSnap) : C.pad(parts.m) + ':' + C.pad(parts.s));
           } else if (toSnap > -90000 && cfg.showCount) {
             done = true;
-            setText(el.ovCountLbl, newYear ? 'HAPPY NEW YEAR' : onTarget(s) ? 'RIGHT ON TIME' : 'TARGET REACHED');
-            setText(el.ovCountVal, newYear ? String(new Date(s.targetEpoch).getFullYear()) : '00:00');
+            const w = momentWords(s.targetEpoch);
+            setText(el.ovCountLbl, w.title);
+            setText(el.ovCountVal, w.year || '00:00');
           } else {
             showCount = false;
           }
@@ -5053,8 +5134,10 @@
         state = e.test ? 'test' : 'synced'; label = (e.test ? 'TEST RUN · ' : 'PLAYING IN SYNC · ') + (newYear ? 'NEW YEAR IN' : onTarget(s) ? 'THE SNAP IN' : 'THE TARGET IN');
         big = C.fmtCountdown(cdSnap); sub = this.syncState().short;
       } else {
-        state = e.test ? 'test' : 'done'; label = e.test ? 'TEST RUN' : 'ON TIME';
-        big = newYear ? 'HAPPY NEW YEAR' : onTarget(s) ? 'RIGHT ON TIME' : 'TARGET REACHED'; sub = this.syncState().short;
+        // After the moment. "Hit" only when the film was on the clock at it (see MadeIt).
+        state = e.test ? 'test' : 'done';
+        label = e.test ? 'TEST RUN' : MadeIt.hit(s) && onTarget(s) ? 'THE SNAP HIT MIDNIGHT' : 'PLAYING IN SYNC';
+        big = momentWords(s.targetEpoch).title; sub = this.syncState().short;
       }
       if (e.test && state !== 'slipped') state = 'test';
       if (e.sim) label = 'SIMULATION · ' + label;
@@ -5882,6 +5965,7 @@
     }
     if (!Number.isFinite(cfg.armedTarget)) cfg.armed = false;
     tellArmed(cfg.armed);
+    MadeIt.boot();
     // How the last run ended (a power cut, a shutdown): known before anything can restore the countdown.
     try { Recovery.take(native.lastRun()); } catch (e) { /* not known: nothing special is said */ }
 
@@ -5907,7 +5991,7 @@
   }
 
   // For the automated tests and for debugging from the developer tools.
-  window.__AP = { Engine: Engine, Clock: Clock, cfg: cfg, Media: Media, AudioTracks: AudioTracks, AudioFix: AudioFix, SnapCam: SnapCam, Late: Late, Missed: Missed, Power: Power, Recovery: Recovery, Replay: Replay, NetTime: NetTime, SubsUI: SubsUI, SubSync: SubSync, UI: UI, Celebration: Celebration, Sfx: window.APSfx, Versions: Versions, C: C, saveNow: saveNow };
+  window.__AP = { Engine: Engine, Clock: Clock, cfg: cfg, Media: Media, AudioTracks: AudioTracks, AudioFix: AudioFix, SnapCam: SnapCam, Late: Late, Missed: Missed, MadeIt: MadeIt, Power: Power, Recovery: Recovery, Replay: Replay, NetTime: NetTime, SubsUI: SubsUI, SubSync: SubSync, UI: UI, Celebration: Celebration, Sfx: window.APSfx, Versions: Versions, C: C, saveNow: saveNow };
 
   boot();
 })();

@@ -1174,6 +1174,8 @@ select.inline { padding: 2px 4px; font-size: 12px; }
 .modal-body { color: var(--muted); margin: 10px 0 16px; line-height: 1.6; user-select: text; }
 .modal-body b { color: var(--text); }
 .modal-body ul { margin: 8px 0 0; padding-left: 18px; }
+/* The congratulation after a New Year that was hit (MadeIt in app.js). */
+.modal-body .made-year { font: 800 64px/1 var(--display); letter-spacing: .08em; text-align: center; color: var(--hot); text-shadow: 0 0 28px color-mix(in srgb, var(--hot) 45%, transparent); margin: 4px 0 14px; }
 .modal-progress { height: 8px; border-radius: 4px; background: rgba(255, 255, 255, .1); overflow: hidden; margin-bottom: 8px; }
 .modal-progress i { display: block; height: 100%; width: 0; background: var(--acc); transition: width .25s linear; }
 .modal-note { font: 12px/1.4 var(--mono); color: var(--muted); margin-bottom: 14px; }
