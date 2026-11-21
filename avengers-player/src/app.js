@@ -87,6 +87,7 @@
     showOverlay: true, showClock: true, showDate: true, showCount: true, showSyncBadge: false, finalTen: true,
     overlayPos: 'tl', overlaySize: 'm',
     celebration: 'stark',
+    celebrationSound: false,             // the animations' own sound (sfx.js): off unless switched on
     replay: true, replaySec: 40,          // the replay of the night (see Replay)
     standbyScreen: true,
     autoRecover: true, autoRecoverSec: 10,
@@ -2059,7 +2060,10 @@
     // Only the engine may change the speed while armed.
     if (Engine.mode === 'armed' && Engine.phase === 'synced' && Math.abs(video.playbackRate - Engine.st.rate) > 0.001) video.playbackRate = Engine.st.rate;
   });
-  video.addEventListener('volumechange', () => { UI.dirty.transport = true; UI.dirty.preflight = true; });
+  video.addEventListener('volumechange', () => {
+    UI.dirty.transport = true; UI.dirty.preflight = true;
+    if (window.APSfx) window.APSfx.setVolume(video.muted ? 0 : video.volume);   // the animation's sound follows the app's volume
+  });
   video.addEventListener('error', () => {
     if (!Media.ready) return;
     Engine.logEvent('Video error: ' + (video.error ? video.error.message || video.error.code : 'unknown'));
@@ -2295,9 +2299,13 @@
         const type = pick.type;
         const screen = await navigator.mediaDevices.getUserMedia({ audio: false, video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: source, maxWidth: 1920, maxHeight: 1080, maxFrameRate: pick.fps } } });
         rec.tracks.push(...screen.getTracks());
-        let sound = [];
-        try { sound = video.captureStream().getAudioTracks(); } catch (e) { sound = []; }    // the film's own sound
-        rec.tracks.push(...sound);
+        let film = [];
+        try { film = video.captureStream().getAudioTracks(); } catch (e) { film = []; }      // the film's own sound
+        let sound = film;
+        // With the animation's sound switched on, the clip gets the film and the animation in one track.
+        if (cfg.celebrationSound && window.APSfx) { const mixed = window.APSfx.mix(film); if (mixed && mixed.length) sound = mixed; }
+        rec.tracks.push(...film);
+        if (sound !== film) rec.tracks.push(...sound);
         if (this.rec !== rec) { give('stopped'); return; }
         const out = await native.replayBegin(this.fileName(m, sim), type.startsWith('video/mp4') ? 'mp4' : 'webm');
         if (!out) { give('the replay folder cannot be written'); return; }
@@ -4113,6 +4121,7 @@
     /** Seconds before the moment: the slow part of starting the animation is done now, not at midnight. */
     prime(targetEpoch) {
       const style = cfg.celebration;
+      if (cfg.celebrationSound && window.APSfx && style !== 'off') { try { window.APSfx.prime(); } catch (e) { /* only a head start */ } }
       if (!this.fx || style === 'off' || style === 'minimal' || !this.has(style)) return;
       this.resize();
       const w = this.words(targetEpoch);
@@ -4126,6 +4135,7 @@
       const title = newYear ? 'HAPPY NEW YEAR' : !Engine.session || onTarget(Engine.session) ? 'RIGHT ON TIME' : 'TARGET REACHED';
       const year = newYear ? String(new Date(targetEpoch).getFullYear()) : '';
       this.stop();
+      this.sound(style === 'minimal' || !this.fx ? 'minimal' : style, title, year);
       if (style === 'minimal' || !this.fx) {
         el.bannerText.textContent = year ? title + ' ' + year : title;
         el.banner.hidden = false;
@@ -4136,10 +4146,23 @@
       try { this.fx.play({ style: style, title: title, year: year }); } catch (e) { Engine.logEvent('Animation failed: ' + (e && e.message)); }
     },
 
+    /** The animation's own sound, when switched on (Display → Animation sound): quiet, at the app's volume. */
+    sound(style, title, year) {
+      const sfx = window.APSfx;
+      if (this.fx) this.fx.onCue = null;
+      if (!cfg.celebrationSound || !sfx) return;
+      try {
+        sfx.play(style, { title: title, year: year, volume: video.muted ? 0 : video.volume });
+        // Stark's and Fireworks' rockets are heard as the engine fires them.
+        if (this.fx && (style === 'stark' || style === 'fireworks')) this.fx.onCue = (name, d) => sfx.cue(name, d);
+      } catch (e) { /* the animation goes on without its sound */ }
+    },
+
     stop() {
       clearTimeout(this.bannerTimer);
       el.banner.hidden = true;
       if (this.fx) { try { this.fx.stop(); } catch (e) { /* cosmetic */ } }
+      if (window.APSfx) { try { window.APSfx.stop(); } catch (e) { /* cosmetic */ } }
     }
   };
 
@@ -4179,7 +4202,7 @@
     fireworks: 'Classic fireworks with a gold title.',
     arc: 'An arc reactor ignites; its shockwave strikes each letter on like a neon tube, then energy fills the year digit by digit.',
     hotrod: 'Red and gold: 2027 is struck digit by digit from molten metal, then a welding torch writes HAPPY NEW YEAR in sparks.',
-    infinity: 'A violet infinity loop draws itself; stardust pours from its crossing into 2027 digit by digit, then into the greeting.',
+    infinity: 'Thanos: a snap, six coloured lights collide into a gold blaze that forges 2027, ash rises into the greeting, then half of it turns to dust. Perfectly balanced.',
     gamma: 'Green gamma storm: the new year smashes down digit by digit, then lightning bolts write HAPPY NEW YEAR one letter at a time.',
     warmachine: 'A tactical HUD boots, a target box locks each letter as a scan renders it in steel, then the year\'s counter rolls and locks.',
     tva: 'Amber TVA bureau: an old split-flap clock flips over to the new year, then HAPPY NEW YEAR types out on a terminal.',
@@ -4623,6 +4646,7 @@
       el.optLock.checked = cfg.lockControls;
       el.optAutoRestart.checked = cfg.autoRestart !== false;
       el.optReplay.checked = cfg.replay !== false;
+      el.optCelebSound.checked = !!cfg.celebrationSound;
       el.optReplaySec.value = String(cfg.replaySec);
       el.optReplaySec.disabled = cfg.replay === false;
       el.optNetTime.checked = cfg.useNetTime;
@@ -5461,6 +5485,7 @@
     /* display tab */
     bindToggle(el.optOverlay, 'showOverlay');
     bindToggle(el.optReplay, 'replay', () => UI.renderSettings());
+    bindToggle(el.optCelebSound, 'celebrationSound', () => { if (!cfg.celebrationSound && window.APSfx) window.APSfx.stop(); });
     bindSelect(el.optReplaySec, 'replaySec', (v) => +v);
     el.openReplays.addEventListener('click', () => { try { native.openReplays(); } catch (e) { /* the browser build */ } });
     bindToggle(el.optClock, 'showClock');
@@ -5878,7 +5903,7 @@
   }
 
   // For the automated tests and for debugging from the developer tools.
-  window.__AP = { Engine: Engine, Clock: Clock, cfg: cfg, Media: Media, AudioTracks: AudioTracks, AudioFix: AudioFix, SnapCam: SnapCam, Late: Late, Missed: Missed, Power: Power, Recovery: Recovery, Replay: Replay, NetTime: NetTime, SubsUI: SubsUI, SubSync: SubSync, UI: UI, Celebration: Celebration, Versions: Versions, C: C, saveNow: saveNow };
+  window.__AP = { Engine: Engine, Clock: Clock, cfg: cfg, Media: Media, AudioTracks: AudioTracks, AudioFix: AudioFix, SnapCam: SnapCam, Late: Late, Missed: Missed, Power: Power, Recovery: Recovery, Replay: Replay, NetTime: NetTime, SubsUI: SubsUI, SubSync: SubSync, UI: UI, Celebration: Celebration, Sfx: window.APSfx, Versions: Versions, C: C, saveNow: saveNow };
 
   boot();
 })();

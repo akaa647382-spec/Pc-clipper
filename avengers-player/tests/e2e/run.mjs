@@ -2473,13 +2473,13 @@ const scenarios = {
       }));
       await s.page.click('#optCelebration [data-v="off"]');
       check('the New Year animation can be turned off', await s.page.evaluate(() => window.__AP.cfg.celebration === 'off'));
-      check('all nine animation choices are there, the five theme ones included', await s.page.evaluate(() =>
-        ['stark', 'fireworks', 'arc', 'gamma', 'warmachine', 'tva', 'doom', 'minimal', 'off'].every((id) => {
+      check('all eleven animation choices are there, the seven theme ones included', await s.page.evaluate(() =>
+        ['stark', 'arc', 'hotrod', 'infinity', 'gamma', 'warmachine', 'tva', 'doom', 'fireworks', 'minimal', 'off'].every((id) => {
           const b = document.querySelector('#optCelebration [data-v="' + id + '"]');
           return b && !b.hidden && b.offsetWidth > 0;
         })));
       // Each theme animation really plays in the app (its file loaded, registered and drawing).
-      for (const id of ['arc', 'gamma', 'warmachine', 'tva', 'doom']) {
+      for (const id of ['arc', 'hotrod', 'infinity', 'gamma', 'warmachine', 'tva', 'doom']) {
         await s.page.click(`#optCelebration [data-v="${id}"]`);
         await s.page.click('#previewCelebration');
         await sleep(2200);
@@ -2494,6 +2494,35 @@ const scenarios = {
         if (id === 'tva') await shot(s.page, 'celebration-tva');
         await s.page.evaluate(() => window.__AP.Celebration.stop());
       }
+      // Animation sound: off by default; switched on, every animation is heard, Stark's rockets too.
+      const sfxCount = () => s.page.evaluate(() => (window.__AP.Sfx ? window.__AP.Sfx.count : -1));
+      check('the animation sound is there and off by default', await s.page.evaluate(() =>
+        !!window.__AP.Sfx && window.__AP.cfg.celebrationSound === false && document.getElementById('optCelebSound').checked === false));
+      await s.page.click('#optCelebration [data-v="stark"]');
+      let c0 = await sfxCount();
+      await s.page.click('#previewCelebration');
+      await sleep(3000);
+      check('with the sound off, the preview makes no sound', await sfxCount() === c0, `${c0} -> ${await sfxCount()}`);
+      await s.page.evaluate(() => window.__AP.Celebration.stop());
+      await s.page.click('label:has(#optCelebSound)');
+      check('the switch turns the sound on', await s.page.evaluate(() => window.__AP.cfg.celebrationSound === true));
+      c0 = await sfxCount();
+      await s.page.click('#previewCelebration');
+      const c1 = await sfxCount();
+      await sleep(4500);
+      const c2 = await sfxCount();
+      check('Stark is heard: its own sound at once, then its rockets as they fire', c1 > c0 && c2 > c1, `${c0} -> ${c1} -> ${c2}`);
+      await s.page.evaluate(() => window.__AP.Celebration.stop());
+      for (const id of ['arc', 'hotrod', 'infinity', 'gamma', 'warmachine', 'tva', 'doom', 'fireworks', 'minimal']) {
+        await s.page.click(`#optCelebration [data-v="${id}"]`);
+        const a = await sfxCount();
+        await s.page.click('#previewCelebration');
+        const b = await sfxCount();
+        check(`${id} has a sound`, b > a, `${a} -> ${b}`);
+        await s.page.evaluate(() => window.__AP.Celebration.stop());
+      }
+      await s.page.click('label:has(#optCelebSound)');
+      check('and the switch turns it off again', await s.page.evaluate(() => window.__AP.cfg.celebrationSound === false));
       await s.page.click('#optCelebration [data-v="stark"]');
       await s.page.keyboard.press('f');
       check('F enters fullscreen and hides the panel', await waitFor(s.page, () => document.getElementById('app').classList.contains('is-fs'), null, 4000) && await s.page.isHidden('#panel'));

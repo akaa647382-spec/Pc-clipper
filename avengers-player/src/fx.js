@@ -128,6 +128,7 @@
     let lines = null;        // the letters of the two lines (built-in styles)
     let reveal = null;       // Fireworks: when each letter arrives, the burst and the crackles
     let lastStepT = -1;      // the last moment simulated (a resize mid-way does not replay the bursts)
+    let stepT = 0;           // the time of the step being run (cues carry it)
     let wordsCache = Object.create(null);    // these three are kept until the size changes:
     let sampleCache = Object.create(null);   // prime() fills them before midnight, so the first
     let pointCache = Object.create(null);    // frame of the animation has nothing slow left to do
@@ -136,6 +137,7 @@
 
     const api = {
       onDone: null,
+      onCue: null,         // (name, data): a sound to make now ('launch', 'burst', 'boom', 'pop'); see sfx.js
       get running() { return running; },
       get peakParticles() { return peak; },
       resize: resize,
@@ -476,6 +478,13 @@
       lastStepT = -1;
     }
 
+    /** Tells the app's sound (sfx.js) that something audible happens now. */
+    function cue(name, d) {
+      if (typeof api.onCue !== 'function') return;
+      d.t = stepT;                                 // the animation's time (ms), for tests that render the sound offline
+      try { api.onCue(name, d); } catch (e) { /* the host's problem */ }
+    }
+
     function launch(t) {
       const scale = Math.max(0.3, Math.min(W / 1920, H / 1080));
       const stark = opts.style === 'stark';
@@ -493,6 +502,7 @@
       const hue = stark ? [44, 36, 18, 2, 48][(rnd() * 5) | 0] : (rnd() * 360) | 0;
       const flight = 0.55 + rnd() * 0.25;
       rockets.push({ x: x + (rnd() - 0.5) * 60 * scale, y: H + 10, tx: x, ty: ty, t: 0, flight: flight, hue: hue, sat: stark && hue === 48 ? 30 : 100 });
+      cue('launch', { x: x / W });
     }
 
     /**
@@ -536,6 +546,7 @@
     }
 
     function burst(rk) {
+      cue('burst', { x: rk.tx / W });
       const scale = Math.max(0.3, Math.min(W / 1920, H / 1080));
       const count = Math.round((110 + rnd() * 70) * clamp(Math.sqrt(scale), 0.6, 1.3));
       const power = (330 + rnd() * 230) * scale;
@@ -553,14 +564,15 @@
     }
 
     function step(dt, t) {
+      stepT = t;
       if (simple || !opts || W < 8) return;
       if (custom) { if (custom.step) custom.step(dt, t); return; }
       const stark = opts.style === 'stark';
       if (reveal) {
-        if (!reveal.boomed && t >= reveal.boom.at) { reveal.boomed = true; burstAt(reveal.boom.x, reveal.boom.y, 44, 150, 520, 1.6); }
+        if (!reveal.boomed && t >= reveal.boom.at) { reveal.boomed = true; burstAt(reveal.boom.x, reveal.boom.y, 44, 150, 520, 1.6); cue('boom', { x: reveal.boom.x / W }); }
         while (reveal.next < reveal.list.length && t >= reveal.list[reveal.next].at) {
           const e = reveal.list[reveal.next++];
-          if (!e.year) burstAt(e.g.cx, e.g.top, 46, 12, 150, 0.6);
+          if (!e.year) { burstAt(e.g.cx, e.g.top, 46, 12, 150, 0.6); cue('pop', { x: e.g.cx / W }); }
         }
       }
       lastStepT = t;
