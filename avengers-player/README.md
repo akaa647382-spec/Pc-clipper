@@ -225,8 +225,8 @@ date rolls over from December 31 to January 1.
 This **Final Countdown** follows the Happy New Year animation you choose, so the two feel like one piece, each in
 that animation's lettering and colours, inside the panel: **Stark**: the classic one, as it always was; **Arc
 Reactor**: cyan neon that strikes on like a tube, between the arcs of a spinning reactor ring, with a shockwave;
-**Hot Rod**: slanted polished gold with a deep red edge, slamming down in sparks; **Infinity**: lilac to white,
-condensing out of stardust with an orbiting comet; **Gamma**: lime inside a thick dark outline, with a jolt and a
+**Hot Rod**: slanted polished gold with a deep red edge, slamming down in sparks; **Infinity**: gold with a deep
+purple edge, as the Thanos words at midnight, condensing out of violet and gold ash with an orbiting comet; **Gamma**: lime inside a thick dark outline, with a jolt and a
 crack of lightning; **War Machine**: gunmetal with a fine red edge, scanned in as brackets lock on; **TVA**: amber,
 switching on like an old television inside a clock dial; **Doom**: green fire cooling to scratched steel with a green
 outline, in a turning ring; **Fireworks**: every number bursts in with coloured rays and sparks; **Minimal**: a quiet
@@ -262,13 +262,35 @@ Position, size, 12/24-hour clock, seven app themes (Arc Reactor, Hot Rod, Infini
 ## The Happy New Year animation
 
 **Display → Happy New Year animation** chooses what plays at midnight: **Stark** (golden dust assembles into HAPPY
-NEW YEAR and blows away again), **Fireworks**, five theme animations (**Arc Reactor**: a cyan reactor powers up above
-the words, its shockwave lights them up, then its rings break into drifting sparks; **Gamma**: a green thunderclap and
-shockwave, then lightning crackles around glowing lime words as embers rise; **War Machine**: a tactical display boots
-and locks onto the words in steel, then red tracers burst into silver flak above them; **TVA**: an amber timeline
-branches across the screen as a door of light opens behind the words, ringed by a clock dial; **Doom**: a circle of
-runes in green fire turns around the words in polished steel, then collapses into a green flash), **Minimal** (a
-small banner) or **Off**. *Preview the animation* plays it now.
+NEW YEAR and blows away again), the seven theme animations, **Fireworks**, **Minimal** (a small banner) or **Off**.
+*Preview the animation* plays it now. Each theme animation builds the words in stages, never all at once, in
+lettering of its own:
+
+- **Arc Reactor** (Michroma, cyan neon): a reactor powers up above the words; its shockwave strikes each letter on
+  like a neon tube, then energy fills the year digit by digit.
+- **Hot Rod** (Russo One, slanted gold with a deep red edge): 2027 is struck digit by digit from molten metal, then a
+  welding torch writes HAPPY NEW YEAR in sparks.
+- **Infinity**, the Thanos animation (Syncopate, gold with a deep purple edge): a snap; six coloured lights collide
+  into a gold blaze that forges the year, ash rises into the greeting, and at the end, perfectly balanced, half of the
+  letters turn to dust, then the rest.
+- **Gamma** (Anton, lime inside a thick dark outline): a thunderclap; the year smashes down digit by digit, then
+  lightning writes the greeting one letter at a time.
+- **War Machine** (Black Ops One, gunmetal with a fine red edge): a tactical display boots and locks each letter as it
+  renders in steel, the year's counter rolls and locks, then red tracers burst into silver flak.
+- **TVA** (Orbitron, amber): an old split-flap clock flips over to the new year and HAPPY NEW YEAR types out on a
+  terminal, as a door of light opens behind the words.
+- **Doom** (Cinzel, scratched steel with a glossy green outline): green fire burns the letters in one by one, then a
+  circle of runes surges and brands the year.
+
+The typefaces ship inside the app, so they work offline: free fonts under the SIL Open Font License (Syncopate under
+Apache 2.0), with their licences in `src/fonts`. They are chosen to feel close to the films; the films' own lettering
+is custom and not used.
+
+**Animation sound** (Display tab, **off by default**): each animation gets a sound of its own, made by the app itself
+(no sound files): the snap and the gold blaze for Infinity, a thunderclap for Gamma, split-flap clacks and typing for
+TVA, the rockets of Stark and Fireworks as they fly, and so on. It is quiet and follows the app's volume and mute,
+because at midnight the film is playing its own snap. With the replay on, the midnight clip gets it too, mixed with
+the film's sound.
 
 They are built to run at 60 frames a second on big screens too: the words are drawn once and reused, the animation gets ready a
 few seconds before midnight, and if a PC still cannot keep up, the soft glow is the first thing to go.
