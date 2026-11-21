@@ -129,6 +129,8 @@
     let reveal = null;       // Fireworks: when each letter arrives, the burst and the crackles
     let lastStepT = -1;      // the last moment simulated (a resize mid-way does not replay the bursts)
     let stepT = 0;           // the time of the step being run (cues carry it)
+    let cueLive = false;     // cues go out only while an animation plays (or renderAt runs), never from prime()
+    let cueFloor = -1;       // after a mid-animation re-layout, moments up to here were already reported
     let wordsCache = Object.create(null);    // these three are kept until the size changes:
     let sampleCache = Object.create(null);   // prime() fills them before midnight, so the first
     let pointCache = Object.create(null);    // frame of the animation has nothing slow left to do
@@ -162,7 +164,7 @@
       glyphCache = Object.create(null);
       canvas.width = Math.max(1, Math.round(W * DPR));
       canvas.height = Math.max(1, Math.round(H * DPR));
-      if (opts) prepare();                     // mid-animation: lay the words out again for the new size
+      if (opts) { if (running) cueFloor = Math.max(cueFloor, stepT); prepare(); }   // mid-animation: lay the words out again for the new size
       else clear();
     }
 
@@ -388,6 +390,8 @@
           if (layout.year) glyphSet(f, 1, layout.year);
         },
         sprite: sprite,
+        // Reports a moment for the sound (sfx.js): cue(name, { x: 0..1 across, … }, atMs). See plugCue().
+        cue: plugCue,
         low: () => low,                       // true once the PC cannot keep 60 frames a second: draw less
         clamp: clamp, lerp: lerp, smooth: smooth, easeOut: easeOut, easeIn: easeIn, mulberry32: mulberry32
       };
@@ -403,7 +407,7 @@
         sampleCache = Object.create(null);
         pointCache = Object.create(null);
         glyphCache = Object.create(null);
-        if (opts && opts === want) prepare();
+        if (opts && opts === want) { if (running) cueFloor = Math.max(cueFloor, stepT); prepare(); }
       }, () => { /* the fallback stays */ });
     }
 
@@ -480,8 +484,20 @@
 
     /** Tells the app's sound (sfx.js) that something audible happens now. */
     function cue(name, d) {
-      if (typeof api.onCue !== 'function') return;
-      d.t = stepT;                                 // the animation's time (ms), for tests that render the sound offline
+      if (!cueLive || typeof api.onCue !== 'function') return;
+      d.t = stepT;                                 // the moment's time in the animation (ms)
+      try { api.onCue(name, d); } catch (e) { /* the host's problem */ }
+    }
+
+    /** A plug-in reports a moment (for its sound): name, data, and the moment's time in the animation
+     *  (ms; a plan made at create() passes 0). A re-layout mid-animation creates the plug-in again;
+     *  what it reports again for moments already past is dropped. */
+    function plugCue(name, data, atMs) {
+      if (!cueLive || typeof api.onCue !== 'function') return;
+      const at = typeof atMs === 'number' && isFinite(atMs) ? atMs : stepT;
+      if (at <= cueFloor) return;
+      const d = data && typeof data === 'object' ? data : {};
+      d.t = at;
       try { api.onCue(name, d); } catch (e) { /* the host's problem */ }
     }
 
@@ -1027,6 +1043,7 @@
     function finish(natural) {
       const was = running;
       running = false;
+      cueLive = false;
       if (raf) root.cancelAnimationFrame(raf);
       raf = 0;
       opts = null;
@@ -1050,6 +1067,7 @@
      */
     function prime(o) {
       if (running || W < 8 || H < 8) return;
+      cueLive = false;
       try {
         opts = options(o);
         prepare();
@@ -1085,6 +1103,8 @@
       low = false;
       slowFor = 0;
       resetSim();
+      cueLive = true;
+      cueFloor = -1;
       prepare();
       running = true;
       startTs = lastTs = root.performance.now();
@@ -1102,9 +1122,12 @@
       raf = 0;
       running = false;
       resetSim();
+      cueLive = true;                              // tests collect the cues of a whole run with renderAt
+      cueFloor = -1;
       prepare();
       const dt = 1 / 60;
       for (let t = 0; t <= tMs; t += 1000 / 60) step(dt, t);
+      cueLive = false;
       draw(tMs);
     }
 

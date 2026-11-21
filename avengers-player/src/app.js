@@ -4153,8 +4153,8 @@
       if (!cfg.celebrationSound || !sfx) return;
       try {
         sfx.play(style, { title: title, year: year, volume: video.muted ? 0 : video.volume });
-        // Stark's and Fireworks' rockets are heard as the engine fires them.
-        if (this.fx && (style === 'stark' || style === 'fireworks')) this.fx.onCue = (name, d) => sfx.cue(name, d);
+        // Every moment the animation reports (a rocket, a digit landing, a letter struck) is heard as it happens.
+        if (this.fx && style !== 'minimal') this.fx.onCue = (name, d) => sfx.cue(name, d);
       } catch (e) { /* the animation goes on without its sound */ }
     },
 
