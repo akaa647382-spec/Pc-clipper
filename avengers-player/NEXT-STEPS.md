@@ -21,6 +21,10 @@ Where things stand, so the next session can carry on without the chat history.
   Preview say HAPPY NEW YEAR (a custom non-New-Year target: TARGET REACHED). Film on the clock at midnight (60 ms):
   the Mission card says THE SNAP HIT MIDNIGHT, and when the movie is over a dialog says "You did it. Happy New Year
   2027!" once. e2e newyear + night + ui pass.
+- **Countdown sound** (`5a146c8`, review fixes `c39b98a`): Display → Countdown sound, off by default. Each number of
+  the Final Countdown heard the instant it appears (scheduled on the audio clock, output latency taken off), a set
+  per countdown look (src/sfx-count.js), 3 · 2 · 1 heavier with a build landing on midnight, 6 dB under the animation
+  sound. Silenced when the countdown stops; reset when the app's clock jumps (test runs). e2e: countsound, ui, newyear.
 - **Cinematic sound: work in progress** (`b544e30`): all 10 designs written; only Arc and Hot Rod checked. The run was
   stopped; to finish, resume workflow run `wf_a8133b35-4e8` (pixel baseline is `f133018`).
 - **Tests:** unit 143/143; e2e `ui` scenario 136/136; the crash scan of all 9 drawn animations is clean.
