@@ -105,6 +105,13 @@
     const titleStart = new Map();
     title.forEach((g, i) => titleStart.set(g, (hasYear ? 1900 : 1150) + i * 65));
 
+    /* ---- perfectly balanced: exactly half the letters go first ----
+       (drawn before the grains, whose number depends on the screen size: the halves depend only on
+       the seed and the letters, so a resize at 10 s brings no dusted letter back) */
+    const order = glyphs.map((g) => ({ g: g, k: rnd() })).sort((p, q) => p.k - q.k);
+    const ends = new Map();
+    order.forEach((o, i) => ends.set(o.g, (i < Math.floor(order.length / 2) ? T_HALF1 : T_HALF2) + rnd() * 180));
+
     /* ---- the grains: points on the letters, each belonging to one letter ---- */
     const wp = env.wordPoints(1400);
     const split = hasYear ? (L.titleY + L.titleSize / 2 + L.yearY - L.yearSize / 2) / 2 : Infinity;
@@ -127,11 +134,6 @@
         ox: (0.12 + rnd() * 0.26) * W, oy: (0.04 + rnd() * 0.2) * H, od: rnd() * 250
       });
     }
-
-    /* ---- perfectly balanced: exactly half the letters go first ---- */
-    const order = glyphs.map((g) => ({ g: g, k: rnd() })).sort((p, q) => p.k - q.k);
-    const ends = new Map();
-    order.forEach((o, i) => ends.set(o.g, (i < Math.floor(order.length / 2) ? T_HALF1 : T_HALF2) + rnd() * 180));
 
     // The ring of motes round the year (or the title without one).
     const ringLine = hasYear ? year : title;

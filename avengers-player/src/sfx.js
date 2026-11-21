@@ -17,8 +17,11 @@
   'use strict';
 
   let ac = null;          // the AudioContext, made on first use (prime() makes it before midnight)
-  let master = null;      // everything goes through this (the app's volume)
+  let pre = null;         // the mix level, before the app's volume (the replay records from here)
+  let master = null;      // the app's volume and mute, then the speakers
   let bus = null;         // the animation playing now (stop() fades it out)
+  let queue = [];         // voices still to be made: [time, make], earliest first (see later())
+  let pump = 0;           // the timer that makes them
   let noise = null;       // two seconds of white noise, reused by every noisy sound
   let mixDest = null;     // the replay's mix, when one is recording
   let volume = 1;
@@ -32,8 +35,11 @@
       const AC = root.AudioContext || root.webkitAudioContext;
       if (!AC) return null;
       try { ac = new AC(); } catch (e) { return null; }
+      pre = ac.createGain();
+      pre.gain.value = 0.55;
       master = ac.createGain();
-      master.gain.value = 0.55 * volume;
+      master.gain.value = volume;
+      pre.connect(master);
       master.connect(ac.destination);
       noise = ac.createBuffer(1, Math.round(ac.sampleRate * 2), ac.sampleRate);
       const d = noise.getChannelData(0);
@@ -44,6 +50,33 @@
   }
 
   /* ------------------------------------------------------------ voices --- */
+
+  // A script schedules a whole animation (up to ~200 voices, ~800 audio nodes). Making them all at
+  // once would cost the frame that has to show 00:00:00 several milliseconds (tens on a slow PC), so
+  // in live play only the voices due in the next moment are made at once; the rest wait in a queue
+  // and are made a little ahead of their time. (Offline renders make everything at once.)
+  const NOW_AHEAD = 0.12;     // made at once: what is due within this (s)
+  const AHEAD = 0.45;         // later: made this far ahead of its time
+  let live = false;           // true while a live play() / cue() is scheduling
+
+  function later(t, make) {
+    SFX.count++;
+    if (!live || t < ac.currentTime + NOW_AHEAD) { make(); return; }
+    let i = queue.length;
+    while (i > 0 && queue[i - 1][0] > t) i--;
+    queue.splice(i, 0, [t, make]);
+    if (!pump) pump = setInterval(drain, 60);
+  }
+
+  function drain() {
+    if (!ac || !bus) { queue = []; }
+    const until = ac ? ac.currentTime + AHEAD : 0;
+    let n = 0;
+    while (n < queue.length && queue[n][0] < until) n++;
+    const due = queue.splice(0, n);
+    for (const v of due) { try { v[1](); } catch (e) { /* one voice less */ } }
+    if (!queue.length && pump) { clearInterval(pump); pump = 0; }
+  }
 
   /** Where a sound goes: the animation's bus, panned (-1 left .. 1 right). */
   function out(pan) {
@@ -64,7 +97,8 @@
   }
 
   /** Filtered noise: whooshes, cracks, rumbles, sizzles. f0 → f1 is the filter's sweep. */
-  function hiss(t, dur, o) {
+  function hiss(t, dur, o) { later(t, () => hissNow(t, dur, o)); }
+  function hissNow(t, dur, o) {
     const src = ac.createBufferSource();
     src.buffer = noise;
     src.loop = true;
@@ -78,11 +112,11 @@
     src.connect(f); f.connect(g); g.connect(out(o.pan));
     src.start(t, rand() * 1.5);
     src.stop(t + dur + 0.05);
-    SFX.count++;
   }
 
   /** An oscillator: beeps, hums, sweeps. */
-  function tone(t, dur, o) {
+  function tone(t, dur, o) { later(t, () => toneNow(t, dur, o)); }
+  function toneNow(t, dur, o) {
     const osc = ac.createOscillator();
     osc.type = o.type || 'sine';
     osc.frequency.setValueAtTime(o.f0 || 440, t);
@@ -94,7 +128,6 @@
     node.connect(g); g.connect(out(o.pan));
     osc.start(t);
     osc.stop(t + dur + 0.05);
-    SFX.count++;
   }
 
   /* the sounds the scripts are made of */
@@ -157,11 +190,15 @@
       boom(t0 + 1.42, 0.2);
       const n = letters(w.title);
       for (let i = 0; i < n; i++) zap(t0 + 1.5 + (i / Math.max(1, n)) * 0.6, 0.05, (i / Math.max(1, n - 1)) * 1.4 - 0.7);
+      // The year fills as fx-arc.js does it: the first pour about 2.03 s in (once the title has
+      // caught), the digits 205 ms apart (closer for a long year), each topping out 470 ms after its pour.
       const ny = letters(w.year);
+      const gap = ny > 1 ? Math.min(0.205, 0.82 / (ny - 1)) : 0;
       for (let k = 0; k < ny; k++) {
-        const t = t0 + 1.7 + k * 0.29;
-        tone(t, 0.27, { type: 'sine', f0: 300, f1: 900, gain: 0.05, a: 0.2, r: 0.07, pan: (k / Math.max(1, ny - 1)) * 0.8 - 0.4 });
-        beep(t + 0.27, 1320, 0.25, 0.05, (k / Math.max(1, ny - 1)) * 0.8 - 0.4);
+        const t = t0 + 2.03 + k * gap;
+        const p = (k / Math.max(1, ny - 1)) * 0.8 - 0.4;
+        tone(t, 0.47, { type: 'sine', f0: 300, f1: 900, gain: 0.05, a: 0.38, r: 0.07, pan: p });
+        beep(t + 0.47, 1320, 0.25, 0.05, p);
       }
       boom(t0 + 6.2, 0.08); shimmer(t0 + 6.2, 1.2, 0.03);
       tone(t0 + 9.3, 1.6, { type: 'sawtooth', f0: 140, f1: 38, gain: 0.07, a: 0.1, r: 1.2, lp: 600 });
@@ -276,7 +313,7 @@
 
     setVolume(v) {
       volume = clamp(Number(v) || 0, 0, 1);
-      if (master) master.gain.setTargetAtTime(0.55 * volume, ac.currentTime, 0.05);
+      if (master) master.gain.setTargetAtTime(volume, ac.currentTime, 0.05);
     },
 
     /** The sound of `style` from now. w = { title, year, volume }. */
@@ -284,24 +321,28 @@
       if (!ensure()) return false;
       this.stop();
       if (w && w.volume != null) this.setVolume(w.volume);
-      bus = ac.createGain();
-      bus.gain.value = 1;
-      bus.connect(master);
-      seed = 20270101;
       const script = SCRIPTS[style];
       if (!script) return false;
-      try { script(ac.currentTime + 0.02, { title: (w && w.title) || '', year: (w && w.year) || '' }); } catch (e) { return false; }
+      bus = ac.createGain();
+      bus.gain.value = 1;
+      bus.connect(pre);
+      seed = 20270101;
+      live = true;
+      try { script(ac.currentTime + 0.02, { title: (w && w.title) || '', year: (w && w.year) || '' }); } catch (e) { return false; } finally { live = false; }
       return true;
     },
 
     /** A sound the animation engine fires as it happens (Stark's and Fireworks' rockets and bursts). */
     cue(name, d) {
       if (!ac || !bus) return;
-      cueAt(ac.currentTime + 0.005, name, d);
+      live = true;
+      try { cueAt(ac.currentTime + 0.005, name, d); } finally { live = false; }
     },
 
     /** Fades the playing sound out. */
     stop() {
+      queue = [];
+      if (pump) { clearInterval(pump); pump = 0; }
       if (!bus) return;
       const b = bus;
       bus = null;
@@ -311,14 +352,16 @@
       } catch (e) { /* gone */ }
     },
 
-    /** The replay's sound: the film's tracks and the animation's sound in one track. */
+    /** The replay's sound: the film's tracks and the animation's sound in one track (each at its own level, before the app's volume). */
     mix(tracks) {
       if (!ensure()) return null;
       try {
-        if (mixDest) { try { master.disconnect(mixDest); } catch (e) { /* not connected */ } }
+        if (mixDest) { try { pre.disconnect(mixDest); } catch (e) { /* not connected */ } }
         mixDest = ac.createMediaStreamDestination();
         if (tracks && tracks.length) ac.createMediaStreamSource(new MediaStream(tracks)).connect(mixDest);
-        master.connect(mixDest);
+        // From before the app's volume: the film's capture ignores the volume and mute too, so the
+        // clip keeps the balance the room heard at full volume, whatever the slider says.
+        pre.connect(mixDest);
         return mixDest.stream.getAudioTracks();
       } catch (e) { return null; }
     },
@@ -330,6 +373,7 @@
       const OAC = root.OfflineAudioContext;
       if (!OAC || !SCRIPTS[style]) return Promise.resolve(null);
       const keep = [ac, master, bus, noise];
+      live = false;
       const oc = new OAC(2, Math.round(44100 * (secs || 13)), 44100);
       ac = oc;
       master = oc.createGain(); master.gain.value = 0.55; master.connect(oc.destination);

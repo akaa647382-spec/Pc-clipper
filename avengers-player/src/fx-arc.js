@@ -9,8 +9,9 @@
  *   1.4 s     the core flares; rays and a shockwave sweep out across the picture. As the wave
  *             reaches each letter of the title (the middle first) the tube strikes: two or three
  *             quick white-hot flickers, then it catches and settles into its colour.
- *   1.7 s     energy pours down from the reactor into the year, one digit after another: each
- *             fills with cyan light from the bottom up and tops out with a small flash (about 2.8 s).
+ *   ~2.0 s    once the title has caught, energy pours down from the reactor into the year, one digit
+ *             after another: each fills with cyan light from the bottom up and tops out with a small
+ *             flash (the last at about 3.1 s).
  *   2-9 s     the rings spin, energy filaments race round them, current jumps between them, motes
  *             orbit the core, the core beats and a bar of light scans the words; a surge at 6.2 s.
  *   9.3 s     the rings spin down, flicker and break into drifting cyan sparks; the core collapses.

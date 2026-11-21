@@ -796,10 +796,11 @@ kbd {
 .overlay.final[data-ten="minimal"] .ov-count .val.pop { animation: ten-minimal .45s cubic-bezier(.25, .7, .3, 1) both; }
 @keyframes ten-minimal { from { opacity: .1; } to { opacity: 1; } }
 
-/* Less motion asked for: the number just fades in, in its own colours; nothing else moves. */
+/* Less motion asked for: the number just fades in, in its own colours; nothing else moves. (Stark's
+   classic countdown stays exactly as it always was: it never had an override.) */
 @media (prefers-reduced-motion: reduce) {
   .overlay.final .ov-count .val.pop::before, .overlay.final .ov-count .val.pop::after { animation: none !important; }
-  .overlay.final .ov-count .val.pop { animation: ten-fade .3s ease-out both !important; }
+  .overlay.final:not([data-ten="classic"]) .ov-count .val.pop { animation: ten-fade .3s ease-out both !important; }
   .overlay.final .ov-count .ten-fx { display: none !important; }
 }
 @keyframes ten-fade { from { opacity: .4; } to { opacity: 1; } }

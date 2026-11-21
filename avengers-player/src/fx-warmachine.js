@@ -826,7 +826,7 @@
           const len = (major ? 0.024 : 0.011) * H;
           hudRect(dir > 0 ? x : x - len, yy - w / 2, len, w, (major ? 0.75 : 0.45) * a * (1 - d * d));
         }
-        marks.push([x + dir * H * 0.034, tapeY, dir, a]);
+        if (!inGap(gaps, tapeY)) marks.push([x + dir * H * 0.034, tapeY, dir, a]);   // not in the gap left for the words
       }
       // The heading tape along the top, turning with the reticle; each tick lights up as the scan passes.
       const hy = H * 0.07;

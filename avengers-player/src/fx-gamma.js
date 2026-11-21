@@ -278,7 +278,9 @@
     const NP = P.length >> 1;
     const step = Math.max(2, wp.step || 4);
     const year = !!L.year;
-    const split = year ? (L.titleY + L.yearY) / 2 : Infinity;
+    // Between the two lines' ink, not their centres: Anton's digits reach ~0.6 of their size above the
+    // year's centre, so the midpoint of the centres would hand the digit tops to the title letters.
+    const split = year ? (L.titleY + L.titleSize * 0.3 + L.yearY - L.yearSize * 0.6) / 2 : Infinity;
     const pG = new Int16Array(NP);
     for (let i = 0; i < NP; i++) {
       const x = P[i * 2];

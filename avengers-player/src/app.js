@@ -4878,7 +4878,11 @@
         if (now >= this.tenPv || this.tenPreviewBlock(now)) this.stopTenPreview();
         else pv = Math.min(10, Math.ceil((this.tenPv - now) / 1000));
       }
-      const ovOn = pv > 0 || cfg.showOverlay && (cfg.showClock || cfg.showDate || cfg.showCount || cfg.finalTen);
+      // 10, 9, 8 …: for the last ten seconds the countdown row itself becomes the big ticking number.
+      // (Only then does the Final Countdown alone keep the panel on screen: no empty box all evening.)
+      const cdSnap = s ? C.untilClockSecond(s.targetEpoch, now) : NaN;
+      const ten = cfg.finalTen && s && Engine.mode === 'armed' && toSnap > 0 && toSnap <= 10000 ? C.countdownParts(cdSnap).total : 0;
+      const ovOn = pv > 0 || cfg.showOverlay && (cfg.showClock || cfg.showDate || cfg.showCount || ten > 0);
       setHidden(el.overlay, !ovOn);
       if (!ovOn && this.lastTen) this.setTen(0);
       if (ovOn) {
@@ -4886,9 +4890,6 @@
         setHidden(el.ovDate, !cfg.showDate);
         if (cfg.showClock) { setText(el.ovTime, cp.hms); setText(el.ovAmpm, cp.ampm); }
         if (cfg.showDate) this.renderDate(date, now, dateLine);
-        // 10, 9, 8 …: for the last ten seconds the countdown row itself becomes the big ticking number.
-        const cdSnap = s ? C.untilClockSecond(s.targetEpoch, now) : NaN;
-        const ten = cfg.finalTen && s && Engine.mode === 'armed' && toSnap > 0 && toSnap <= 10000 ? C.countdownParts(cdSnap).total : 0;
         let showCount = (cfg.showCount || ten > 0) && !!s || pv > 0;
         let done = false;
         if (showCount) {
@@ -5485,7 +5486,10 @@
     /* display tab */
     bindToggle(el.optOverlay, 'showOverlay');
     bindToggle(el.optReplay, 'replay', () => UI.renderSettings());
-    bindToggle(el.optCelebSound, 'celebrationSound', () => { if (!cfg.celebrationSound && window.APSfx) window.APSfx.stop(); });
+    bindToggle(el.optCelebSound, 'celebrationSound', () => {
+      if (!window.APSfx) return;
+      if (cfg.celebrationSound) window.APSfx.prime(); else window.APSfx.stop();
+    });
     bindSelect(el.optReplaySec, 'replaySec', (v) => +v);
     el.openReplays.addEventListener('click', () => { try { native.openReplays(); } catch (e) { /* the browser build */ } });
     bindToggle(el.optClock, 'showClock');

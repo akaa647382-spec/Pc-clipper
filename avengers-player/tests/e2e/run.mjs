@@ -2521,8 +2521,42 @@ const scenarios = {
         check(`${id} has a sound`, b > a, `${a} -> ${b}`);
         await s.page.evaluate(() => window.__AP.Celebration.stop());
       }
+      // The midnight frame stays light: the sound's voices are made just ahead of time, not all at once.
+      const soundMs = await s.page.evaluate(() => {
+        let worst = 0;
+        for (const st of ['gamma', 'doom', 'hotrod', 'arc']) {
+          const a = performance.now();
+          window.__AP.Celebration.sound(st, 'HAPPY NEW YEAR', '2027');
+          worst = Math.max(worst, performance.now() - a);
+          window.__AP.Celebration.stop();
+        }
+        return Math.round(worst * 100) / 100;
+      });
+      check('starting an animation\'s sound costs the midnight frame almost nothing', soundMs < 5, soundMs + ' ms at most');
       await s.page.click('label:has(#optCelebSound)');
       check('and the switch turns it off again', await s.page.evaluate(() => window.__AP.cfg.celebrationSound === false));
+      // With only the Final Countdown left on, the panel is not an empty box all evening.
+      for (const id of ['optClock', 'optDate', 'optCount']) await s.page.click(`label:has(#${id})`);
+      check('with the clock, date and countdown off, no empty panel is left on screen', await waitFor(s.page, () => document.getElementById('overlay').hidden, null, 2000)
+        && await s.page.evaluate(() => window.__AP.cfg.finalTen === true && window.__AP.cfg.showOverlay === true));
+      for (const id of ['optClock', 'optDate', 'optCount']) await s.page.click(`label:has(#${id})`);
+      check('and it comes back with them', await waitFor(s.page, () => !document.getElementById('overlay').hidden, null, 2000));
+      // Less motion asked for (Windows animation effects off): Stark's countdown stays the classic one.
+      await s.page.emulateMedia({ reducedMotion: 'reduce' });
+      const tenAnim = async (c) => {
+        await s.page.click(`#optCelebration [data-v="${c}"]`);
+        await s.page.click('#previewTen');
+        await waitFor(s.page, () => document.getElementById('overlay').classList.contains('final'), null, 2000);
+        await sleep(120);
+        const a = await s.page.evaluate(() => document.getAnimations().filter((x) => x.effect && x.effect.target === document.getElementById('ovCountVal') && !x.effect.pseudoElement).map((x) => x.animationName));
+        await s.page.click('#previewTen');
+        await waitFor(s.page, () => !document.getElementById('overlay').classList.contains('final'), null, 2000);
+        return a;
+      };
+      const rmStark = await tenAnim('stark');
+      const rmArc = await tenAnim('arc');
+      check('with less motion asked for, Stark keeps its classic countdown and the others just fade', rmStark.includes('tenpop') && rmArc.includes('ten-fade') && !rmArc.includes('ten-arc'), JSON.stringify({ stark: rmStark, arc: rmArc }));
+      await s.page.emulateMedia({ reducedMotion: 'no-preference' });
       await s.page.click('#optCelebration [data-v="stark"]');
       await s.page.keyboard.press('f');
       check('F enters fullscreen and hides the panel', await waitFor(s.page, () => document.getElementById('app').classList.contains('is-fs'), null, 4000) && await s.page.isHidden('#panel'));
