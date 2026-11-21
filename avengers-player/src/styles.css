@@ -429,12 +429,13 @@ kbd {
 .overlay.final[data-ten="hotrod"] .ov-count .val.pop + .ten-fx::after { animation: ten-hotrod-impact .5s ease-out .085s both; }
 @keyframes ten-hotrod-impact { 0% { transform: scaleX(.25); opacity: 0; } 3% { opacity: 1; } 100% { transform: scaleX(1.08); opacity: 0; } }
 
-/* Infinity (Syncopate, lilac to white in a soft violet glow): the number condenses out of violet
-   stardust while a comet of light orbits it, once a second. 3, 2, 1: the comet burns gold. */
+/* Infinity, the Thanos countdown (Syncopate, gold with a deep purple edge, as the words at midnight):
+   the number condenses out of violet and gold ash while a comet of light orbits it, once a second.
+   3, 2, 1: the comet burns gold. */
 .overlay[data-ten="infinity"] { --ten-face: 'AP Syncopate'; --ten-weight: 700; --ten-acc: #c9a8ff; --f: .84; --ty: .07em; }
 .overlay.final[data-ten="infinity"] .ov-count .val {
-  color: #cdb0ff;
-  text-shadow: 0 0 .06em rgba(214, 190, 255, .95), 0 0 .2em rgba(160, 110, 255, .75), 0 0 .48em rgba(107, 61, 240, .5);
+  color: #ffd977;
+  text-shadow: 0 0 .035em rgba(74, 26, 140, .98), 0 0 .07em rgba(122, 60, 255, .9), 0 0 .2em rgba(122, 60, 255, .7), 0 0 .48em rgba(90, 40, 200, .5);
 }
 .overlay.final[data-ten="infinity"] .ov-count .val.pop { animation: ten-infinity .23s cubic-bezier(.2, .75, .3, 1) both; }
 @keyframes ten-infinity {
@@ -442,10 +443,10 @@ kbd {
   42% { transform: scale(1.03); opacity: 1; }
   100% { transform: none; opacity: 1; }
 }
-/* lilac to white, as the words at midnight */
+/* gold, light at the top and burnished at the foot, as the words at midnight */
 .overlay.final[data-ten="infinity"] .ov-count .val::after {
   content: attr(data-n); color: transparent; text-shadow: none;
-  background: linear-gradient(180deg, #d4bfff 18%, #e6daff 36%, #f1e9ff 50%, #fff 78%);
+  background: linear-gradient(180deg, #fff5d0 20%, #ffd977 38%, #e3a52c 60%, #93530e 84%);
   -webkit-background-clip: text; background-clip: text;
 }
 /* the haze it condenses out of, behind it: a blurred copy, fading (a blur that changes would be drawn anew every frame) */
@@ -478,14 +479,14 @@ kbd {
     radial-gradient(circle at 10% 46%, #fff 0 .01em, transparent .024em),
     radial-gradient(circle at 18% 22%, #d9c4ff 0 .012em, transparent .027em),
     radial-gradient(circle at 24% 80%, #b48cff 0 .01em, transparent .024em),
-    radial-gradient(circle at 38% 12%, #fff 0 .008em, transparent .02em),
+    radial-gradient(circle at 38% 12%, #ffcf6a 0 .008em, transparent .02em),
     radial-gradient(circle at 46% 90%, #e6d6ff 0 .011em, transparent .025em),
     radial-gradient(circle at 60% 10%, #b48cff 0 .01em, transparent .024em),
-    radial-gradient(circle at 74% 18%, #fff 0 .011em, transparent .025em),
+    radial-gradient(circle at 74% 18%, #ffcf6a 0 .011em, transparent .025em),
     radial-gradient(circle at 88% 36%, #d9c4ff 0 .012em, transparent .027em),
     radial-gradient(circle at 91% 60%, #fff 0 .009em, transparent .022em),
     radial-gradient(circle at 78% 84%, #c9b0ff 0 .011em, transparent .025em),
-    radial-gradient(circle at 60% 92%, #fff 0 .007em, transparent .018em),
+    radial-gradient(circle at 60% 92%, #ffcf6a 0 .007em, transparent .018em),
     radial-gradient(circle at 30% 66%, #e6d6ff 0 .007em, transparent .018em),
     radial-gradient(circle at 70% 32%, #fff 0 .007em, transparent .018em);
 }
