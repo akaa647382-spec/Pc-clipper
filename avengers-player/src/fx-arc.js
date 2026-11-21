@@ -1562,6 +1562,24 @@
       return count;
     }
 
+    // The sound (sfx-arc.js): every moment of this animation is known from here, so one plan carries
+    // them all (x is 0..1 across the frame). Nothing here is drawn or drawn from the seed.
+    if (env.cue) {
+      const across = (a, r) => (HOLD_X + Math.cos(a) * r) / W;
+      const breaks = [];
+      for (const o of [outer, arcs, coil, rim]) {
+        for (let j = 0; j < o.n; j++) breaks.push({ t: o.tb[j], x: across(angleOf(o, o.tb[j]) + o.s0[j] + o.sl[j] / 2, o.f * HOLD_R) });
+      }
+      env.cue('plan', {
+        tubes: tubes.map((tb) => ({ x: tb.g.cx / W, i: tb.g.i, n: nT, blinks: tb.blinks.map((f) => f[0]), at: tb.at,
+          strikes: tb.strike.map((f) => tb.at + f[0]), caught: tb.caught, out: tb.out, downs: tb.down.map((f) => tb.out + f[0]), dark: tb.dark })),
+        digits: digits.map((d, j) => ({ x: d.g.cx / W, i: j, at: d.at, hit: d.at + POUR, full: d.full, drain: d.drain })),
+        bolts: bolts.map((b) => ({ t: b.t, dur: b.dur, x: across(b.th, (b.f1 + b.f2) / 2 * HOLD_R) })),
+        breaks: breaks,
+        titleLit: titleLit, allOn: ALL_ON, allOut: ALL_OUT, surgeOnWords: surgeOnWords
+      }, 0);
+    }
+
     return {
       step: function () { /* every frame is drawn from t alone */ },
       draw: draw,

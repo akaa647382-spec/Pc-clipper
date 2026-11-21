@@ -1547,6 +1547,23 @@
       return count;
     }
 
+    // The sound (sfx-warmachine.js): every moment of this animation is known from here, so one plan
+    // carries them all (x is 0..1 across the frame, y 0..1 down). Nothing here is drawn or drawn from the seed.
+    if (env.cue) {
+      env.cue('plan', {
+        letters: ACQ.map((e) => ({ t: e.arr, x: e.g.cx / W, line: e.g.line })),
+        digits: COUNTER.map((e) => ({ on: e.arr, lock: e.lock, x: e.g.cx / W, rolls: Math.max(0, Math.round(drumAt(e, e.lock))) })),
+        gate: T_GATE, brackets: T_BRK0, lock: T_LOCK, settled: T_SETTLED,
+        sheens: SHEENS.map((s) => s[0]),
+        volleys: VOLLEYS.map((v) => v[0]),
+        shots: shots.map((s) => ({ t0: s.t0, tb: s.tb, x0: s.x0 / W, bx: s.bx / W, by: s.by / H, size: s.size, fin: !!s.guided,
+          crk: s.crk.map((c) => s.tb + c.at * 1000) })),
+        finale: T_FINALE, finBurst: T_FIN_BURST, down: T_DOWN,
+        outs: LET.map((e) => ({ t: e.out, x: e.g.cx / W })),
+        point: T_DOWN + 900
+      }, 0);
+    }
+
     return {
       step: function () { /* every frame is drawn from t alone */ },
       draw: draw,

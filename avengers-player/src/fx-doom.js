@@ -1878,6 +1878,19 @@
       return n;
     }
 
+    // The sound (sfx-doom.js): every moment of this animation is known from here, so one plan carries
+    // them all (x is 0..1 across the frame). Nothing here is drawn or drawn from the seed.
+    if (env.cue) {
+      env.cue('plan', {
+        cx: cx / W, r: R / W, cross: tCross, trace: T_TRACE,
+        bolt: bolt ? { x0: bolt.x0 / W, x1: bolt.x1 / W } : null,
+        title: TITLE.map((o) => ({ t: o.t0, x: o.g.cx / W, melt: o.m0 })),
+        year: YEAR.map((o) => ({ t: o.t0, x: o.g.cx / W, melt: o.m0 })),
+        gather: T_Y0, burst: T_YB, steady: T_STEADY,
+        sheens: SHEENS, surges: SURGES, charge: T_CHARGE, collapse: T_COLLAPSE, heat: T_HEAT, melt: T_MELT, flash: T_FLASH
+      }, 0);
+    }
+
     return {
       step: function () { /* every frame is drawn from t alone */ },
       draw: draw,

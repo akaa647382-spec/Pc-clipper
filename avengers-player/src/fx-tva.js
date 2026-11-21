@@ -1684,6 +1684,23 @@
       ctx.restore();
     }
 
+    // The sound (sfx-tva.js): every moment of this animation is known from here, so one plan carries
+    // them all (x is 0..1 across the frame). Nothing here is drawn or drawn from the seed.
+    if (env.cue) {
+      env.cue('plan', {
+        digits: DIG.map((d) => {
+          const riffles = [];
+          if (d.tRoll >= 0) for (let j = 0; d.tIn + (j + 1) * d.span <= d.tRoll + 0.5; j++) riffles.push(d.tIn + (j + FALL) * d.span);
+          return { x: d.g.cx / W, tIn: d.tIn, land: d.tLand, clack: d.clack, riffles: riffles, out: d.tOut + BLANK_DUR * FALL };
+        }),
+        landed: T_LANDED,
+        keys: TCH.map((e) => ({ t: e.tOn, off: e.tOff, x: (e.g ? e.g.cx : e.x + P.curW / 2) / W, space: !e.g })),
+        cursor: tCursor, typed: T_TYPED, blink: T_BLINK, blinkMs: BLINK, curOff: T_CUROFF, erase: T_ERASE, curEnd: T_CUREND,
+        forks: BR.map((b) => ({ t: b.ts, x: (G.cx + b.side * b.d0) / W, gen: b.gen })),
+        surge: T_SURGE, prune: T_PRUNE, back: tree.back0, rewind: T_REWIND, close: T_CLOSE0, wink: T_WINK
+      }, 0);
+    }
+
     return { step: function () {}, draw: draw, prime: prime };
   }
 

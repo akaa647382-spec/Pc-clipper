@@ -398,6 +398,22 @@
       env.warm(HOT);
     }
 
+    // The sound (sfx-infinity.js): every moment of this animation is known here, so one plan carries
+    // them all (x is 0..1 across the frame). Only reads what is worked out above: nothing is drawn or
+    // drawn from the seed here.
+    if (env.cue) {
+      env.cue('plan', {
+        cx: C.x / W,
+        lights: lights.map((lt, i) => ({ i: i, t0: lt.t0, t1: lt.t1, x0: lt.p0.x / W, xq: lt.q.x / W })),
+        merge: T_MERGE,
+        digits: yearOrder.map((o) => ({ x: o.g.cx / W, i: o.g.i, at: landing.get(o.g) })),
+        letters: title.map((g) => ({ x: g.cx / W, i: g.i, at: titleStart.get(g) })),
+        ends: glyphs.map((g) => ({ x: g.cx / W, line: g.line, at: ends.get(g) })),
+        ring: { x: ring.x / W, rx: ring.rx / W },
+        half1: T_HALF1, half2: T_HALF2, melt: MELT, fly: DUST_FLY
+      }, 0);
+    }
+
     return { step: function () {}, draw: draw, prime: prime };
   }
 

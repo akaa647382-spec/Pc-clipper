@@ -1515,6 +1515,24 @@
       return n;
     }
 
+    // The sound (sfx-gamma.js): every moment of this animation is worked out above, so one plan carries
+    // them all (x is 0..1 across the frame, y 0..1 down it). Only reads: nothing here is drawn or drawn
+    // from the seed.
+    if (env.cue) {
+      env.cue('plan', {
+        digits: YG.map((k) => ({ x: G[k].cx / W, i: G[k].i, at: born[k] })),
+        smash: SMASH,
+        fall: FALL,
+        lead: LEAD,
+        letters: groups.map((ks) => ({ t: born[ks[0]], xs: ks.map((k) => G[k].cx / W), re: ks.map((k) => rsT[k * 2]) })),
+        titleDone: titleDone,
+        bolts: bolts.map((b) => ({ x0: b.ax / W, x1: b.bx / W, y0: b.ay / H, y1: b.by / H, edge: b.edge })),
+        flashes: fl.map((f) => ({ t: f[0], d: f[1], b: f[2], p: f[4], k: f[5] })),
+        leaves: G.map((g, k) => ({ x: g.cx / W, line: g.line, at: leave[k] })),
+        mid: MID, beat: BEAT, strikesEnd: STRIKES_END, leaveAt: LEAVE_AT, leaveDur: LEAVE_DUR, fadeAt: FADE_AT
+      }, 0);
+    }
+
     return {
       step: function () { /* every frame is worked out from t alone */ },
       draw: draw,

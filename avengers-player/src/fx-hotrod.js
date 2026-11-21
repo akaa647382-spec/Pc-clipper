@@ -1045,6 +1045,20 @@
       return count;
     }
 
+    // The sound (sfx-hotrod.js): every moment of the forge is known from here, so one plan carries
+    // them all (x is 0..1 across the frame). Nothing here is drawn or drawn from the seed.
+    if (env.cue) {
+      env.cue('plan', {
+        digits: YL.map((g, i) => ({ x: g.cx / W, i: i, hit: HIT[i] })),
+        bead: bead ? { t0: B0, t1: B1, x0: bead.x0 / W, x1: bead.x1 / W } : null,
+        torch: nT ? { lit: W0 - 100, t0: W0, t1: W1 } : null,
+        letters: TL.map((g, j) => ({ x0: g.x0 / W, x1: g.x1 / W, i: j, t0: WS[j], t1: WE[j] })),
+        out: glyphs.map((g, k) => ({ x: g.cx / W, line: g.line, t: OUT[k] })),
+        cross: { t: T_CROSS, x: CX / W },
+        sheens: SHEENS.slice(), waves: WAVES.slice(), minX: minX / W, maxX: maxX / W
+      }, 0);
+    }
+
     return {
       step: function () { /* every frame is drawn from t alone */ },
       draw: draw,
