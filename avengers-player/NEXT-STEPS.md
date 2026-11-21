@@ -19,14 +19,20 @@ Where things stand, so the next session can carry on without the chat history.
     worth the risk for that case).
 - **Tests:** unit 143/143; e2e `ui` scenario 136/136; the crash scan of all 9 drawn animations is clean.
 
-## Release 1.11.0, what is left
+## Release 1.11.0
 
-1. Full e2e (`node tests/e2e/run.mjs`, about an hour) and `node tests/fx/shots.cjs --perf` on a quiet machine.
-2. Build (`node scripts/build-win.mjs`), remove the 1.10.4 and preview installers from `download/`, commit, push,
-   and give the user the link.
-3. The user watches the animation videos (with sound) and picks any animation to rework. A rework (with Fable 5.2)
+- Done: full e2e 821/821, unit 143/143, `tests/fx/shots.cjs --perf` (60 fps; every style deterministic and clean at
+  the end), built (`download/Avengers-Player-Setup-1.11.0.exe`, 93.4 MB, SHA-256
+  `693755862146676d20a3275bff88e6a2faaa684ecf7b0cf9bf9317fb4561f4e7`), 1.10.4 and the preview removed.
+- Not done: the install/update/launch check under Wine (Wine 9.0 crashes on every command in this container,
+  "free(): invalid pointer", even with the prefix that worked for earlier releases). The installer script changed
+  only in its publisher name since 1.10.4, which passed that check.
+
+## What is left
+
+1. The user watches the animation videos (with sound) and picks any animation to rework. A rework (with Fable 5.2)
    replaces the current one only if it is clearly better side by side.
-4. itch.io: the page text is in `docs/itch-page.md` ($0 or donate, $3.99 suggested). The user takes the two Windows
+2. itch.io: the page text is in `docs/itch-page.md` ($0 or donate, $3.99 suggested). The user takes the two Windows
    warning screenshots, creates the page and uploads.
 
 ## After the release
