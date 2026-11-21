@@ -88,6 +88,7 @@
     overlayPos: 'tl', overlaySize: 'm',
     celebration: 'stark',
     celebrationSound: false,             // the animations' own sound (sfx.js): off unless switched on
+    countdownSound: false,               // the Final Countdown's own sound (sfx-count.js): off unless switched on
     replay: true, replaySec: 40,          // the replay of the night (see Replay)
     standbyScreen: true,
     autoRecover: true, autoRecoverSec: 10,
@@ -2324,6 +2325,71 @@
     }
   };
 
+  /* =============================================== the countdown's sound === */
+
+  /**
+   * The Final Countdown's own sound (Display → Countdown sound, off by default; sfx-count.js).
+   * Each number is heard on the instant it appears: it is put on the audio clock a moment ahead
+   * (sfx.js takes the output latency off), not played when a frame happens to draw it. The real
+   * countdown (armed, Final Countdown on: test runs and the simulation too) and the Display tab's
+   * preview. Stopped before its end (the countdown stopped, a test ended, the preview stopped),
+   * it is silenced at once; at its end it rings out into midnight.
+   */
+  const CountSound = {
+    LEAD_MS: 400,                 // how far ahead a number is scheduled
+    key: '',                      // the countdown being heard ('real@…' or 'pv@…'), '' for none
+    at: 0,                        // its instant 0: number n appears at at - n s
+    done: Object.create(null),    // its numbers already scheduled (or let go)
+    heard: false,                 // something of it was scheduled
+
+    /** The sound set of the countdown on screen (data-ten; Stark's is the classic one). */
+    style() {
+      const id = el.overlay.dataset.ten || 'classic';
+      return id === 'classic' ? 'stark' : id;
+    },
+
+    frame(now, s, pvAt) {
+      const sfx = window.APSfx;
+      if (!sfx || typeof sfx.tick !== 'function') return;
+      let at = 0;
+      let kind = '';
+      if (cfg.countdownSound) {
+        if (pvAt) { at = pvAt; kind = 'pv'; }
+        else if (cfg.finalTen && s && Engine.mode === 'armed') { at = Math.floor(s.targetEpoch / 1000) * 1000; kind = 'real'; }
+      }
+      const key = at && now < at + 50 ? kind + '@' + at : '';
+      if (key !== this.key) {
+        if (this.heard && now < this.at) this.silence();      // ended before its moment
+        this.key = key;
+        this.at = at;
+        this.done = Object.create(null);
+        this.heard = false;
+      }
+      if (!key) return;
+      const toAt = at - now;
+      if (toAt > 15000) return;
+      if (!this.done.primed) {
+        this.done.primed = true;
+        try { sfx.setVolume(video.muted ? 0 : video.volume); sfx.prime(); } catch (e) { /* only a head start */ }
+      }
+      for (let n = 10; n >= 1; n--) {
+        if (this.done[n]) continue;
+        const due = at - n * 1000 - Clock.now();             // ms until number n appears (read now, not at the frame's start)
+        if (due > this.LEAD_MS) break;                        // the numbers after it are later still
+        this.done[n] = true;
+        // A number already on screen is heard late only by a moment (the preview's 10 shows at once);
+        // one long gone (the app opened at 4) is let go.
+        if (due < (n === 10 ? -1000 : -250)) continue;
+        try { if (sfx.tick(this.style(), n, Math.max(0, due) / 1000)) this.heard = true; } catch (e) { /* one tick less */ }
+      }
+    },
+
+    silence() {
+      this.heard = false;
+      try { if (window.APSfx && window.APSfx.tickStop) window.APSfx.tickStop(); } catch (e) { /* gone */ }
+    }
+  };
+
   /* ======================================================== replay of the night === */
 
   /**
@@ -2411,7 +2477,7 @@
         try { film = video.captureStream().getAudioTracks(); } catch (e) { film = []; }      // the film's own sound
         let sound = film;
         // With the animation's sound switched on, the clip gets the film and the animation in one track.
-        if (cfg.celebrationSound && window.APSfx) { const mixed = window.APSfx.mix(film); if (mixed && mixed.length) sound = mixed; }
+        if ((cfg.celebrationSound || cfg.countdownSound) && window.APSfx) { const mixed = window.APSfx.mix(film); if (mixed && mixed.length) sound = mixed; }
         rec.tracks.push(...film);
         if (sound !== film) rec.tracks.push(...sound);
         if (this.rec !== rec) { give('stopped'); return; }
@@ -4755,6 +4821,7 @@
       el.optAutoRestart.checked = cfg.autoRestart !== false;
       el.optReplay.checked = cfg.replay !== false;
       el.optCelebSound.checked = !!cfg.celebrationSound;
+      el.optCountSound.checked = !!cfg.countdownSound;
       el.optReplaySec.value = String(cfg.replaySec);
       el.optReplaySec.disabled = cfg.replay === false;
       el.optNetTime.checked = cfg.useNetTime;
@@ -4992,6 +5059,7 @@
       // (Only then does the Final Countdown alone keep the panel on screen: no empty box all evening.)
       const cdSnap = s ? C.untilClockSecond(s.targetEpoch, now) : NaN;
       const ten = cfg.finalTen && s && Engine.mode === 'armed' && toSnap > 0 && toSnap <= 10000 ? C.countdownParts(cdSnap).total : 0;
+      CountSound.frame(now, s, this.tenPv);
       const ovOn = pv > 0 || cfg.showOverlay && (cfg.showClock || cfg.showDate || cfg.showCount || ten > 0);
       setHidden(el.overlay, !ovOn);
       if (!ovOn && this.lastTen) this.setTen(0);
@@ -5610,6 +5678,10 @@
       if (!window.APSfx) return;
       if (cfg.celebrationSound) window.APSfx.prime(); else window.APSfx.stop();
     });
+    bindToggle(el.optCountSound, 'countdownSound', () => {
+      if (!window.APSfx) return;
+      if (cfg.countdownSound) window.APSfx.prime(); else CountSound.silence();
+    });
     bindSelect(el.optReplaySec, 'replaySec', (v) => +v);
     el.openReplays.addEventListener('click', () => { try { native.openReplays(); } catch (e) { /* the browser build */ } });
     bindToggle(el.optClock, 'showClock');
@@ -6028,7 +6100,7 @@
   }
 
   // For the automated tests and for debugging from the developer tools.
-  window.__AP = { Engine: Engine, Clock: Clock, cfg: cfg, Media: Media, AudioTracks: AudioTracks, AudioFix: AudioFix, SnapCam: SnapCam, Late: Late, Missed: Missed, MadeIt: MadeIt, Power: Power, Recovery: Recovery, Replay: Replay, NetTime: NetTime, SubsUI: SubsUI, SubSync: SubSync, UI: UI, Celebration: Celebration, Sfx: window.APSfx, Versions: Versions, C: C, saveNow: saveNow };
+  window.__AP = { Engine: Engine, Clock: Clock, cfg: cfg, Media: Media, AudioTracks: AudioTracks, AudioFix: AudioFix, SnapCam: SnapCam, Late: Late, Missed: Missed, MadeIt: MadeIt, CountSound: CountSound, Power: Power, Recovery: Recovery, Replay: Replay, NetTime: NetTime, SubsUI: SubsUI, SubSync: SubSync, UI: UI, Celebration: Celebration, Sfx: window.APSfx, Versions: Versions, C: C, saveNow: saveNow };
 
   boot();
 })();

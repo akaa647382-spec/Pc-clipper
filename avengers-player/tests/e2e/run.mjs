@@ -245,10 +245,11 @@ async function tenPreviews(s) {
   };
   const keys = ['showOverlay', 'showClock', 'showDate', 'showCount', 'finalTen', 'theme', 'overlayPos', 'overlaySize', 'celebration'];
   const settings = () => page.evaluate((keys) => JSON.stringify(keys.map((k) => window.__AP.cfg[k])), keys);
-  check('the Display tab has "Preview the Final Countdown" next to its switch', await page.evaluate(() => {
+  check('the Display tab has "Preview the Final Countdown" right under its switches (Final Countdown, Countdown sound)', await page.evaluate(() => {
     const b = document.getElementById('previewTen');
     const sw = document.getElementById('optFinal').closest('label');
-    return !!b && b.offsetWidth > 0 && /Preview the Final Countdown/.test(b.textContent) && sw.nextElementSibling === b;
+    const snd = document.getElementById('optCountSound').closest('label');
+    return !!b && b.offsetWidth > 0 && /Preview the Final Countdown/.test(b.textContent) && sw.nextElementSibling === snd && snd.nextElementSibling === b;
   }));
 
   const celebrationBefore = await page.evaluate(() => window.__AP.cfg.celebration);
@@ -329,6 +330,49 @@ async function tenPreviews(s) {
   check('and hides it again when it stops, still switched off', await waitFor(page, () => document.getElementById('overlay').hidden, null, 1500) && await page.evaluate(() => window.__AP.cfg.showOverlay === false));
   await page.keyboard.press('o');
   await waitFor(page, () => !document.getElementById('overlay').hidden, null, 2000);
+
+  // Countdown sound: off by default. Switched on, each number is heard once, on its second, in the
+  // countdown's own sound; stopped early, it is silenced at once.
+  const ticks = () => page.evaluate(() => (window.__AP.Sfx ? window.__AP.Sfx.ticks.slice() : []));
+  check('the countdown sound is there, off by default, with a sound for every countdown look', await page.evaluate(() =>
+    window.__AP.cfg.countdownSound === false && document.getElementById('optCountSound').checked === false && !!window.__AP.Sfx &&
+    ['default', 'stark', 'arc', 'hotrod', 'infinity', 'gamma', 'warmachine', 'tva', 'doom', 'fireworks'].every((k) => window.__AP.Sfx.countStyles().includes(k))));
+  let k0 = (await ticks()).length;
+  await page.click('#previewTen');
+  await sleep(2600);
+  check('switched off, the Final Countdown preview makes no sound', (await ticks()).length === k0, (await ticks()).length - k0 + ' ticks');
+  await page.click('#previewTen');
+  await page.click('label:has(#optCountSound)');
+  check('the switch turns the countdown sound on', await page.evaluate(() => window.__AP.cfg.countdownSound === true));
+  for (const c of ['stark', 'doom']) {
+    await page.click(`#optCelebration [data-v="${c}"]`);
+    const want = await page.evaluate(() => { const st = window.__AP.CountSound.style(); return window.__AP.Sfx.countStyles().includes(st) ? st : 'default'; });
+    k0 = (await ticks()).length;
+    await page.click('#previewTen');
+    const ended = await waitFor(page, () => !window.__AP.UI.tenPv, null, 12500);
+    const tk = (await ticks()).slice(k0);
+    check(`${c}: the preview is heard, 10 to 1, each number once, in its countdown's own sound (${want})`, ended && tk.map((x) => x.n).join(',') === '10,9,8,7,6,5,4,3,2,1' && tk.every((x) => x.style === want),
+      JSON.stringify(tk.map((x) => [x.n, x.style, +x.inSec.toFixed(3)])));
+    const gaps = tk.slice(1).map((x, i) => x.t - tk[i].t).slice(1);        // 9 → 8 … 2 → 1 (the 10 shows at the click)
+    check(`${c}: each number one second after the one before, on the audio clock (±20 ms)`, gaps.length === 8 && gaps.every((g) => Math.abs(g - 1) < 0.02), gaps.map((g) => g.toFixed(3)).join(' '));
+  }
+  await page.click(`#optCelebration [data-v="${celebrationBefore}"]`);
+  k0 = (await ticks()).length;
+  await page.click('#previewTen');
+  await sleep(2300);
+  await page.click('#previewTen');
+  const heard = (await ticks()).length - k0;
+  await sleep(2000);
+  check('stopped early: silenced, and nothing more is heard', heard >= 2 && (await ticks()).length - k0 === heard && await page.evaluate(() => !window.__AP.CountSound.heard), heard + ' then ' + ((await ticks()).length - k0));
+  const tickMs = await page.evaluate(() => {
+    let worst = 0;
+    for (let n = 10; n >= 1; n--) { const a = performance.now(); window.__AP.Sfx.tick('doom', n, 5); worst = Math.max(worst, performance.now() - a); }
+    window.__AP.Sfx.tickStop();
+    return Math.round(worst * 100) / 100;
+  });
+  check('a number of the countdown sound costs its frame almost nothing', tickMs < 3, tickMs + ' ms at most');
+  await page.click('label:has(#optCountSound)');
+  check('and switched off again', await page.evaluate(() => window.__AP.cfg.countdownSound === false));
 
   // Never during a test run: refused, and a test run that starts stops a running preview.
   await page.click('#previewTen');
@@ -1770,8 +1814,15 @@ const scenarios = {
       await waitFor(s.page, () => !document.getElementById('late').hidden, null, 10000);
       await s.page.click('#lateBtn');
       check('joined: the countdown runs', await waitSynced(s.page, 20000));
+      // With the countdown sound on, the real Final Countdown is heard.
+      const k0 = await s.page.evaluate(() => { window.__AP.cfg.countdownSound = true; return window.__AP.Sfx.ticks.length; });
       const ms = await toMidnight(s.page, t.target);
       await sleep(Math.max(0, ms) + 2000);
+      const tk = await s.page.evaluate((k) => window.__AP.Sfx.ticks.slice(k), k0);
+      const gaps = tk.slice(1).map((x, i) => x.t - tk[i].t);
+      check('countdown sound on: the real Final Countdown is heard, 10 to 1, once each, a second apart on the audio clock (±20 ms)',
+        tk.map((x) => x.n).join(',') === '10,9,8,7,6,5,4,3,2,1' && tk.every((x) => x.style === 'stark') && gaps.length === 9 && gaps.every((g) => Math.abs(g - 1) < 0.02),
+        JSON.stringify({ n: tk.map((x) => x.n), gaps: gaps.map((g) => +g.toFixed(3)), inSec: tk.map((x) => +x.inSec.toFixed(3)) }));
       check('at midnight the film was on the clock: the hit is kept', await s.page.evaluate((x) => window.__AP.cfg.madeIt === x, t.target));
       check('no congratulations while the movie plays', !(await congrats(s.page)));
       check('the movie runs to its end, then: "You did it"', await waitFor(s.page, () => !document.getElementById('modal').hidden && /You did it/.test(document.getElementById('modalTitle').textContent), null, 40000) &&

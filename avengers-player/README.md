@@ -298,6 +298,13 @@ TVA, the rockets of Stark and Fireworks as they fly, and so on. It is quiet and 
 because at midnight the film is playing its own snap. With the replay on, the midnight clip gets it too, mixed with
 the film's sound.
 
+**Countdown sound** (Display tab, next to the Final Countdown, **off by default**): the 10 · 9 · 8 gets a sound in the
+look of its countdown (a HUD beep for Stark, current through the reactor for Arc, a heartbeat for Gamma, a clock's
+tick-tock for TVA, an iron drum for Doom…). Each number is heard the instant it appears: it is put on the audio clock
+ahead of time, with the speakers' latency taken off, not played when a frame happens to draw it. 3 · 2 · 1 are
+heavier, and from 3 a build rises to land on midnight. It sits under the film (the room counts down too), follows the
+app's volume and mute, is silenced at once if the countdown is stopped, and plays with "Preview the Final Countdown".
+
 They are built to run at 60 frames a second on big screens too: the words are drawn once and reused, the animation gets ready a
 few seconds before midnight, and if a PC still cannot keep up, the soft glow is the first thing to go.
 

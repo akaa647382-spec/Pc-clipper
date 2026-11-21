@@ -35,6 +35,7 @@ the downloads" link.
 > - **Stays on the clock.** Pause for snacks, and it catches up. A crash or a power cut? It reopens and joins
 >   where the clock says.
 > - **The Final Countdown.** The last ten seconds tick in the clock panel, in the style of the animation you pick.
+>   Switch on **Countdown sound** and every number is heard the instant it appears, building into midnight.
 > - **Happy New Year animations.** Stark, Arc Reactor, Hot Rod, Infinity (the Thanos one), Gamma, War Machine, TVA,
 >   Doom, Fireworks or Minimal, each building the words in its own way and its own lettering at midnight. Switch on
 >   **Animation sound** and each one gets a sound of its own.

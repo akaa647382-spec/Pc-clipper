@@ -26,7 +26,14 @@
  * at once, the rest just ahead of their time (later()).
  *
  * window.APSfx = { prime(), play(style, { title, year, volume }), cue(name, d), stop(), setVolume(v),
- *                  mix(tracks) -> [MediaStreamTrack], styles(), render(style, w, secs, cues), define, count }
+ *                  mix(tracks) -> [MediaStreamTrack], styles(), render(style, w, secs, cues), define, count,
+ *                  defineCount(id, fn), tick(style, n, inSec), tickStop(), renderCount(style) }
+ *
+ * The Final Countdown's sound (off by default: Display → Countdown sound) is a set of its own
+ * (sfx-count.js): defineCount(id, fn(n, t, P)) makes number n (10 … 1) at audio time t. tick()
+ * schedules one number so that it leaves the speakers on the instant given (the output latency is
+ * taken off); it plays on a bus of its own, so stopping the animation never cuts it, and tickStop()
+ * silences it when the countdown is stopped.
  */
 (function (root) {
   'use strict';
@@ -49,8 +56,39 @@
   let live = false;       // scheduling for live play (deferred) rather than an offline render
   let mixDest = null;
   let volume = 1;
+  let cbus = null;        // the Final Countdown's sound: dry …
+  let csend = null;       // … and its reverb send (tickStop() fades both)
 
   const DEFS = Object.create(null);
+  const COUNTS = Object.create(null);
+  const COUNT_GAIN = 0.5;     // the countdown sits under the film: its whole bus 6 dB down
+
+  /**
+   * The audio time at which a sound leaves the speakers `inSec` from now (performance.now()).
+   * getOutputTimestamp() ties the audio clock to the screen's clock at the speaker; without it
+   * the output latency is taken off. A reading far from either is not trusted.
+   */
+  function speakerTime(inSec) {
+    const now = ac.currentTime;
+    const lat = (ac.outputLatency || 0) + (ac.baseLatency || 0);
+    let t = now + inSec - Math.min(0.25, lat);
+    try {
+      const ts = ac.getOutputTimestamp ? ac.getOutputTimestamp() : null;
+      if (ts && ts.performanceTime > 0 && ts.contextTime > 0) {
+        const at = ts.contextTime + (performance.now() + inSec * 1000 - ts.performanceTime) / 1000;
+        if (Math.abs(at - (now + inSec)) < 0.3) t = at;
+      }
+    } catch (e) { /* the estimate above */ }
+    return Math.max(now + 0.004, t);
+  }
+
+  /** The reverb return, back up if stop() ducked it. */
+  function unduck() {
+    if (!ducked) return;
+    ch.revOut.gain.cancelScheduledValues(ac.currentTime);
+    ch.revOut.gain.setTargetAtTime(0.6, ac.currentTime + 0.02, 0.02);
+    ducked = false;
+  }
 
   /* ------------------------------------------------------------ the chain --- */
 
@@ -685,6 +723,69 @@
     },
 
     styles() { return Object.keys(DEFS); },
+
+    /* ---- the Final Countdown's sound ---- */
+
+    ticks: [],        // test hook: the numbers scheduled, { style, n, t (audio time), inSec }
+
+    /** fn(n, t, P): the sound of number n (10 … 1) of the Final Countdown `id`, at audio time t. */
+    defineCount(id, fn) { if (id && typeof fn === 'function') COUNTS[id] = fn; },
+
+    countStyles() { return Object.keys(COUNTS); },
+
+    /** Number n of the Final Countdown of `style`, out of the speakers `inSec` from now (0: at once). */
+    tick(style, n, inSec) {
+      if (!ensure()) return false;
+      const fn = COUNTS[style] || COUNTS.default;
+      if (!fn) return false;
+      unduck();
+      if (!cbus) {
+        cbus = ac.createGain(); cbus.gain.value = COUNT_GAIN; cbus.connect(ch.pre);
+        csend = ac.createGain(); csend.gain.value = COUNT_GAIN; csend.connect(ch.revIn);
+      }
+      const t = speakerTime(Math.max(0, inSec || 0));
+      const keep = [bus, send, live];
+      bus = cbus; send = csend; live = false;          // a number is a few voices: made at once
+      seed = 4000 + n;
+      try { fn(n, t, P); } catch (e) { return false; } finally { bus = keep[0]; send = keep[1]; live = keep[2]; }
+      if (this.ticks.length > 40) this.ticks.shift();
+      this.ticks.push({ style: COUNTS[style] ? style : 'default', n: n, t: t, inSec: inSec });
+      return true;
+    },
+
+    /** Silences the Final Countdown's sound (the countdown stopped, or its preview). */
+    tickStop() {
+      if (!cbus) return;
+      const b = cbus;
+      const s = csend;
+      cbus = null;
+      csend = null;
+      try {
+        b.gain.setTargetAtTime(0.0001, ac.currentTime, 0.03);
+        s.gain.setTargetAtTime(0.0001, ac.currentTime, 0.03);
+        setTimeout(() => { try { b.disconnect(); s.disconnect(); } catch (e) { /* gone */ } }, 500);
+      } catch (e) { /* gone */ }
+    },
+
+    /** Test hook: the whole Final Countdown of `style` rendered offline: 10 at 1.02 s … 1 at 10.02 s, 0 at 11.02 s
+     *  (a second of silence first, as live, where the chain has been running since prime()). */
+    renderCount(style, secs) {
+      const OAC = root.OfflineAudioContext;
+      const fn = COUNTS[style] || COUNTS.default;
+      if (!OAC || !fn) return Promise.resolve(null);
+      const keep = [ac, ch, bus, send, live];
+      const oc = new OAC(2, Math.round(44100 * (secs || 14)), 44100);
+      try {
+        ac = oc;
+        ch = makeChain(oc);
+        ch.out.connect(oc.destination);
+        bus = oc.createGain(); bus.gain.value = COUNT_GAIN; bus.connect(ch.pre);
+        send = oc.createGain(); send.gain.value = COUNT_GAIN; send.connect(ch.revIn);
+        live = false;
+        for (let n = 10; n >= 1; n--) { seed = 4000 + n; fn(n, 1.02 + (10 - n), P); }
+      } finally { ac = keep[0]; ch = keep[1]; bus = keep[2]; send = keep[3]; live = keep[4]; }
+      return oc.startRendering();
+    },
 
     /** Test hook: the sound of `style` rendered offline (an AudioBuffer of `secs` seconds) with the
      *  animation's cues ({ name, t, ... } as fx.js reports them), for checks and demo videos. */
