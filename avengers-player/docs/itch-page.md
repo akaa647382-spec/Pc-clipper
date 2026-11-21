@@ -35,8 +35,9 @@ the downloads" link.
 > - **Stays on the clock.** Pause for snacks, and it catches up. A crash or a power cut? It reopens and joins
 >   where the clock says.
 > - **The Final Countdown.** The last ten seconds tick in the clock panel, in the style of the animation you pick.
-> - **Happy New Year animations.** Stark, Arc Reactor, Hot Rod, Infinity, Gamma, War Machine, TVA, Doom, Fireworks
->   or Minimal, each building the words in its own way at midnight.
+> - **Happy New Year animations.** Stark, Arc Reactor, Hot Rod, Infinity (the Thanos one), Gamma, War Machine, TVA,
+>   Doom, Fireworks or Minimal, each building the words in its own way and its own lettering at midnight. Switch on
+>   **Animation sound** and each one gets a sound of its own.
 > - **Your midnight, recorded.** It saves the last 40 seconds before midnight as a video clip, for everyone who forgot
 >   to film.
 > - **Rehearse first.** A New Year's Eve simulation shows you the whole night in a few minutes, on any day.
