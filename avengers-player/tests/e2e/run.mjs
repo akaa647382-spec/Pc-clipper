@@ -360,10 +360,12 @@ async function tenPreviews(s) {
   k0 = (await ticks()).length;
   await page.click('#previewTen');
   await sleep(2300);
+  const s0 = await page.evaluate(() => window.__AP.Sfx.stops);
   await page.click('#previewTen');
   const heard = (await ticks()).length - k0;
   await sleep(2000);
-  check('stopped early: silenced, and nothing more is heard', heard >= 2 && (await ticks()).length - k0 === heard && await page.evaluate(() => !window.__AP.CountSound.heard), heard + ' then ' + ((await ticks()).length - k0));
+  const s1 = await page.evaluate(() => window.__AP.Sfx.stops);
+  check('stopped early: its sound is silenced at once, and nothing more is heard', heard >= 2 && (await ticks()).length - k0 === heard && s1 === s0 + 1, heard + ' then ' + ((await ticks()).length - k0) + ', silenced ' + (s1 - s0) + 'x');
   const tickMs = await page.evaluate(() => {
     let worst = 0;
     for (let n = 10; n >= 1; n--) { const a = performance.now(); window.__AP.Sfx.tick('doom', n, 5); worst = Math.max(worst, performance.now() - a); }
@@ -371,15 +373,16 @@ async function tenPreviews(s) {
     return Math.round(worst * 100) / 100;
   });
   check('a number of the countdown sound costs its frame almost nothing', tickMs < 3, tickMs + ' ms at most');
-  await page.click('label:has(#optCountSound)');
-  check('and switched off again', await page.evaluate(() => window.__AP.cfg.countdownSound === false));
 
-  // Never during a test run: refused, and a test run that starts stops a running preview.
+  // Never during a test run: refused, and a test run that starts stops a running preview (and its sound).
   await page.click('#previewTen');
   await waitFor(page, () => document.getElementById('overlay').classList.contains('final'), null, 1500);
+  await sleep(300);
+  const s2 = await page.evaluate(() => window.__AP.Sfx.stops);
   await page.click('.tab[data-tab="test"]');
   await page.click('[data-test="slip"]');
   check('a test run that starts stops the preview', await waitFor(page, () => !!window.__AP.Engine.test && !window.__AP.UI.tenPv && !document.getElementById('overlay').classList.contains('final'), null, 3000));
+  check('and silences its countdown sound', await page.evaluate((x) => window.__AP.Sfx.stops === x + 1, s2));
   await page.click('.tab[data-tab="display"]');
   await page.click('#previewTen');
   await sleep(400);
@@ -387,6 +390,8 @@ async function tenPreviews(s) {
   check('during a test run the Final Countdown preview is refused and says why', !t.pv && !t.final && /Not during a test run/.test(t.toasts), JSON.stringify({ pv: t.pv, final: t.final, toasts: t.toasts }));
   await page.evaluate(() => window.__AP.Engine.endTest('Stopped by the test.'));
   await waitFor(page, () => !window.__AP.Engine.test && document.getElementById('video').paused, null, 4000);
+  await page.click('label:has(#optCountSound)');
+  check('the countdown sound switched off again', await page.evaluate(() => window.__AP.cfg.countdownSound === false));
 }
 
 const scenarios = {
@@ -1719,6 +1724,35 @@ const scenarios = {
       check('and its snap is found right there, by the flash alone', Math.abs(v.snap - 9056.668) < 1e-6 && await shows(s.page, 'preflight', /Snap point confirmed in this file2:30:56\.668 · found by the app: the flash of the snap/), v.preflight.slice(0, 300));
       await s.page.keyboard.press('Escape');
       await stripClosed(s.page);
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally { await s.close(); }
+  },
+
+  async countsound() {
+    // A rehearsal of the armed countdown (same midnight) ended in its last ten seconds: its countdown
+    // sound is silenced at once, and the real countdown starts afresh with all ten numbers to come.
+    const s = await launch(newProfile());
+    try {
+      await loadMovie(s.page, MOVIE);
+      await setSnap(s.page, SNAP);
+      await s.page.evaluate(() => { window.__AP.cfg.countdownSound = true; });
+      await armIn(s.page, 600);
+      check('armed, waiting for the start', await waitPhase(s.page, 'standby', 8000));
+      const target = await s.page.evaluate(() => window.__AP.Engine.session.targetEpoch);
+      await s.page.evaluate(() => window.__AP.Engine.startTest('snap', 20));
+      check('a Snap test of the armed countdown runs, on the same midnight', await waitFor(s.page, (x) => !!window.__AP.Engine.test && window.__AP.Engine.session.targetEpoch === x, target, 5000));
+      check('its countdown is heard (10 … 5)', await waitFor(s.page, () => !!window.__AP.CountSound.done[5] && window.__AP.CountSound.heard, null, 40000),
+        JSON.stringify(await s.page.evaluate(() => ({ key: window.__AP.CountSound.key, done: Object.keys(window.__AP.CountSound.done) }))));
+      const s0 = await s.page.evaluate(() => window.__AP.Sfx.stops);
+      await s.page.evaluate(() => window.__AP.Engine.endTest('Stopped by the test.'));
+      check('ended in its last ten seconds: the sound is silenced at once', await s.page.evaluate((x) => window.__AP.Sfx.stops === x + 1, s0));
+      await sleep(600);
+      const v = await s.page.evaluate(() => ({ armed: window.__AP.Engine.mode, key: window.__AP.CountSound.key, done: Object.keys(window.__AP.CountSound.done).filter((k) => /^\d+$/.test(k)) }));
+      check('the real countdown starts afresh: still armed, nothing of it marked as heard', v.armed === 'armed' && v.key === 'real@' + Math.floor(target / 1000) * 1000 && v.done.length === 0, JSON.stringify(v));
+      // Hidden clock panel: no Final Countdown on screen, so no countdown sound.
+      await s.page.evaluate(() => { window.__AP.cfg.showOverlay = false; });
+      await sleep(300);
+      check('with the clock panel hidden there is no countdown to hear', await s.page.evaluate(() => window.__AP.CountSound.key === ''));
       check('no page errors', s.errors.length === 0, s.errors.join(' | '));
     } finally { await s.close(); }
   },

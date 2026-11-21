@@ -727,6 +727,7 @@
     /* ---- the Final Countdown's sound ---- */
 
     ticks: [],        // test hook: the numbers scheduled, { style, n, t (audio time), inSec }
+    stops: 0,         // test hook: how many times a countdown being heard was silenced
 
     /** fn(n, t, P): the sound of number n (10 … 1) of the Final Countdown `id`, at audio time t. */
     defineCount(id, fn) { if (id && typeof fn === 'function') COUNTS[id] = fn; },
@@ -756,6 +757,7 @@
     /** Silences the Final Countdown's sound (the countdown stopped, or its preview). */
     tickStop() {
       if (!cbus) return;
+      this.stops++;
       const b = cbus;
       const s = csend;
       cbus = null;

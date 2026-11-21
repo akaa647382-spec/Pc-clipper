@@ -1353,6 +1353,7 @@
       if (this.test && this.test.kind === 'late') Late.dismissedFor = this.test.prevDismissed;
       if (this.test) { Clock.testOffsetMs = 0; UI.prevNow = 0; this.test = null; UI.onTest(); }
       this.mode = 'free';
+      CountSound.reset();
       Celebration.stop();
       UI.hideSlip();
       el.blocked.hidden = true;
@@ -1714,6 +1715,7 @@
       SnapCam.close();
       if (kind === 'snap' || kind === 'real') SnapCam.watchTest(atTarget); else SnapCam.live = null;
       Clock.testOffsetMs = simNow - realNow;
+      CountSound.reset();                // the clock jumps: whatever countdown was heard is over
       UI.prevNow = 0;                    // the clock jumped (maybe past the target): no celebration for that
       this.test = {
         kind: kind, title: title, t0: simNow, eventEpoch: eventEpoch, endEpoch: endEpoch, startMode: startMode, atTarget: atTarget, targetEpoch: s.targetEpoch,
@@ -1898,6 +1900,7 @@
       this.dropWaiter();
       Clock.testOffsetMs = 0;
       UI.prevNow = 0;                    // the clock jumped back: that is not the target going by
+      CountSound.reset();                // the rehearsal's countdown sound stops here; the real one starts afresh
       this.test = null;
       if (t.kind === 'late') {
         // "Not now" is as it was before the test; the real clock decides whether anybody is late.
@@ -2355,9 +2358,10 @@
       let kind = '';
       if (cfg.countdownSound) {
         if (pvAt) { at = pvAt; kind = 'pv'; }
-        else if (cfg.finalTen && s && Engine.mode === 'armed') { at = Math.floor(s.targetEpoch / 1000) * 1000; kind = 'real'; }
+        else if (cfg.finalTen && cfg.showOverlay && s && Engine.mode === 'armed') { at = Math.floor(s.targetEpoch / 1000) * 1000; kind = 'real'; }
       }
-      const key = at && now < at + 50 ? kind + '@' + at : '';
+      // A rehearsal of the same midnight is a countdown of its own (as for the replay's moments).
+      const key = at && now < at + 50 ? kind + '@' + at + (kind === 'real' && Engine.test ? '#' + Engine.test.t0 : '') : '';
       if (key !== this.key) {
         if (this.heard && now < this.at) this.silence();      // ended before its moment
         this.key = key;
@@ -2374,7 +2378,8 @@
       }
       for (let n = 10; n >= 1; n--) {
         if (this.done[n]) continue;
-        const due = at - n * 1000 - Clock.now();             // ms until number n appears (read now, not at the frame's start)
+        let due = at - n * 1000 - Clock.now();               // ms until number n appears (read now, not at the frame's start)
+        if (kind === 'pv' && n === 10) due = Math.min(due, 0); // the preview's 10 is on screen from the click
         if (due > this.LEAD_MS) break;                        // the numbers after it are later still
         this.done[n] = true;
         // A number already on screen is heard late only by a moment (the preview's 10 shows at once);
@@ -2387,6 +2392,15 @@
     silence() {
       this.heard = false;
       try { if (window.APSfx && window.APSfx.tickStop) window.APSfx.tickStop(); } catch (e) { /* gone */ }
+    },
+
+    /** The app's clock jumps (a test run starts or ends, the movie is reset): the countdown heard so far is over. */
+    reset() {
+      if (this.heard) this.silence();
+      this.key = '';
+      this.at = 0;
+      this.done = Object.create(null);
+      this.heard = false;
     }
   };
 
@@ -4973,6 +4987,7 @@
       let next = Math.ceil(now / 1000) * 1000;
       if (next - now < 300) next += 1000;
       this.tenPv = next + 9000;
+      if (cfg.countdownSound && window.APSfx) { try { window.APSfx.prime(); } catch (e) { /* only a head start */ } }   // its 10 is heard at once
       this.renderTenButton();
       if (!cfg.finalTen) toast('The Final Countdown is switched off: this is how it would look');
     },
