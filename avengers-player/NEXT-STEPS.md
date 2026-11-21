@@ -17,6 +17,12 @@ Where things stand, so the next session can carry on without the chat history.
     8 fixed in `f2ee876`. Not fixed on purpose: turning the sound on *after* the midnight replay has started leaves
     it out of that clip (the fix would route every user's replay sound through Web Audio, sound on or not; not
     worth the risk for that case).
+- **No more RIGHT ON TIME; New Year hit congratulated** (`43f5d5b`, review fixes `665a5b6`): New Year, test runs and the
+  Preview say HAPPY NEW YEAR (a custom non-New-Year target: TARGET REACHED). Film on the clock at midnight (60 ms):
+  the Mission card says THE SNAP HIT MIDNIGHT, and when the movie is over a dialog says "You did it. Happy New Year
+  2027!" once. e2e newyear + night + ui pass.
+- **Cinematic sound: work in progress** (`b544e30`): all 10 designs written; only Arc and Hot Rod checked. The run was
+  stopped; to finish, resume workflow run `wf_a8133b35-4e8` (pixel baseline is `f133018`).
 - **Tests:** unit 143/143; e2e `ui` scenario 136/136; the crash scan of all 9 drawn animations is clean.
 
 ## Release 1.11.0
