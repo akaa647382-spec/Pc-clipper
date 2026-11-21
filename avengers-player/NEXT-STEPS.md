@@ -31,12 +31,14 @@ Where things stand, so the next session can carry on without the chat history.
 
 ## Release 1.11.0
 
-- Done: full e2e 821/821, unit 143/143, `tests/fx/shots.cjs --perf` (60 fps; every style deterministic and clean at
-  the end), built (`download/Avengers-Player-Setup-1.11.0.exe`, 93.4 MB, SHA-256
-  `693755862146676d20a3275bff88e6a2faaa684ecf7b0cf9bf9317fb4561f4e7`), 1.10.4 and the preview removed.
-- Not done: the install/update/launch check under Wine (Wine 9.0 crashes on every command in this container,
-  "free(): invalid pointer", even with the prefix that worked for earlier releases). The installer script changed
-  only in its publisher name since 1.10.4, which passed that check.
+- Rebuilt with everything above (cinematic animation sound, countdown sound, no RIGHT ON TIME, the New Year
+  congratulation): full e2e 861/861, unit 143/143, `tests/fx/shots.cjs --perf` (60 fps; Stark's p95 33 ms is the known
+  measurement quirk, frames identical to before), crash scan clean. `download/Avengers-Player-Setup-1.11.0.exe`,
+  93.4 MB, SHA-256 `f352c4583ccfb3b6e112fc27b9fe25b32ed7896428956fb7d1dbbf7bac0a4f71`; the packaged app's 26 files are
+  byte-identical to src/.
+- Not done: the install/update/launch check under Wine (Wine 9.0 crashes on every command in this container).
+- Sound review: Arc and Hot Rod had the full design check; the other animation sounds only the measured checks
+  (levels, no clipping, frames identical, no doubled cues). The user judges them by ear from the demo videos.
 
 ## What is left
 
