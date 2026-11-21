@@ -4503,6 +4503,24 @@
     applyTheme() {
       document.documentElement.dataset.theme = THEMES.some((t) => t.id === cfg.theme) ? cfg.theme : 'arc';
       $$('.theme', el.themeGrid).forEach((b) => b.classList.toggle('on', b.dataset.id === cfg.theme));
+      this.applyTen();
+    },
+
+    /**
+     * Which Final Countdown plays (data-ten on the clock panel; styles.css draws it): the one of the
+     * New Year animation that will play, the classic one for Stark, and with the animation off the
+     * app theme's. Its typeface is loaded now: one that first loads as the 10 shows is blank meanwhile.
+     */
+    applyTen() {
+      const c = Celebration.has(cfg.celebration) ? cfg.celebration : 'stark';
+      const id = c === 'stark' ? 'classic' : c === 'off' ? document.documentElement.dataset.theme || 'arc' : c;
+      if (el.overlay.dataset.ten === id) return;
+      el.overlay.dataset.ten = id;
+      try {
+        const cs = getComputedStyle(el.overlay);
+        const face = cs.getPropertyValue('--ten-face').trim();
+        if (face && document.fonts) document.fonts.load((cs.getPropertyValue('--ten-weight').trim() || '400') + ' 40px ' + face, '0123456789').catch(() => {});
+      } catch (e) { /* then it loads as it is first drawn */ }
     },
 
     /* ---- one-off renders ---- */
@@ -4642,6 +4660,7 @@
       setText(el.celebHint, CELEB_HINT[cfg.celebration] || '');
       // (A running 10 · 9 · 8 keeps its class: taking it off for a moment would restart its tick.)
       el.overlay.className = 'overlay pos-' + cfg.overlayPos + ' size-' + cfg.overlaySize + (this.lastTen ? ' final' : '') + (el.overlay.classList.contains('done') ? ' done' : '');
+      this.applyTen();
       el.stage.dataset.ov = cfg.overlayPos;
       el.btnOverlay.classList.toggle('on', cfg.showOverlay);
       el.btnLock.innerHTML = cfg.lockControls ? ICON.lock : ICON.unlock;
@@ -4744,7 +4763,7 @@
       return '';
     },
 
-    /** Display tab: plays the final ten seconds in the clock panel now, with the theme; again stops it. Settings are not touched. */
+    /** Display tab: plays the Final Countdown in the clock panel now, as the chosen animation has it; again stops it. Settings are not touched. */
     toggleTenPreview() {
       if (this.tenPv) { this.stopTenPreview(); return; }
       const now = Clock.now();

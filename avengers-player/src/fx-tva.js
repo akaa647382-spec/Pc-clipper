@@ -45,6 +45,8 @@
   if (!APFx || typeof APFx.register !== 'function') return;
 
   const DURATION = 12800;
+  // The face of the words (declared in fonts.css): Orbitron Black, set a little tighter than the default.
+  const FONT = { family: 'AP Orbitron', weight: 900, tracking: 0.08 };
   const FADE_FROM = DURATION - 1500;            // everything fades out from here
   const FADE_TO = DURATION - 220;               // and nothing at all is drawn from here on
   const PI = Math.PI;
@@ -144,6 +146,13 @@
     c.width = Math.max(1, Math.ceil(w));
     c.height = Math.max(1, Math.ceil(h));
     return c;
+  }
+
+  /** The gap between two letters of a word as the engine set them (the face's tracking). */
+  function letterGap(letters, size) {
+    let gap = Infinity;
+    for (let i = 1; i < letters.length; i++) gap = Math.min(gap, letters[i].x0 - letters[i - 1].x1);
+    return isFinite(gap) && gap >= 0 ? gap : size * FONT.tracking;
   }
 
   /* ------------------------------------------------------- the layout --- */
@@ -591,11 +600,16 @@
     g.fillRect(0, 0, 4, 64);
     P.bar = bar;
 
-    // The terminal's block cursor: a cell of amber phosphor the height of the title's capitals,
-    // with the letters' own dark halo (it reads over a bright picture), cut into scanlines.
+    // The terminal's block cursor: a cell of amber phosphor the height of the title's capitals and
+    // as wide as one of its letters in this face (the middle of their widths: the cursor sits on a
+    // letter as it erases it), with the letters' own dark halo (it reads over a bright picture), cut
+    // into scanlines. After the last letter it keeps inside the frame.
     const ts = L.titleSize;
     const cBlur = Math.max(6, ts * 0.28);                 // as the engine's halo (in the picture's pixels)
-    P.curW = ts * 0.56;
+    const TGL = env.glyphs().filter((g) => g.line === 0);
+    const lw = TGL.map((g) => g.x1 - g.x0).sort((a, b) => a - b);
+    const room = TGL.length ? W - 4 - TGL[TGL.length - 1].x1 - letterGap(TGL, ts) : ts;
+    P.curW = Math.max(ts * 0.5, Math.min(lw.length ? lw[lw.length >> 1] : ts * 0.56, ts * 0.9, room));
     P.curH = ts * 0.8;
     P.curPad = (cBlur * 1.6 + ts * 0.04) / Math.min(1, dpr) + 2;
     const cur = canvas((P.curW + P.curPad * 2) * dpr, (P.curH + P.curPad * 2) * dpr);
@@ -669,7 +683,19 @@
     const G = geometry(env);
     const tree = growTree(env, G);
     const BR = tree.all;
-    const key = [W, H, dpr, fingerprint, L.title, L.year].join('|');
+    const ALL = env.glyphs();
+    // The pictures also hold the words' shapes and sizes (the scanlines are cut from them, the
+    // cursor is sized on them, the tree grows round them): a face still on its way when the
+    // animation starts is drawn in the fallback, and once it arrives (the engine lays the words out
+    // again) the pictures are made again, never kept from the fallback.
+    let faceReady = true;
+    try {
+      const fonts = root.document && root.document.fonts;
+      const f = APFx.face ? APFx.face('tva') : null;
+      if (fonts && f) faceReady = fonts.check(f.weight + ' 40px ' + f.family);
+    } catch (e) { /* only a part of the key */ }
+    const key = [W, H, dpr, fingerprint, L.title, L.year, L.titleSize, L.yearSize, L.top, L.bottom, G.wMin, G.wMax, faceReady,
+      ALL.map((g) => g.x0.toFixed(2) + ':' + g.x1.toFixed(2)).join(',')].join('|');
     if (CACHE && CACHE.key === key) {
       // The same seed grows the same tree: its forks take their places in the cached atlas.
       for (let i = 0; i < BR.length; i++) Object.assign(BR[i], CACHE.links[i]);
@@ -718,7 +744,6 @@
 
     /* ---------------------------------------- the machines that build the words --- */
 
-    const ALL = env.glyphs();
     const TG = ALL.filter((g) => g.line === 0);
     const YG = ALL.filter((g) => g.line === 1);
     // Which digits change from the year that is ending (only when the year is a number). That year
@@ -729,15 +754,33 @@
       if (/^\d+$/.test(o) && o.length === L.year.length && YG.length === L.year.length) OLD = o;
     }
 
-    // A card of the clock: each digit is cut at its middle (the hinge, a dark hairline across it)
-    // and turns on that hinge. The digit's picture (halo included) reaches halfCell above and below
-    // it, as the engine cuts it; the card itself reaches HC.
+    // A card of the clock: each digit is cut across the middle (the hinge, a dark hairline across
+    // it) and turns on that hinge. A face sets its figures a little above or below the middle of
+    // the line (Orbitron's sit 0.055 of the size above it), so the hinge goes through the middle of
+    // the figures themselves, measured in the face, and the card (HC above and below) is centred on
+    // it. The crops are shares of a digit's picture (halo included), worked out exactly as the
+    // engine cuts it.
     const ys = L.yearSize || 1;
-    const halfCell = ys * 0.62 + (Math.max(6, L.titleSize * 0.28) * 1.6 + L.titleSize * 0.04) / Math.min(1, dpr) + 2;
+    let YOFF = 0;                                                    // the hinge, below the middle of the line
+    if (YG.length && APFx.face) {
+      const f = APFx.face('tva');
+      ctx.save();
+      ctx.font = f.weight + ' ' + ys + 'px ' + f.family;
+      ctx.textBaseline = 'middle';
+      const m = ctx.measureText(L.year);
+      ctx.restore();
+      const up = m.actualBoundingBoxAscent;
+      const dn = m.actualBoundingBoxDescent;
+      if (up > 0 && dn > 0 && up + dn < ys * 1.5) YOFF = clamp((dn - up) / 2, -ys * 0.12, ys * 0.12);
+    }
+    const HY = L.yearY + YOFF;
+    const cellPad = (Math.max(6, L.titleSize * 0.28) * 1.6 + L.titleSize * 0.04) / Math.min(1, dpr) + 2;
+    const cellY0 = Math.floor((L.yearY - ys * 0.62 - cellPad) * dpr);              // a digit's picture, in device px
+    const cellH = Math.max(1, Math.ceil((L.yearY + ys * 0.62 + cellPad) * dpr) - cellY0);
+    const VH = (HY * dpr - cellY0) / cellH;                          // the hinge, as a share of the picture
     const HC = ys * 0.5;
-    const KF = Math.min(1, HC / halfCell);
-    const HG = 0;                                                    // the halves meet at the hinge
-    const HV = Math.max(0.6, 1.15 * s) / (2 * halfCell);             // half the hairline, as a share of the picture
+    const KV = HC * dpr / cellH;                                     // half a card's height, as a share
+    const HV = Math.max(0.6, 1.15 * s) * dpr / cellH;                // half the hairline, as a share
     let CWH = 0;                                                     // half a card's width
     for (const g of YG) CWH = Math.max(CWH, (g.x1 - g.x0) / 2 + ys * 0.08);
 
@@ -780,8 +823,11 @@
       TCH.push({ g: space ? null : TG[gi++] || null, x: 0, tOn: tt, tOff: 0, m: null });
       tt += space ? 1.7 * keyMs : keyMs * (0.82 + 0.36 * rnd());
     }
-    // where the cursor sits on each character (its left edge), and after the last one
-    const tGap = L.titleSize * 0.14;
+    // Where the cursor sits (its left edge): on each character where the engine set it (a space one
+    // letter gap after the letter before it), and after the last letter, where the next one would go.
+    // (On the left edge, a cursor wider than its letter only ever reaches over letters not typed yet,
+    // or already erased.)
+    const tGap = letterGap(TG, L.titleSize);
     let lastX1 = null;
     for (let c = 0; c < TCH.length; c++) {
       const e = TCH[c];
@@ -789,7 +835,7 @@
       if (lastX1 != null) { e.x = lastX1 + tGap; continue; }
       let nx = L.cx;
       for (let j = c + 1; j < TCH.length; j++) if (TCH[j].g) { nx = TCH[j].g.x0; break; }
-      e.x = nx - L.titleSize * 0.42;
+      e.x = nx - tGap - P.curW;
     }
     const endX = lastX1 != null ? Math.min(lastX1 + tGap, W - P.curW - 4) : L.cx - P.curW / 2;
     const T_TYPED = TCH.length ? TCH[TCH.length - 1].tOn : tType;     // the cursor is at the end of the line
@@ -817,7 +863,7 @@
       }
       if (YG.length) {
         const hg = Math.max(0.6, 1.1 * s);
-        YROWS = [rows(L.yearY - ys * 0.6, L.yearY - hg), rows(L.yearY + hg, L.yearY + ys * 0.6)];
+        YROWS = [rows(L.yearY - ys * 0.6, HY - hg), rows(HY + hg, L.yearY + ys * 0.6)];
       }
     }
 
@@ -883,16 +929,26 @@
     function drawOpening(t, fa) {
       if (t > 760) return;
       if (t < 360) {
-        // A warm flash over the whole picture, well under a quarter of full brightness.
+        // A warm flash over the whole picture, well under a quarter of full brightness. (A gradient
+        // over the whole frame is the dearest thing drawn in this animation: it is filled only as
+        // far out as it still adds a level of light, which shrinks fast as it fades.)
         const a = 0.19 * (1 - t / 360) * (1 - t / 360) * fa;
-        const gr = ctx.createRadialGradient(G.cx, G.lineY, 0, G.cx, G.lineY, Math.max(W, H) * 0.8);
-        gr.addColorStop(0, 'rgba(255,200,130,' + a.toFixed(3) + ')');
-        gr.addColorStop(0.45, 'rgba(244,162,60,' + (a * 0.4).toFixed(3) + ')');
-        gr.addColorStop(1, 'rgba(200,98,42,0)');
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = gr;
-        ctx.fillRect(0, 0, W, H);
-        n++;
+        const e = 1 / 255;
+        const reach = 0.4 * a >= e ? 0.45 + 0.55 * (1 - e / (0.4 * a)) : a > e ? 0.75 * (1 - e / a) : 0;
+        if (reach > 0) {
+          const R = Math.max(W, H) * 0.8;
+          const gr = ctx.createRadialGradient(G.cx, G.lineY, 0, G.cx, G.lineY, R);
+          gr.addColorStop(0, 'rgba(255,200,130,' + a.toFixed(3) + ')');
+          gr.addColorStop(0.45, 'rgba(244,162,60,' + (a * 0.4).toFixed(3) + ')');
+          gr.addColorStop(1, 'rgba(200,98,42,0)');
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = gr;
+          const r = reach * R;
+          const x0 = Math.max(0, Math.floor(G.cx - r));
+          const y0 = Math.max(0, Math.floor(G.lineY - r));
+          ctx.fillRect(x0, y0, Math.min(W, Math.ceil(G.cx + r)) - x0, Math.min(H, Math.ceil(G.lineY + r)) - y0);
+          n++;
+        }
       }
       const k = 1 - smooth(0, 700, t);
       const grow = easeOut(clamp(t / 260, 0, 1));
@@ -1289,7 +1345,7 @@
     /* ------------------------------------------------------- the words --- */
 
     const after = (dt, len) => (dt >= 0 && dt < len ? (1 - dt / len) * (1 - dt / len) : 0);
-    const TF = { sy: null, crop: [0, 0, 1, 1], op: undefined };
+    const TF = { sy: null, dy: 0, crop: [0, 0, 1, 1], op: undefined };
     const TL = { sy: null, op: undefined };
     /** The digits that wait for the one that changes are dimmer; they brighten as the new year lands. */
     const faceA = (d, t) => (OLD && d.tRoll < 0 ? WAIT_A + (1 - WAIT_A) * smooth(T_LANDED - 30, T_LANDED + 160, t) : 1);
@@ -1298,6 +1354,7 @@
     function face(F, v0, v1, sy, a, hot) {
       if (!F || a <= 0.004 || v1 - v0 < 0.002 || (sy != null && sy < 0.012)) return;
       TF.sy = sy;
+      TF.dy = sy == null ? 0 : YOFF * (1 - sy);    // (the engine turns a letter on its middle line: this keeps the hinge still)
       TF.crop[1] = v0;
       TF.crop[3] = v1;
       TF.op = hot ? 'lighter' : undefined;
@@ -1306,8 +1363,8 @@
     }
 
     function card(F, a, hot) {
-      face(F, 0, 0.5 - HG, null, a, hot);
-      face(F, 0.5 + HG, 1, null, a, hot);
+      face(F, 0, VH, null, a, hot);
+      face(F, VH, 1, null, a, hot);
     }
 
     /**
@@ -1324,24 +1381,24 @@
       if (th < PI / 2) hinge(d, A, aA * fa); else hinge(d, B, aB * fa);
       if (th < PI / 2) {
         const sy = Math.cos(th);
-        face(B, 0, Math.min(0.5 - HG, 0.5 - 0.5 * KF * sy), null, aB * fa);
-        face(A, 0.5 + HG, 1, null, aA * fa);
-        face(A, 0, 0.5 - HG, sy, aA * fa);
-        if (!lo) face(A, 0, 0.5 - HG, sy, aA * fa * 0.45 * (1 - sy), true);         // catching the light
+        face(B, 0, VH - KV * sy, null, aB * fa);
+        face(A, VH, 1, null, aA * fa);
+        face(A, 0, VH, sy, aA * fa);
+        if (!lo) face(A, 0, VH, sy, aA * fa * 0.45 * (1 - sy), true);              // catching the light
         // (a blank flap shows only its edge, which is lit all the way: it is what uncovers B)
-        run(P.strips[1], g.cx - CWH, g.cx + CWH, g.cy - sy * HC, fa * ((A ? 0 : 0.3) + (A ? 0.85 : 0.55) * (1 - sy * sy)));
+        run(P.strips[1], g.cx - CWH, g.cx + CWH, HY - sy * HC, fa * ((A ? 0 : 0.3) + (A ? 0.85 : 0.55) * (1 - sy * sy)));
       } else {
         const sy = f < 1 ? -Math.cos(th) : 1 - BOUNCE * Math.sin(PI * (u - FALL) / (1 - FALL));
-        face(B, 0, 0.5 - HG, null, aB * fa);
-        if (f < 1) face(A, Math.max(0.5 + HG, 0.5 + 0.5 * KF * sy), 1, null, aA * fa);
-        face(B, 0.5 + HG, 1, sy, aB * fa);
-        if (!lo) face(B, 0.5 + HG, 1, sy, aB * fa * 0.45 * (1 - sy), true);
+        face(B, 0, VH, null, aB * fa);
+        if (f < 1) face(A, VH + KV * sy, 1, null, aA * fa);
+        face(B, VH, 1, sy, aB * fa);
+        if (!lo) face(B, VH, 1, sy, aB * fa * 0.45 * (1 - sy), true);
         if (f >= 1 && d.hot > 0.01) {
           // landed: white-hot for a moment, bouncing with the flap
-          face(B, 0, 0.5 - HG, null, d.hot, true);
-          face(B, 0.5 + HG, 1, sy, d.hot, true);
+          face(B, 0, VH, null, d.hot, true);
+          face(B, VH, 1, sy, d.hot, true);
         }
-        if (f < 1) run(P.strips[1], g.cx - CWH, g.cx + CWH, g.cy + sy * HC, fa * ((B ? 0 : 0.3) + (B ? 0.85 : 0.55) * (1 - sy * sy)));
+        if (f < 1) run(P.strips[1], g.cx - CWH, g.cx + CWH, HY + sy * HC, fa * ((B ? 0 : 0.3) + (B ? 0.85 : 0.55) * (1 - sy * sy)));
       }
     }
 
@@ -1374,25 +1431,26 @@
         }
         // the light of the cards landing: a flick as each one lands, a clack for the new year
         if (kC > 0.01) {
-          stamp(P.flash, g.cx, g.cy + HC * 0.45, ys * 1.4, 0.2 * kC * fa);
-          stamp2(P.flareH, g.cx - CWH * 3.2, g.cy + HC - 12 * s, CWH * 6.4, 24 * s, 0.95 * kC * fa);
+          stamp(P.flash, g.cx, HY + HC * 0.45, ys * 1.4, 0.2 * kC * fa);
+          stamp2(P.flareH, g.cx - CWH * 3.2, HY + HC - 12 * s, CWH * 6.4, 24 * s, 0.95 * kC * fa);
           if (d.hot > 0.01 && t >= d.tLand + ((d.tRoll >= 0 ? ROLL_DUR : FLAP_DUR) * (1 - FALL))) card(g, d.hot, true);  // (while it bounces, flip() draws it)
         } else if (!d.clack) {
           const kIn = after(t - d.tLand, 240);
-          if (kIn > 0.01) stamp2(P.flareH, g.cx - CWH * 1.5, g.cy + HC - 8 * s, CWH * 3, 16 * s, 0.5 * kIn * fa);
+          if (kIn > 0.01) stamp2(P.flareH, g.cx - CWH * 1.5, HY + HC - 8 * s, CWH * 3, 16 * s, 0.5 * kIn * fa);
           // the digits that waited light up with the one that lands last
           const kL = lo ? 0 : after(t - T_LANDED, 450);
           if (kL > 0.01 && t < d.tOut) card(g, 0.28 * kL * fa, true);
         }
         const kO = after(t - d.tOut - BLANK_DUR * FALL, 220);
-        if (kO > 0.01) stamp2(P.flareH, g.cx - CWH * 1.4, g.cy + HC - 7 * s, CWH * 2.8, 14 * s, 0.4 * kO * fa);
+        if (kO > 0.01) stamp2(P.flareH, g.cx - CWH * 1.4, HY + HC - 7 * s, CWH * 2.8, 14 * s, 0.4 * kO * fa);
       }
       // the hinges: a dark hairline through the strokes of every digit that is up
       for (const d of DIG) {
         if (!d.hf || d.ha <= 0.004) continue;
         TF.sy = null;
-        TF.crop[1] = 0.5 - HV;
-        TF.crop[3] = 0.5 + HV;
+        TF.dy = 0;
+        TF.crop[1] = VH - HV;
+        TF.crop[3] = VH + HV;
         TF.op = undefined;
         env.glyph(d.hf, Math.min(1, 0.9 * d.ha), INK, TF);
         n++;
@@ -1629,5 +1687,5 @@
     return { step: function () {}, draw: draw, prime: prime };
   }
 
-  APFx.register('tva', { name: 'TVA', duration: DURATION, font: { family: 'AP Orbitron', weight: 900, tracking: 0.08 }, create: create });
+  APFx.register('tva', { name: 'TVA', duration: DURATION, font: FONT, create: create });
 })(typeof window !== 'undefined' ? window : this);

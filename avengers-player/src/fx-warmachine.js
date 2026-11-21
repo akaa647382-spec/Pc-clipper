@@ -164,6 +164,25 @@
     return TEX;
   }
 
+  /**
+   * The power-on flash over the whole frame (a radial light from the middle), drawn once small in the
+   * frame's shape and stretched over the frame without smoothing: its steps are far below one level
+   * of brightness, and a gradient worked out for every pixel of a big frame costs as much as all the
+   * rest of the frame (it made the first frames late). Kept per shape, like the textures.
+   */
+  const FLASH = Object.create(null);
+  function flashOf(W, H) {
+    const w = 96;
+    const h = Math.max(8, Math.min(512, Math.round(w * H / Math.max(1, W))));
+    const key = w + 'x' + h;
+    if (FLASH[key]) return FLASH[key];
+    const c = canvas(w, h);
+    const g = c.getContext('2d');
+    g.fillStyle = radial(g, w / 2, h / 2, Math.max(w, h) * 0.8, [[0, 'rgba(232,238,255,1)'], [0.4, 'rgba(210,220,245,0.55)'], [1, 'rgba(190,200,235,0.15)']]);
+    g.fillRect(0, 0, w, h);
+    return (FLASH[key] = c);
+  }
+
   /* -------------------------------------------------------------- style --- */
 
   function create(env) {
@@ -191,7 +210,34 @@
 
     const TS = L.titleSize;
     const BX = L.cx;
-    const BY = (L.top + L.bottom) / 2;
+    // Where the ink of the letters is, above and below the middle of each line. A typeface sets its
+    // capitals at a height of its own (Black Ops One's sit about a tenth of their size above the
+    // middle), so the target boxes, the scan lines and the counter's window are fitted to the ink.
+    const GL = env.glyphs();
+    const INK_UP = [TS * 0.37, L.yearSize * 0.37];
+    const INK_DN = [TS * 0.37, L.yearSize * 0.37];
+    {
+      const face = APFx.face ? APFx.face('warmachine') : null;
+      const up = [0, 0];
+      const dn = [0, 0];
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+      for (const g of face ? GL : []) {
+        ctx.font = face.weight + ' ' + g.size + 'px ' + face.family;
+        const m = ctx.measureText(g.ch);
+        if (m.actualBoundingBoxAscent > -g.size && m.actualBoundingBoxDescent > -g.size &&
+          m.actualBoundingBoxAscent + m.actualBoundingBoxDescent > g.size * 0.2) {
+          up[g.line] = Math.max(up[g.line], m.actualBoundingBoxAscent);
+          dn[g.line] = Math.max(dn[g.line], m.actualBoundingBoxDescent);
+        }
+      }
+      ctx.restore();
+      for (let l = 0; l < 2; l++) if (up[l] + dn[l] > 0) { INK_UP[l] = up[l]; INK_DN[l] = dn[l]; }
+    }
+    const inkTop = (g) => g.cy - INK_UP[g.line];
+    const inkBot = (g) => g.cy + INK_DN[g.line];
     // The ink of each line (from points on the letters), for the reticle's openings and the brackets.
     const split = L.year ? (L.titleY + L.yearY) / 2 : Infinity;
     const ink = [{ x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity }, { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity }];
@@ -205,7 +251,7 @@
       if (y > b.y1) b.y1 = y;
     }
     if (!isFinite(ink[0].x0)) {                   // no points: guess from the layout
-      ink[0] = { x0: W * 0.2, x1: W * 0.8, y0: L.titleY - TS * 0.4, y1: L.titleY + TS * 0.4 };
+      ink[0] = { x0: W * 0.2, x1: W * 0.8, y0: L.titleY - INK_UP[0], y1: L.titleY + INK_DN[0] };
     }
     const lines = [ink[0]];
     if (isFinite(ink[1].x0)) lines.push(ink[1]);
@@ -222,6 +268,24 @@
     const inkY0 = lines[0].y0 - half;
     const inkY1 = lines[lines.length - 1].y1 + half;
     const inkH = inkY1 - inkY0;
+    const BY = (inkY0 + inkY1) / 2;               // the middle of the words as they are seen
+    // The side scales leave a gap where the words reach them (a narrow frame, portrait: the words
+    // are nearly as wide as the frame), so their ticks never run into the ends of the words.
+    const SCALE_GAPS = [0, 1].map((side) => {
+      const x = side ? W * 0.94 : W * 0.06;
+      const m = TS * 0.3;
+      const reach = H * 0.024 + m;
+      const gaps = [];
+      for (const b of BOXES) if (x + reach > b.x0 && x - reach < b.x1) gaps.push([b.y0 - m, b.y1 + m]);
+      gaps.sort((p, q) => p[0] - q[0]);
+      const merged = [];
+      for (const gp of gaps) {
+        const last = merged[merged.length - 1];
+        if (last && gp[0] <= last[1]) last[1] = Math.max(last[1], gp[1]); else merged.push(gp);
+      }
+      return merged;
+    });
+    const inGap = (gaps, y) => { for (let i = 0; i < gaps.length; i++) if (y > gaps[i][0] && y < gaps[i][1]) return true; return false; };
 
     /* --- the letters: acquired, one at a time --------------------------- */
 
@@ -229,7 +293,7 @@
     // wiped out), det (the boot's scan finds it), b (its target box) }; the year's digits also have
     // lock (when the counter stops on it), slot, and their drum: seq (its digits), run and speed.
     const DPR = env.dpr;
-    const LET = env.glyphs().map((g) => ({ g: g, arr: 0, out: 0, det: 0, lock: -1, slot: -1, seq: null, run: 0, speed: 0, b: null }));
+    const LET = GL.map((g) => ({ g: g, arr: 0, out: 0, det: 0, lock: -1, slot: -1, seq: null, run: 0, speed: 0, b: null }));
     const NL = LET.length;
     const TITLE = LET.filter((e) => e.g.line === 0);
     const YEAR = LET.filter((e) => e.g.line === 1);
@@ -272,8 +336,8 @@
     let T_CONTACTS_END = 0;
     for (const e of LET) {
       const g = e.g;
-      e.det = scanPass(g.cy);
-      e.b = [g.x0 - g.size * 0.17, g.top - g.size * 0.15, g.x1 + g.size * 0.17, g.bottom + g.size * 0.15];
+      e.det = scanPass((inkTop(g) + inkBot(g)) / 2);
+      e.b = [g.x0 - g.size * 0.17, inkTop(g) - g.size * 0.15, g.x1 + g.size * 0.17, inkBot(g) + g.size * 0.15];
       T_CONTACTS_END = Math.max(T_CONTACTS_END, e.arr + 30);
     }
     // The readout's gate round the year's digits.
@@ -305,7 +369,7 @@
       const first = LET[idx[0]].g;
       const lastG = LET[idx[idx.length - 1]].g;
       const b = l === 0 || lines.length > 1 ? BOXES[l]
-        : { x0: first.x0 - TS * 0.25, x1: lastG.x1 + TS * 0.25, y0: first.top - TS * 0.15, y1: first.bottom + TS * 0.15 };
+        : { x0: first.x0 - TS * 0.25, x1: lastG.x1 + TS * 0.25, y0: inkTop(first) - TS * 0.15, y1: inkBot(first) + TS * 0.15 };
       const cuts = new Float64Array(idx.length + 1);
       cuts[0] = b.x0;
       for (let i = 1; i < idx.length; i++) cuts[i] = (LET[idx[i - 1]].g.x1 + LET[idx[i]].g.x0) / 2;
@@ -520,10 +584,7 @@
 
     /* --- precomputed light --------------------------------------------- */
 
-    const flashGrad = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.8);
-    flashGrad.addColorStop(0, 'rgba(232,238,255,1)');
-    flashGrad.addColorStop(0.4, 'rgba(210,220,245,0.55)');
-    flashGrad.addColorStop(1, 'rgba(190,200,235,0.15)');
+    const flash = flashOf(W, H);
 
     // Glints on the letters: a fixed shuffle of word points.
     const NOISE = new Float32Array(512);
@@ -591,8 +652,9 @@
       // per cent go a little early: a whole-frame fill is the dearest thing drawn in these frames).
       if (t < 290) {
         ctx.globalAlpha = 0.16 * Math.pow(1 - t / 420, 1.7) * (1 - smooth(190, 290, t));
-        ctx.fillStyle = flashGrad;
-        ctx.fillRect(0, 0, W, H);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(flash, 0, 0, W, H);
+        ctx.imageSmoothingEnabled = true;
         count++;
       }
       const y = H / 2;
@@ -745,11 +807,20 @@
         const a = lit(x, t) * keep;
         if (a <= 0.01 || tapeH < 2) continue;
         const dir = side ? -1 : 1;                    // ticks point into the picture
-        hudRect(x - w / 2, tapeY - tapeH, w, tapeH * 2, 0.5 * a);
+        const gaps = SCALE_GAPS[side];
+        // the spine, open where the words reach it
+        let s0 = tapeY - tapeH;
+        const s1 = tapeY + tapeH;
+        for (const gp of gaps) {
+          if (gp[1] <= s0 || gp[0] >= s1) continue;
+          if (gp[0] > s0) hudRect(x - w / 2, s0, w, gp[0] - s0, 0.5 * a);
+          s0 = Math.max(s0, gp[1]);
+        }
+        if (s1 > s0) hudRect(x - w / 2, s0, w, s1 - s0, 0.5 * a);
         for (let i = -40; i <= 40; i++) {
           const yy = tapeY + i * step + scroll - step * 2.5;
           const d = Math.abs(yy - tapeY) / tapeH;
-          if (d > 1) continue;
+          if (d > 1 || (gaps.length && inGap(gaps, yy))) continue;
           const major = ((i % 5) + 5) % 5 === 0;
           if (lo && !major && i % 2) continue;
           const len = (major ? 0.024 : 0.011) * H;
@@ -1197,11 +1268,14 @@
       const i = Math.floor(pos);
       const f = pos - i;
       const pitch = g.size;
-      const wy0 = g.cy - pitch / 2;
-      let wy1 = g.cy + pitch / 2;
+      // the window, as high as a digit's pitch, round the ink of the digits
+      const mid = (inkTop(g) + inkBot(g)) / 2;
+      const wy0 = mid - pitch / 2;
+      let wy1 = mid + pitch / 2;
       const p = (t - e.arr) / SCAN_T;
       const sy = p < 1 ? scanY(g, Math.min(1, p / 0.8)) : Infinity;
       if (sy < wy1) wy1 = sy;
+      const heat = 1 - smooth(0.8, 1, p);          // the white-hot ink cools off once the line has passed
       // A drum at full speed smears its digits: two fainter copies (without the dark halo) where
       // they were a moment ago. It stops dead at its lock, crisp.
       const smear = Math.min(pitch * 0.5, (pos - drumAt(e, t - 16)) * pitch);
@@ -1213,7 +1287,7 @@
           band(src, g, BLUR, PAD_BARE, 0.34, dy + smear * 0.45, wy0, wy1);
         }
         band(src, g, FILL, PAD_HALO, 0.88, dy, wy0, wy1);
-        if (p < 1) band(src, g, SHEEN, PAD_BARE, 0.9, dy, Math.max(wy0, sy - g.size * 0.3), wy1, 'lighter');
+        if (p < 1) hotBand(src, g, heat, sy, -1, dy, wy0, wy1);
       }
       if (p < 0.8) scanLine(g, sy, (1 - smooth(0.64, 0.8, p)) * Math.min(1, p * 10), lo);
     }
@@ -1235,8 +1309,23 @@
       ctx.fillRect(x0, y - 0.75 * k * s, w, Math.max(1, 1.5 * k * s));
       count++;
     }
-    // Where the scan line is when it has gone p of the way over a letter (from just above to just below).
-    const scanY = (g, p) => g.top - g.size * 0.12 + (g.bottom - g.top + g.size * 0.24) * p;
+    // Where the scan line is when it has gone p of the way over a letter: from above its ink (far
+    // enough that its dark halo is faint there, so the line brings the halo in and takes it away
+    // instead of it appearing or vanishing at once) to just below the ink.
+    const scanY = (g, p) => inkTop(g) - g.size * 0.3 + (inkBot(g) - inkTop(g) + g.size * 0.42) * p;
+    // The white-hot ink beside the scan line, cooling off in steps away from it: [from, to] in
+    // the letter's size, and how hot.
+    const HOT = [[0, 0.1, 0.9], [0.1, 0.2, 0.55], [0.2, 0.32, 0.22]];
+    /** The white-hot rows of a letter's picture beside the line at y (dir -1 above it, 1 below), moved down by dy, seen between y0 and y1. */
+    function hotBand(src, at, a, y, dir, dy, y0, y1) {
+      if (a <= 0.004) return;
+      for (let i = 0; i < HOT.length; i++) {
+        const h = HOT[i];
+        const u0 = dir < 0 ? y - h[1] * at.size : y + h[0] * at.size;
+        const u1 = dir < 0 ? y - h[0] * at.size : y + h[1] * at.size;
+        band(src, at, SHEEN, PAD_BARE, a * h[2], dy, Math.max(y0, u0), Math.min(y1, u1), 'lighter');
+      }
+    }
     /** A letter rendering in: steel above the scan line, the ink just above the line white-hot. The
      *  last fifth of the time the line, faded, takes the rest of the letter's dark halo down with it. */
     function scanIn(src, at, p, a, lo) {
@@ -1244,7 +1333,7 @@
       const y = q < 1 ? scanY(at, q) : lerp(scanY(at, 1), at.cy + at.size * 0.62 + PAD_HALO, (p - 0.8) / 0.2);
       part(src, at, FILL, a, 0, cropAt(at, y, PAD_HALO));
       if (q < 1) {
-        part(src, at, SHEEN, 0.9 * a, cropAt(at, y - at.size * 0.3, PAD_BARE), cropAt(at, y, PAD_BARE), 'lighter');
+        hotBand(src, at, a, y, -1, 0, -Infinity, Infinity);
         scanLine(at, y, (1 - smooth(0.8, 1, q)) * Math.min(1, q * 8), lo);
       }
     }
@@ -1252,9 +1341,10 @@
     function scanOut(g, p, lo) {
       const y = scanY(g, p);
       const a = 1 - smooth(0.75, 1, p);
+      const on = Math.min(1, p * 8);
       part(g, g, FILL, a, cropAt(g, y, PAD_HALO), 1);
-      part(g, g, SHEEN, 0.9 * a, cropAt(g, y, PAD_BARE), cropAt(g, y + g.size * 0.3, PAD_BARE), 'lighter');
-      scanLine(g, y, (1 - smooth(0.85, 1, p)) * Math.min(1, p * 8), lo);
+      hotBand(g, g, a * on, y, 1, 0, -Infinity, Infinity);
+      scanLine(g, y, (1 - smooth(0.85, 1, p)) * on, lo);
     }
 
     function drawLetters(t, lo) {
@@ -1493,7 +1583,7 @@
           for (const pc of pics) env.glyph(pc[0], 0.01, pc[1], onPx(pc[0]));
           ctx.setTransform(1, 0, 0, 1, 0, 0);
           ctx.globalAlpha = 0.01;
-          for (const img of [tex.glow, tex.red, tex.band, tex.vband, tex.streak, tex.vstreak, tex.star, tex.haze, sprW, sprIce, sprRed]) ctx.drawImage(img, px, py, 1, 1);
+          for (const img of [flash, tex.glow, tex.red, tex.band, tex.vband, tex.streak, tex.vstreak, tex.star, tex.haze, sprW, sprIce, sprRed]) ctx.drawImage(img, px, py, 1, 1);
         } finally {
           ctx.restore();
           ctx.save();

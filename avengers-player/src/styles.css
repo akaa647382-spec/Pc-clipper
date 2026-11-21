@@ -259,30 +259,32 @@ kbd {
 .ov-sync[data-state="fix"] i { background: var(--warn); }
 .ov-sync[data-state="bad"] i { background: var(--danger); }
 
-/* ---- 10, 9, 8 …: the countdown row of the clock panel grows for the last ten seconds ----
-   Each app theme ticks in its own way (html[data-theme]); tenpop is the fallback. All of it stays in
-   the clock panel. The number's box has a fixed size, so nothing moves from one second to the next;
-   the decorations are drawn in that box, on the number's ::before/::after (they move with it) and on
-   .ten-fx, a box laid exactly over it that stays still; and the panel clips whatever would still
-   reach past its edge. app.js restarts a tick by taking .pop off the number and putting it back
-   (every animated rule below names .pop, so that really restarts it); data-n holds the number for the
-   copies of it, and .last marks 3, 2, 1. Every tick is over in .95 s. What moves is transform and
+/* ---- the Final Countdown: 10, 9, 8 … in the clock panel for the last ten seconds ----
+   The countdown row of the clock panel becomes one big ticking number. Its look follows the New Year
+   animation chosen in the Display tab (data-ten on the panel, set by app.js): Stark has the classic
+   one (exactly as it always was), each theme animation its own, in that animation's typeface and
+   colours, Fireworks a burst of colour, Minimal a quiet fade; with the animation off, the app theme's.
+   All of it stays in the clock panel.
+   A styled number has a box of fixed size (1.6 × 1.24 of 4.2 em), so nothing moves from one second
+   to the next: --f sizes its typeface to fit (1 = 4.2 em) and --ty centres that face's digits. The
+   decorations are drawn in that box, on the number's ::before/::after (they move with it) and on
+   .ten-fx, a box laid exactly over it that stays still; the panel clips whatever would still reach
+   past its edge. A gradient fill is a copy of the number on top of it (a text-shadow would paint over
+   a fill clipped to the text), its edge and glow the number itself, underneath. app.js restarts a tick
+   by taking .pop off the number and putting it back (every animated rule below names .pop, so that
+   really restarts it); data-n holds the number for the copies of it, and .last marks 3, 2, 1. Every
+   tick is over in .95 s and the number is readable within 100 ms. What moves is transform and
    opacity, plus a few short paints of this small box: the film plays underneath. */
+.overlay { --f: 1; --ty: 0em; }
 .overlay.final { overflow: clip; overflow-clip-margin: .2em; }
 .overlay.final .ov-count { position: relative; flex-direction: column; align-items: center; gap: .1em; padding-top: .4em; }
-.overlay.final .ov-count .lbl { color: var(--hot); letter-spacing: .3em; padding-left: .3em; }
+.overlay.final .ov-count .lbl { color: var(--ten-acc, var(--hot)); letter-spacing: .3em; padding-left: .3em; }
+
+/* Stark: the classic, in the app's own typeface. */
 .overlay.final .ov-count .val {
-  position: relative; z-index: 0; width: 1.6em; height: 1.24em;
-  font: 800 4.2em/1.24 var(--display); letter-spacing: 0; color: #fff; text-align: center;
+  font: 800 4.2em/1 var(--display); letter-spacing: 0; color: #fff; min-width: 1.4em; text-align: center;
   text-shadow: 0 0 .35em color-mix(in srgb, var(--hot) 75%, transparent);
 }
-.ov-count .ten-fx { display: none; }
-.overlay.final .ov-count .ten-fx {
-  display: block; position: absolute; left: 50%; bottom: 0; width: 1.6em; height: 1.24em; margin-left: -.8em;
-  font-size: 4.2em; pointer-events: none;
-}
-.overlay.final .ov-count .val::before, .overlay.final .ov-count .val::after { position: absolute; inset: 0; pointer-events: none; }
-.overlay.final .ov-count .ten-fx::before, .overlay.final .ov-count .ten-fx::after { position: absolute; pointer-events: none; }
 .overlay.final .ov-count .val.pop { animation: tenpop .95s cubic-bezier(.2, .8, .3, 1) both; }
 @keyframes tenpop {
   0% { transform: scale(1.45); opacity: .2; color: var(--hot); }
@@ -291,87 +293,121 @@ kbd {
 }
 @keyframes ten-out { from { opacity: 1; } to { opacity: 0; } }
 
-/* Arc Reactor: the number ignites white-hot inside a segmented cyan ring that spins up, and a
-   shockwave leaves the core every second. 3, 2, 1: the ring runs twice as fast, white-gold. */
-html[data-theme="arc"] .overlay.final .ov-count .val {
-  color: #effcff;
-  text-shadow: 0 0 .05em #c8f6ff, 0 0 .18em rgba(95, 227, 255, .8), 0 0 .42em rgba(30, 155, 255, .5);
+/* Every other one: the box of fixed size, the number in its own typeface. */
+.overlay.final:is([data-ten="arc"], [data-ten="hotrod"], [data-ten="infinity"], [data-ten="gamma"], [data-ten="warmachine"], [data-ten="tva"], [data-ten="doom"], [data-ten="fireworks"]) .ov-count .val {
+  position: relative; z-index: 0; min-width: 0; width: calc(1.6em / var(--f)); height: calc(1.24em / var(--f));
+  font-size: calc(4.2em * var(--f)); line-height: calc(1.24 / var(--f)); translate: 0 var(--ty);
 }
-html[data-theme="arc"] .overlay.final .ov-count .val.pop { animation: ten-arc .2s cubic-bezier(.2, .8, .3, 1) both; }
-@keyframes ten-arc {
-  0% { transform: scale(.84); opacity: .5; }
-  41% { transform: scale(1.05); opacity: 1; }
-  100% { transform: none; opacity: 1; }
+/* the theme animations' typefaces (fonts.css), the app's own behind them */
+.overlay.final:is([data-ten="arc"], [data-ten="hotrod"], [data-ten="infinity"], [data-ten="gamma"], [data-ten="warmachine"], [data-ten="tva"], [data-ten="doom"]) .ov-count .val {
+  font-family: var(--ten-face), var(--display); font-weight: var(--ten-weight);
 }
-html[data-theme="arc"] .overlay.final .ov-count .val::after {
+.ov-count .ten-fx { display: none; }
+.overlay.final .ov-count .ten-fx {
+  display: block; position: absolute; left: 50%; bottom: 0; width: 1.6em; height: 1.24em; margin-left: -.8em;
+  font-size: 4.2em; pointer-events: none;
+}
+.overlay.final .ov-count .val::before, .overlay.final .ov-count .val::after { position: absolute; inset: 0; pointer-events: none; }
+.overlay.final .ov-count .ten-fx::before, .overlay.final .ov-count .ten-fx::after { position: absolute; pointer-events: none; }
+
+/* Arc Reactor (Michroma, cyan neon with a white-hot core): the number strikes on like a neon tube
+   between the arcs of a reactor ring, which spins on with every second as a shockwave leaves the
+   core. 3, 2, 1: white-gold, the ring twice as fast. (The ring shows above and below the number:
+   this face is too wide to sit inside it at a size that reads.) */
+.overlay[data-ten="arc"] { --ten-face: 'AP Michroma'; --ten-weight: 400; --ten-acc: #8ff0ff; --f: .74; --ty: -.06em; }
+.overlay.final[data-ten="arc"] .ov-count .val {
+  color: #f4feff;
+  text-shadow: 0 0 .03em #fff, 0 0 .09em #a6f5ff, 0 0 .2em rgba(95, 227, 255, .9), 0 0 .46em rgba(30, 155, 255, .55);
+}
+.overlay.final[data-ten="arc"] .ov-count .val.last {
+  color: #fffaf0;
+  text-shadow: 0 0 .03em #fff, 0 0 .09em #fff0c4, 0 0 .2em rgba(246, 196, 83, .85), 0 0 .46em rgba(95, 227, 255, .5);
+}
+/* the tube: white-hot, cooling to cyan at its foot (gold for 3, 2, 1), as the words at midnight */
+.overlay.final[data-ten="arc"] .ov-count .val::before {
+  content: attr(data-n); color: transparent; text-shadow: none;
+  background: linear-gradient(180deg, #fff 30%, #e8fcff 55%, #93ebff 92%);
+  -webkit-background-clip: text; background-clip: text;
+}
+.overlay.final[data-ten="arc"] .ov-count .val.last::before { background-image: linear-gradient(180deg, #fff 30%, #fff6e0 55%, #ffd98a 92%); }
+.overlay.final[data-ten="arc"] .ov-count .val.pop { animation: ten-arc .26s steps(1, end) both; }
+@keyframes ten-arc { 0% { opacity: .3; } 15% { opacity: 1; } 27% { opacity: .5; } 38% { opacity: 1; } 62% { opacity: .8; } 75%, 100% { opacity: 1; } }
+/* the strike: a white-hot copy over it, cooling */
+.overlay.final[data-ten="arc"] .ov-count .val::after {
   content: attr(data-n); color: #fff; opacity: 0;
-  text-shadow: 0 0 .06em #fff, 0 0 .2em #5fe3ff, 0 0 .5em #1e9bff;
+  text-shadow: 0 0 .05em #fff, 0 0 .16em #c9f8ff, 0 0 .36em #5fe3ff;
 }
-html[data-theme="arc"] .overlay.final .ov-count .val.pop::after { animation: ten-out .55s ease-out both; }
-html[data-theme="arc"] .overlay.final .ov-count .val.last::after { text-shadow: 0 0 .06em #fff, 0 0 .2em #f6c453, 0 0 .5em #5fe3ff; }
+.overlay.final[data-ten="arc"] .ov-count .val.pop::after { animation: ten-arc-flash .5s ease-out both; }
+@keyframes ten-arc-flash { from { opacity: .9; } to { opacity: 0; } }
+/* the ring and the shockwave, kept out of the number's band (behind it all the same) */
+.overlay.final[data-ten="arc"] .ov-count .ten-fx {
+  z-index: -1;
+  mask: linear-gradient(180deg, #000 0 18%, transparent 25% 75%, #000 82%);
+}
 /* 24 segments; a tick turns them 150° (ten of them), so one second runs on into the next */
-html[data-theme="arc"] .overlay.final .ov-count .ten-fx::before {
-  content: ''; --d: 1.16em; z-index: -1; left: 50%; top: 50%; width: var(--d); height: var(--d); margin: calc(var(--d) / -2) 0 0 calc(var(--d) / -2); border-radius: 50%;
+.overlay.final[data-ten="arc"] .ov-count .ten-fx::before {
+  content: ''; --d: 1.2em; left: 50%; top: 50%; width: var(--d); height: var(--d); margin: calc(var(--d) / -2) 0 0 calc(var(--d) / -2); border-radius: 50%;
   background: repeating-conic-gradient(from -4deg, #8ff0ff 0 8deg, transparent 8deg 15deg);
-  mask: radial-gradient(closest-side, transparent 85%, rgba(0, 0, 0, .45) 88%, #000 91%, #000 95%, rgba(0, 0, 0, .45) 98%, transparent 100%);
-  opacity: .8;
+  mask: radial-gradient(closest-side, transparent 84%, rgba(0, 0, 0, .5) 87%, #000 90%, #000 95%, rgba(0, 0, 0, .5) 98%, transparent 100%);
+  opacity: .85;
 }
-html[data-theme="arc"] .overlay.final .ov-count .val.pop + .ten-fx::before { animation: ten-arc-ring .95s cubic-bezier(.12, .7, .3, 1) both; }
-html[data-theme="arc"] .overlay.final .ov-count .val.last.pop + .ten-fx::before {
+.overlay.final[data-ten="arc"] .ov-count .val.pop + .ten-fx::before { animation: ten-arc-ring .95s cubic-bezier(.12, .7, .3, 1) both; }
+.overlay.final[data-ten="arc"] .ov-count .val.last.pop + .ten-fx::before {
   background: repeating-conic-gradient(from -4deg, #fff3cf 0 8deg, transparent 8deg 15deg); animation-name: ten-arc-ring-last;
 }
-@keyframes ten-arc-ring { 0% { transform: rotate(-150deg); opacity: .45; } 10% { opacity: 1; } 100% { transform: none; opacity: .8; } }
+@keyframes ten-arc-ring { 0% { transform: rotate(-150deg); opacity: .45; } 10% { opacity: 1; } 100% { transform: none; opacity: .85; } }
 @keyframes ten-arc-ring-last { 0% { transform: rotate(-300deg); opacity: .6; } 10% { opacity: 1; } 100% { transform: none; opacity: .95; } }
-html[data-theme="arc"] .overlay.final .ov-count .ten-fx::after {
-  content: ''; --d: 1em; z-index: -1; left: 50%; top: 50%; width: var(--d); height: var(--d); margin: calc(var(--d) / -2) 0 0 calc(var(--d) / -2); border-radius: 50%;
+.overlay.final[data-ten="arc"] .ov-count .ten-fx::after {
+  content: ''; --d: 1em; left: 50%; top: 50%; width: var(--d); height: var(--d); margin: calc(var(--d) / -2) 0 0 calc(var(--d) / -2); border-radius: 50%;
   border: .02em solid rgba(205, 248, 255, .95); box-shadow: 0 0 .05em #5fe3ff, inset 0 0 .05em #5fe3ff;
   opacity: 0;
 }
-html[data-theme="arc"] .overlay.final .ov-count .val.pop + .ten-fx::after { animation: ten-arc-wave .7s cubic-bezier(.15, .6, .35, 1) both; }
-html[data-theme="arc"] .overlay.final .ov-count .val.last.pop + .ten-fx::after { border-color: #fff0c2; box-shadow: 0 0 .06em #f6c453, inset 0 0 .06em #f6c453; }
-@keyframes ten-arc-wave { 0% { transform: scale(.4); opacity: 1; } 100% { transform: scale(1.12); opacity: 0; } }
+.overlay.final[data-ten="arc"] .ov-count .val.pop + .ten-fx::after { animation: ten-arc-wave .7s cubic-bezier(.15, .6, .35, 1) both; }
+.overlay.final[data-ten="arc"] .ov-count .val.last.pop + .ten-fx::after { border-color: #fff0c2; box-shadow: 0 0 .06em #f6c453, inset 0 0 .06em #f6c453; }
+@keyframes ten-arc-wave { 0% { transform: scale(.45); opacity: 1; } 100% { transform: scale(1.2); opacity: 0; } }
 
-/* Hot Rod: the number slams down in molten gold over red heat, a sheen sweeps across the metal and
-   sparks fly from where it lands. 3, 2, 1: harder and hotter. */
-html[data-theme="hotrod"] .overlay.final .ov-count .val {
-  color: #ffc444;
-  text-shadow: 0 0 .04em #ff8a3a, 0 0 .16em rgba(224, 43, 53, .75), 0 0 .4em rgba(224, 43, 53, .4);
+/* Hot Rod (Russo One, slanted, polished gold with a deep red edge): the number slams down over red
+   heat, a sheen sweeps across the metal and sparks fly from where it lands. 3, 2, 1: harder and hotter. */
+.overlay[data-ten="hotrod"] { --ten-face: 'AP Russo One'; --ten-weight: 400; --ten-acc: #ffc24a; --f: .95; --ty: .03em; }
+.overlay.final[data-ten="hotrod"] .ov-count .val {
+  color: #8a1410; -webkit-text-stroke: .09em #8a1410; transform: skewX(-10deg);
+  text-shadow: 0 0 .1em rgba(224, 43, 53, .75), 0 0 .32em rgba(224, 43, 53, .42);
 }
-html[data-theme="hotrod"] .overlay.final .ov-count .val.pop { animation: ten-hotrod .23s linear both; }
-html[data-theme="hotrod"] .overlay.final .ov-count .val.last.pop { animation-name: ten-hotrod-last; }
+.overlay.final[data-ten="hotrod"] .ov-count .val.pop { animation: ten-hotrod .23s linear both; }
+.overlay.final[data-ten="hotrod"] .ov-count .val.last.pop { animation-name: ten-hotrod-last; }
 @keyframes ten-hotrod {
-  0% { transform: translateY(-.05em) scale(1.22); opacity: .65; animation-timing-function: cubic-bezier(.55, 0, .9, .55); }
-  39% { transform: translateY(.012em) scale(1.03, .95); opacity: 1; animation-timing-function: ease-out; }
-  66% { transform: translateY(-.006em) scale(.99, 1.02); animation-timing-function: ease-in-out; }
-  100% { transform: none; opacity: 1; }
+  0% { transform: skewX(-10deg) translateY(-.05em) scale(1.22); opacity: .65; animation-timing-function: cubic-bezier(.55, 0, .9, .55); }
+  39% { transform: skewX(-10deg) translateY(.012em) scale(1.03, .95); opacity: 1; animation-timing-function: ease-out; }
+  66% { transform: skewX(-10deg) translateY(-.006em) scale(.99, 1.02); animation-timing-function: ease-in-out; }
+  100% { transform: skewX(-10deg); opacity: 1; }
 }
 @keyframes ten-hotrod-last {
-  0% { transform: translateY(-.06em) scale(1.3); opacity: .65; animation-timing-function: cubic-bezier(.55, 0, .9, .55); }
-  39% { transform: translateY(.016em) scale(1.05, .92); opacity: 1; animation-timing-function: ease-out; }
-  66% { transform: translateY(-.008em) scale(.98, 1.03); animation-timing-function: ease-in-out; }
-  100% { transform: none; opacity: 1; }
+  0% { transform: skewX(-10deg) translateY(-.06em) scale(1.3); opacity: .65; animation-timing-function: cubic-bezier(.55, 0, .9, .55); }
+  39% { transform: skewX(-10deg) translateY(.016em) scale(1.05, .92); opacity: 1; animation-timing-function: ease-out; }
+  66% { transform: skewX(-10deg) translateY(-.008em) scale(.98, 1.03); animation-timing-function: ease-in-out; }
+  100% { transform: skewX(-10deg); opacity: 1; }
 }
 /* red heat behind it, cooling */
-html[data-theme="hotrod"] .overlay.final .ov-count .val::before {
-  content: attr(data-n); z-index: -1; color: #ff5a2a; opacity: .35;
-  text-shadow: 0 0 .08em #ff6a2a, 0 0 .22em #e02b35, 0 0 .5em rgba(224, 43, 53, .7);
+.overlay.final[data-ten="hotrod"] .ov-count .val::before {
+  content: attr(data-n); z-index: -1; color: #ff5a2a; -webkit-text-stroke: .09em #ff5a2a; opacity: .3;
+  text-shadow: 0 0 .1em #ff6a2a, 0 0 .26em #e02b35, 0 0 .55em rgba(224, 43, 53, .7);
 }
-html[data-theme="hotrod"] .overlay.final .ov-count .val.pop::before { animation: ten-hotrod-heat .9s ease-out both; }
-html[data-theme="hotrod"] .overlay.final .ov-count .val.last.pop::before { animation-name: ten-hotrod-heat-last; }
-@keyframes ten-hotrod-heat { 0%, 14% { opacity: 1; transform: scale(1.05); } 100% { opacity: .35; transform: none; } }
-@keyframes ten-hotrod-heat-last { 0%, 14% { opacity: 1; transform: scale(1.08); } 100% { opacity: .7; transform: none; } }
-/* the gold, and the sheen that crosses it */
-html[data-theme="hotrod"] .overlay.final .ov-count .val::after {
-  content: attr(data-n); color: transparent; text-shadow: none;
+.overlay.final[data-ten="hotrod"] .ov-count .val.pop::before { animation: ten-hotrod-heat .9s ease-out both; }
+.overlay.final[data-ten="hotrod"] .ov-count .val.last.pop::before { animation-name: ten-hotrod-heat-last; }
+@keyframes ten-hotrod-heat { 0%, 14% { opacity: 1; transform: scale(1.05); } 100% { opacity: .3; transform: none; } }
+@keyframes ten-hotrod-heat-last { 0%, 14% { opacity: 1; transform: scale(1.08); } 100% { opacity: .65; transform: none; } }
+/* the polished gold, and the sheen that crosses it */
+.overlay.final[data-ten="hotrod"] .ov-count .val::after {
+  content: attr(data-n); color: transparent; -webkit-text-stroke: 0; text-shadow: none;
   background:
-    linear-gradient(104deg, transparent 42%, rgba(255, 255, 255, .95) 49%, rgba(255, 244, 210, .85) 52%, transparent 59%) 95% 0 / 260% 100% no-repeat,
-    linear-gradient(180deg, #fff4cf 20%, #ffd256 35%, #f5a21b 50%, #ffd66a 62%, #c0570f 80%);
+    linear-gradient(104deg, transparent 40%, rgba(255, 255, 255, .95) 48%, rgba(255, 246, 214, .85) 52%, transparent 60%) 95% 0 / 260% 100% no-repeat,
+    linear-gradient(180deg, #fff8dc 14%, #ffd967 32%, #f4a524 48%, #9a520c 51.5%, #ffc94f 55%, #ffe59c 70%, #d47c14 92%);
   -webkit-background-clip: text; background-clip: text;
 }
-html[data-theme="hotrod"] .overlay.final .ov-count .val.pop::after { animation: ten-hotrod-sheen .42s linear .13s both; }
+.overlay.final[data-ten="hotrod"] .ov-count .val.pop::after { animation: ten-hotrod-sheen .42s linear .13s both; }
 @keyframes ten-hotrod-sheen { from { background-position: 95% 0, 0 0; } to { background-position: 5% 0, 0 0; } }
 /* sparks from the impact, and its streak of light */
-html[data-theme="hotrod"] .overlay.final .ov-count .ten-fx::before {
+.overlay.final[data-ten="hotrod"] .ov-count .ten-fx::before {
   content: ''; inset: 0; transform-origin: 50% 78%; opacity: 0;
   background:
     radial-gradient(circle at 16% 64%, #fff 0 .014em, #ffc24a .024em, transparent .038em),
@@ -383,44 +419,51 @@ html[data-theme="hotrod"] .overlay.final .ov-count .ten-fx::before {
     radial-gradient(circle at 73% 24%, #fff 0 .011em, #ffc24a .018em, transparent .03em),
     radial-gradient(circle at 62% 10%, #ffd27a 0 .009em, transparent .024em);
 }
-html[data-theme="hotrod"] .overlay.final .ov-count .val.pop + .ten-fx::before { animation: ten-hotrod-sparks .62s cubic-bezier(.1, .7, .35, 1) .08s both; }
-html[data-theme="hotrod"] .overlay.final .ov-count .val.last.pop + .ten-fx::before { animation-duration: .78s; }
+.overlay.final[data-ten="hotrod"] .ov-count .val.pop + .ten-fx::before { animation: ten-hotrod-sparks .62s cubic-bezier(.1, .7, .35, 1) .08s both; }
+.overlay.final[data-ten="hotrod"] .ov-count .val.last.pop + .ten-fx::before { animation-duration: .78s; }
 @keyframes ten-hotrod-sparks { 0% { transform: scale(.1); opacity: 0; } 2% { opacity: 1; } 65% { opacity: .85; } 100% { transform: translateY(.05em) scale(1); opacity: 0; } }
-html[data-theme="hotrod"] .overlay.final .ov-count .ten-fx::after {
-  content: ''; z-index: -1; left: 6%; right: 6%; top: 73%; height: .11em; opacity: 0;
+.overlay.final[data-ten="hotrod"] .ov-count .ten-fx::after {
+  content: ''; z-index: -1; left: 6%; right: 6%; top: 74%; height: .11em; opacity: 0;
   background: radial-gradient(closest-side, rgba(255, 246, 214, .95), rgba(255, 194, 74, .7) 30%, rgba(224, 43, 53, .45) 62%, transparent);
 }
-html[data-theme="hotrod"] .overlay.final .ov-count .val.pop + .ten-fx::after { animation: ten-hotrod-impact .5s ease-out .085s both; }
+.overlay.final[data-ten="hotrod"] .ov-count .val.pop + .ten-fx::after { animation: ten-hotrod-impact .5s ease-out .085s both; }
 @keyframes ten-hotrod-impact { 0% { transform: scaleX(.25); opacity: 0; } 3% { opacity: 1; } 100% { transform: scaleX(1.08); opacity: 0; } }
 
-/* Infinity: the number condenses out of violet stardust while a comet of light orbits it, once a
-   second. 3, 2, 1: the comet burns gold. */
-html[data-theme="infinity"] .overlay.final .ov-count .val {
-  color: #f8f3ff;
-  text-shadow: 0 0 .05em #e9dcff, 0 0 .2em rgba(193, 156, 255, .85), 0 0 .48em rgba(107, 61, 240, .6);
+/* Infinity (Syncopate, lilac to white in a soft violet glow): the number condenses out of violet
+   stardust while a comet of light orbits it, once a second. 3, 2, 1: the comet burns gold. */
+.overlay[data-ten="infinity"] { --ten-face: 'AP Syncopate'; --ten-weight: 700; --ten-acc: #c9a8ff; --f: .84; --ty: .07em; }
+.overlay.final[data-ten="infinity"] .ov-count .val {
+  color: #cdb0ff;
+  text-shadow: 0 0 .06em rgba(214, 190, 255, .95), 0 0 .2em rgba(160, 110, 255, .75), 0 0 .48em rgba(107, 61, 240, .5);
 }
-html[data-theme="infinity"] .overlay.final .ov-count .val.pop { animation: ten-infinity .23s cubic-bezier(.2, .75, .3, 1) both; }
+.overlay.final[data-ten="infinity"] .ov-count .val.pop { animation: ten-infinity .23s cubic-bezier(.2, .75, .3, 1) both; }
 @keyframes ten-infinity {
   0% { transform: scale(1.2); opacity: .3; }
   42% { transform: scale(1.03); opacity: 1; }
   100% { transform: none; opacity: 1; }
 }
-/* the haze it condenses out of: a blurred copy, fading (a blur that changes would be drawn anew every frame) */
-html[data-theme="infinity"] .overlay.final .ov-count .val::after {
-  content: attr(data-n); color: transparent; opacity: 0;
+/* lilac to white, as the words at midnight */
+.overlay.final[data-ten="infinity"] .ov-count .val::after {
+  content: attr(data-n); color: transparent; text-shadow: none;
+  background: linear-gradient(180deg, #d4bfff 18%, #e6daff 36%, #f1e9ff 50%, #fff 78%);
+  -webkit-background-clip: text; background-clip: text;
+}
+/* the haze it condenses out of, behind it: a blurred copy, fading (a blur that changes would be drawn anew every frame) */
+.overlay.final[data-ten="infinity"] .ov-count .val::before {
+  content: attr(data-n); z-index: -1; color: transparent; opacity: 0;
   text-shadow: 0 0 .03em #f1e8ff, 0 0 .09em #c19cff, 0 0 .2em #6b3df0;
 }
-html[data-theme="infinity"] .overlay.final .ov-count .val.pop::after { animation: ten-infinity-haze .3s ease-out both; }
+.overlay.final[data-ten="infinity"] .ov-count .val.pop::before { animation: ten-infinity-haze .3s ease-out both; }
 @keyframes ten-infinity-haze { 0% { opacity: 1; transform: scale(1.1); } 100% { opacity: 0; transform: none; } }
 /* the orbit, tilted and seen edge-on; a tick takes the comet once round */
-html[data-theme="infinity"] .overlay.final .ov-count .ten-fx::before {
+.overlay.final[data-ten="infinity"] .ov-count .ten-fx::before {
   content: ''; --d: 1.5em; z-index: -1; left: 50%; top: 50%; width: var(--d); height: var(--d); margin: calc(var(--d) / -2) 0 0 calc(var(--d) / -2); border-radius: 50%;
   background: conic-gradient(rgba(150, 110, 255, .2) 0deg, rgba(150, 110, 255, .2) 190deg, rgba(193, 156, 255, .7) 318deg, #fff 352deg, rgba(150, 110, 255, .2) 360deg);
   mask: radial-gradient(closest-side, transparent 88%, #000 92%, #000 96%, transparent 99%);
   transform: rotate(-14deg) scaleY(.34) rotate(160deg);
 }
-html[data-theme="infinity"] .overlay.final .ov-count .val.pop + .ten-fx::before { animation: ten-infinity-orbit .95s cubic-bezier(.3, .45, .45, 1) both; }
-html[data-theme="infinity"] .overlay.final .ov-count .val.last.pop + .ten-fx::before {
+.overlay.final[data-ten="infinity"] .ov-count .val.pop + .ten-fx::before { animation: ten-infinity-orbit .95s cubic-bezier(.3, .45, .45, 1) both; }
+.overlay.final[data-ten="infinity"] .ov-count .val.last.pop + .ten-fx::before {
   background: conic-gradient(rgba(255, 179, 71, .22) 0deg, rgba(255, 179, 71, .22) 190deg, rgba(255, 200, 120, .8) 318deg, #fff6e0 352deg, rgba(255, 179, 71, .22) 360deg);
 }
 @keyframes ten-infinity-orbit {
@@ -429,7 +472,7 @@ html[data-theme="infinity"] .overlay.final .ov-count .val.last.pop + .ten-fx::be
   100% { transform: rotate(-14deg) scaleY(.34) rotate(160deg); opacity: .85; }
 }
 /* stardust, drawn in towards the number */
-html[data-theme="infinity"] .overlay.final .ov-count .ten-fx::after {
+.overlay.final[data-ten="infinity"] .ov-count .ten-fx::after {
   content: ''; inset: 0; opacity: 0;
   background:
     radial-gradient(circle at 10% 46%, #fff 0 .01em, transparent .024em),
@@ -446,21 +489,22 @@ html[data-theme="infinity"] .overlay.final .ov-count .ten-fx::after {
     radial-gradient(circle at 30% 66%, #e6d6ff 0 .007em, transparent .018em),
     radial-gradient(circle at 70% 32%, #fff 0 .007em, transparent .018em);
 }
-html[data-theme="infinity"] .overlay.final .ov-count .val.pop + .ten-fx::after { animation: ten-infinity-dust .6s cubic-bezier(.3, .6, .4, 1) both; }
+.overlay.final[data-ten="infinity"] .ov-count .val.pop + .ten-fx::after { animation: ten-infinity-dust .6s cubic-bezier(.3, .6, .4, 1) both; }
 @keyframes ten-infinity-dust {
   0% { transform: rotate(-24deg) scale(1.05); opacity: 0; }
   12% { opacity: 1; }
   100% { transform: scale(.4); opacity: 0; }
 }
 
-/* Gamma: a green flash and a jolt that shakes the number, a jagged crack of lightning behind it and
-   a shock ring along the ground. 3, 2, 1: harder. */
-html[data-theme="gamma"] .overlay.final .ov-count .val {
-  color: #edfff2;
-  text-shadow: 0 0 .05em #b9ffd2, 0 0 .18em rgba(92, 255, 154, .85), 0 0 .44em rgba(18, 184, 90, .6);
+/* Gamma (Anton, lime to green inside a thick dark outline): a green flash and a jolt that shakes the
+   number, a jagged crack of lightning behind it and a shock ring along the ground. 3, 2, 1: harder. */
+.overlay[data-ten="gamma"] { --ten-face: 'AP Anton'; --ten-weight: 400; --ten-acc: #d8ff5a; --f: .86; --ty: 0em; }
+.overlay.final[data-ten="gamma"] .ov-count .val {
+  color: #03150a; -webkit-text-stroke: .14em #03150a;
+  text-shadow: 0 0 .1em rgba(92, 255, 154, .6), 0 0 .3em rgba(18, 184, 90, .45);
 }
-html[data-theme="gamma"] .overlay.final .ov-count .val.pop { animation: ten-gamma .29s linear both; }
-html[data-theme="gamma"] .overlay.final .ov-count .val.last.pop { animation: ten-gamma-last .34s linear both; }
+.overlay.final[data-ten="gamma"] .ov-count .val.pop { animation: ten-gamma .29s linear both; }
+.overlay.final[data-ten="gamma"] .ov-count .val.last.pop { animation: ten-gamma-last .34s linear both; }
 @keyframes ten-gamma {
   0% { transform: scale(1.16); opacity: .7; }
   15.6% { transform: translate(-.035em, .012em) scale(1.03); opacity: 1; }
@@ -480,55 +524,67 @@ html[data-theme="gamma"] .overlay.final .ov-count .val.last.pop { animation: ten
   84.2% { transform: translate(.005em, 0); }
   100% { transform: none; opacity: 1; }
 }
-html[data-theme="gamma"] .overlay.final .ov-count .val::after {
-  content: attr(data-n); color: #f4ffd6; opacity: 0;
-  text-shadow: 0 0 .06em #fff, 0 0 .18em #d8ff5a, 0 0 .46em #5cff9a;
+/* lime to green, white-hot as it lands */
+.overlay.final[data-ten="gamma"] .ov-count .val::after {
+  content: attr(data-n); color: transparent; -webkit-text-stroke: 0; text-shadow: none;
+  background: linear-gradient(180deg, #f4ffad 8%, #d4ff4f 34%, #78f35c 64%, #1fbf55 98%);
+  -webkit-background-clip: text; background-clip: text;
 }
-html[data-theme="gamma"] .overlay.final .ov-count .val.pop::after { animation: ten-out .42s ease-out both; }
-html[data-theme="gamma"] .overlay.final .ov-count .val.last.pop::after { animation-duration: .6s; }
-html[data-theme="gamma"] .overlay.final .ov-count .val::before {
+.overlay.final[data-ten="gamma"] .ov-count .val.pop::after { animation: ten-gamma-hot .42s ease-out both; }
+.overlay.final[data-ten="gamma"] .ov-count .val.last.pop::after { animation-duration: .6s; }
+@keyframes ten-gamma-hot { from { filter: brightness(1.8); } to { filter: none; } }
+/* the flash behind it */
+.overlay.final[data-ten="gamma"] .ov-count .val::before {
   content: ''; z-index: -1; border-radius: 50%; opacity: 0;
   background: radial-gradient(closest-side, rgba(216, 255, 90, .5), rgba(92, 255, 154, .2) 55%, transparent);
 }
-html[data-theme="gamma"] .overlay.final .ov-count .val.pop::before { animation: ten-out .38s ease-out both; }
+.overlay.final[data-ten="gamma"] .ov-count .val.pop::before { animation: ten-out .38s ease-out both; }
 /* the crack (mirrored every other second) */
-html[data-theme="gamma"] .overlay.final .ov-count .ten-fx::after {
+.overlay.final[data-ten="gamma"] .ov-count .ten-fx::after {
   content: ''; z-index: -1; inset: 0; opacity: 0;
   background: linear-gradient(135deg, #fbffe8, #d8ff5a 45%, #5cff9a);
   clip-path: polygon(10% 16%, 30% 36%, 25% 41%, 49% 56%, 44% 61%, 73% 79%, 69% 82%, 90% 92%,
     88% 94.5%, 66% 85%, 70% 82%, 41% 64%, 46% 59%, 22% 44%, 27% 39%, 8% 18.5%);
 }
-html[data-theme="gamma"] .overlay.final .ov-count .val:is([data-n="9"], [data-n="7"], [data-n="5"], [data-n="3"], [data-n="1"]) + .ten-fx::after { scale: -1 1; }
-html[data-theme="gamma"] .overlay.final .ov-count .val.pop + .ten-fx::after { animation: ten-gamma-crack .32s linear .02s both; }
-html[data-theme="gamma"] .overlay.final .ov-count .val.last.pop + .ten-fx::after { animation-duration: .5s; }
+.overlay.final[data-ten="gamma"] .ov-count .val:is([data-n="9"], [data-n="7"], [data-n="5"], [data-n="3"], [data-n="1"]) + .ten-fx::after { scale: -1 1; }
+.overlay.final[data-ten="gamma"] .ov-count .val.pop + .ten-fx::after { animation: ten-gamma-crack .32s linear .02s both; }
+.overlay.final[data-ten="gamma"] .ov-count .val.last.pop + .ten-fx::after { animation-duration: .5s; }
 @keyframes ten-gamma-crack {
   0% { opacity: 0; } 8% { opacity: 1; } 22% { opacity: .25; } 34% { opacity: 1; } 52% { opacity: .5; } 64% { opacity: .9; } 100% { opacity: 0; }
 }
 /* the shock ring along the ground */
-html[data-theme="gamma"] .overlay.final .ov-count .ten-fx::before {
-  content: ''; z-index: -1; left: 50%; top: 80%; width: 1.5em; height: .3em; margin: -.15em 0 0 -.75em; border-radius: 50%;
+.overlay.final[data-ten="gamma"] .ov-count .ten-fx::before {
+  content: ''; z-index: -1; left: 50%; top: 82%; width: 1.5em; height: .3em; margin: -.15em 0 0 -.75em; border-radius: 50%;
   border: .018em solid rgba(216, 255, 90, .9); box-shadow: 0 0 .05em #5cff9a, inset 0 0 .05em #5cff9a;
   opacity: 0;
 }
-html[data-theme="gamma"] .overlay.final .ov-count .val.pop + .ten-fx::before { animation: ten-gamma-ring .55s cubic-bezier(.1, .65, .35, 1) .03s both; }
-html[data-theme="gamma"] .overlay.final .ov-count .val.last.pop + .ten-fx::before { border-width: .028em; animation-duration: .7s; }
+.overlay.final[data-ten="gamma"] .ov-count .val.pop + .ten-fx::before { animation: ten-gamma-ring .55s cubic-bezier(.1, .65, .35, 1) .03s both; }
+.overlay.final[data-ten="gamma"] .ov-count .val.last.pop + .ten-fx::before { border-width: .028em; animation-duration: .7s; }
 @keyframes ten-gamma-ring { 0% { transform: scale(.15); opacity: 0; } 3% { opacity: 1; } 100% { transform: none; opacity: 0; } }
 
-/* War Machine: corner brackets snap shut around the number and blink red as they lock on, while a
-   scan line wipes the number in, in steel. 3, 2, 1: the lock stays red. */
-html[data-theme="warmachine"] .overlay.final .ov-count .val {
-  color: #f4f4f6;
-  text-shadow: 0 0 .04em rgba(255, 255, 255, .6), 0 0 .18em rgba(160, 160, 172, .55);
+/* War Machine (Black Ops One, gunmetal with a fine red edge): corner brackets snap shut around the
+   number and blink red as they lock on, while a scan line wipes the number in. 3, 2, 1: the lock
+   stays red. */
+.overlay[data-ten="warmachine"] { --ten-face: 'AP Black Ops One'; --ten-weight: 400; --ten-acc: #ff5a5f; --f: .95; --ty: .04em; }
+.overlay.final[data-ten="warmachine"] .ov-count .val {
+  color: #e0464c; -webkit-text-stroke: .04em #e0464c;
+  text-shadow: 0 0 .05em rgba(255, 70, 75, .45), 0 .02em .16em rgba(0, 0, 0, .7);
 }
-html[data-theme="warmachine"] .overlay.final .ov-count .val.last { text-shadow: 0 0 .04em rgba(255, 255, 255, .6), 0 0 .2em rgba(255, 90, 95, .6); }
-html[data-theme="warmachine"] .overlay.final .ov-count .val.pop { animation: ten-wm .1s linear both; }
+.overlay.final[data-ten="warmachine"] .ov-count .val.last { text-shadow: 0 0 .06em rgba(255, 70, 75, .85), 0 0 .24em rgba(255, 90, 95, .55); }
+.overlay.final[data-ten="warmachine"] .ov-count .val.pop { animation: ten-wm .1s linear both; }
 @keyframes ten-wm {
   0% { clip-path: inset(-.3em -.3em calc(100% - .14em) -.3em); }
   99% { clip-path: inset(-.3em -.3em calc(100% - 1.08em) -.3em); }
   100% { clip-path: inset(-.3em); }
 }
-html[data-theme="warmachine"] .overlay.final .ov-count .ten-fx::before {
-  content: ''; inset: .07em .12em; color: #ff5a5f; filter: grayscale(1) brightness(1.3); --b: .024em; --l: .2em;
+/* gunmetal, as the words at midnight */
+.overlay.final[data-ten="warmachine"] .ov-count .val::after {
+  content: attr(data-n); color: transparent; -webkit-text-stroke: 0; text-shadow: none;
+  background: linear-gradient(180deg, #f1f3f7 12%, #cbcfd7 32%, #a6abb5 46%, #80868f 56%, #636973 63%, #7d838e 72%, #6a707b 85%, #4f555f 98%);
+  -webkit-background-clip: text; background-clip: text;
+}
+.overlay.final[data-ten="warmachine"] .ov-count .ten-fx::before {
+  content: ''; inset: .07em .1em; color: #ff5a5f; filter: grayscale(1) brightness(1.3); --b: .024em; --l: .2em;
   background:
     linear-gradient(currentColor 0 0) left top / var(--l) var(--b), linear-gradient(currentColor 0 0) left top / var(--b) var(--l),
     linear-gradient(currentColor 0 0) right top / var(--l) var(--b), linear-gradient(currentColor 0 0) right top / var(--b) var(--l),
@@ -536,8 +592,8 @@ html[data-theme="warmachine"] .overlay.final .ov-count .ten-fx::before {
     linear-gradient(currentColor 0 0) right bottom / var(--l) var(--b), linear-gradient(currentColor 0 0) right bottom / var(--b) var(--l);
   background-repeat: no-repeat;
 }
-html[data-theme="warmachine"] .overlay.final .ov-count .val.pop + .ten-fx::before { animation: ten-wm-lock .33s linear both; }
-html[data-theme="warmachine"] .overlay.final .ov-count .val.last.pop + .ten-fx::before { animation: ten-wm-lock-last .225s linear both; }
+.overlay.final[data-ten="warmachine"] .ov-count .val.pop + .ten-fx::before { animation: ten-wm-lock .33s linear both; }
+.overlay.final[data-ten="warmachine"] .ov-count .val.last.pop + .ten-fx::before { animation: ten-wm-lock-last .225s linear both; }
 @keyframes ten-wm-lock {
   0% { transform: scale(1.24); opacity: .25; filter: grayscale(1) brightness(1.3); animation-timing-function: cubic-bezier(.6, 0, .9, .5); }
   35% { transform: scale(.97); opacity: 1; filter: grayscale(0) brightness(1); animation-timing-function: ease-out; }
@@ -554,26 +610,27 @@ html[data-theme="warmachine"] .overlay.final .ov-count .val.last.pop + .ten-fx::
   100% { transform: none; opacity: 1; filter: grayscale(0) brightness(1); }
 }
 /* the scan line, at the edge of the wipe */
-html[data-theme="warmachine"] .overlay.final .ov-count .ten-fx::after {
+.overlay.final[data-ten="warmachine"] .ov-count .ten-fx::after {
   content: ''; left: .06em; right: .06em; top: .13em; height: .022em; border-radius: .011em; opacity: 0;
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .9) 12%, #fff 50%, rgba(255, 255, 255, .9) 88%, transparent);
   box-shadow: 0 0 .04em #fff, 0 0 .1em rgba(255, 90, 95, .55);
 }
-html[data-theme="warmachine"] .overlay.final .ov-count .val.pop + .ten-fx::after { animation: ten-wm-scan .18s linear both; }
+.overlay.final[data-ten="warmachine"] .ov-count .val.pop + .ten-fx::after { animation: ten-wm-scan .18s linear both; }
 @keyframes ten-wm-scan {
   0% { transform: none; opacity: 1; }
   55% { transform: translateY(.94em); opacity: 1; }
   100% { transform: translateY(.94em); opacity: 0; }
 }
 
-/* TVA: the number switches on like an old television, a bright line opening up, behind amber
-   scanlines; the dial behind it ticks on by one mark. 3, 2, 1: it flickers once more. */
-html[data-theme="tva"] .overlay.final .ov-count .val {
-  color: #ffc86e;
-  text-shadow: 0 0 .05em #ffdca0, 0 0 .18em rgba(244, 162, 60, .85), 0 0 .44em rgba(200, 98, 42, .55);
+/* TVA (Orbitron, amber): the number switches on like an old television, a bright line opening up,
+   behind amber scanlines; the dial behind it ticks on by one mark. 3, 2, 1: it flickers once more. */
+.overlay[data-ten="tva"] { --ten-face: 'AP Orbitron'; --ten-weight: 900; --ten-acc: #f4a23c; --f: .72; --ty: -.025em; }
+.overlay.final[data-ten="tva"] .ov-count .val {
+  color: #ffb444;
+  text-shadow: 0 0 .04em #ffdca0, 0 0 .16em rgba(244, 162, 60, .85), 0 0 .42em rgba(200, 98, 42, .55);
 }
-html[data-theme="tva"] .overlay.final .ov-count .val.pop { animation: ten-tva .18s linear both; }
-html[data-theme="tva"] .overlay.final .ov-count .val.last.pop { animation: ten-tva-last .245s linear both; }
+.overlay.final[data-ten="tva"] .ov-count .val.pop { animation: ten-tva .18s linear both; }
+.overlay.final[data-ten="tva"] .ov-count .val.last.pop { animation: ten-tva-last .245s linear both; }
 @keyframes ten-tva {
   0% { transform: scale(1.2, .025); filter: brightness(2.6); }
   20% { transform: scale(1.12, .1); }
@@ -591,85 +648,158 @@ html[data-theme="tva"] .overlay.final .ov-count .val.last.pop { animation: ten-t
   100% { transform: none; filter: none; opacity: 1; }
 }
 /* the screen's glow behind it, and its scanlines over it */
-html[data-theme="tva"] .overlay.final .ov-count .val::before {
+.overlay.final[data-ten="tva"] .ov-count .val::before {
   content: ''; z-index: -1; inset: .06em .1em; border-radius: .14em; opacity: .4;
   background: radial-gradient(closest-side, rgba(244, 162, 60, .32), rgba(200, 98, 42, .1) 70%, transparent);
 }
-html[data-theme="tva"] .overlay.final .ov-count .val.pop::before { animation: ten-tva-screen .6s ease-out both; }
+.overlay.final[data-ten="tva"] .ov-count .val.pop::before { animation: ten-tva-screen .6s ease-out both; }
 @keyframes ten-tva-screen { 0%, 12% { opacity: 1; } 100% { opacity: .4; } }
-html[data-theme="tva"] .overlay.final .ov-count .val::after {
-  content: ''; opacity: .6;
-  background: repeating-linear-gradient(180deg, rgba(14, 7, 0, .5) 0 1px, transparent 1px 3px);
+.overlay.final[data-ten="tva"] .ov-count .val::after {
+  content: attr(data-n); color: transparent; text-shadow: none; opacity: .6;
+  background: repeating-linear-gradient(180deg, rgba(40, 16, 0, .75) 0 1px, transparent 1px 3px);
+  -webkit-background-clip: text; background-clip: text;
 }
-html[data-theme="tva"] .overlay.final .ov-count .val.pop::after { animation: ten-tva-scan .215s steps(1, end) both; }
+.overlay.final[data-ten="tva"] .ov-count .val.pop::after { animation: ten-tva-scan .215s steps(1, end) both; }
 @keyframes ten-tva-scan { 0% { opacity: 1; } 46% { opacity: .4; } 74% { opacity: .8; } 100% { opacity: .6; } }
 /* the dial: 60 marks, a tick moves it on by five, like a clock */
-html[data-theme="tva"] .overlay.final .ov-count .ten-fx::before {
-  content: ''; --d: 1.18em; z-index: -1; left: 50%; top: 50%; width: var(--d); height: var(--d); margin: calc(var(--d) / -2) 0 0 calc(var(--d) / -2); border-radius: 50%;
+.overlay.final[data-ten="tva"] .ov-count .ten-fx::before {
+  content: ''; --d: 1.23em; z-index: -1; left: 50%; top: 50%; width: var(--d); height: var(--d); margin: calc(var(--d) / -2) 0 0 calc(var(--d) / -2); border-radius: 50%;
   background:
     radial-gradient(closest-side, transparent 95.5%, rgba(244, 162, 60, .55) 96.5%, rgba(244, 162, 60, .55) 98.5%, transparent 99.5%),
     repeating-conic-gradient(from -1.5deg, rgba(244, 162, 60, .9) 0 3deg, transparent 3deg 30deg),
     repeating-conic-gradient(from -.6deg, rgba(200, 98, 42, .75) 0 1.2deg, transparent 1.2deg 6deg);
-  mask: radial-gradient(closest-side, transparent 82%, #000 83%);
+  mask: radial-gradient(closest-side, transparent 87%, #000 88%);
   opacity: .75;
 }
-html[data-theme="tva"] .overlay.final .ov-count .val.pop + .ten-fx::before { animation: ten-tva-dial .15s cubic-bezier(.5, 0, .25, 1.45) both; }
+.overlay.final[data-ten="tva"] .ov-count .val.pop + .ten-fx::before { animation: ten-tva-dial .15s cubic-bezier(.5, 0, .25, 1.45) both; }
 @keyframes ten-tva-dial { 0% { transform: rotate(-30deg); opacity: .95; } 100% { transform: none; opacity: .75; } }
 /* the pointer the dial ticks under */
-html[data-theme="tva"] .overlay.final .ov-count .ten-fx::after {
-  content: ''; left: 50%; top: calc(50% - .57em); width: .09em; height: .075em; margin-left: -.045em;
+.overlay.final[data-ten="tva"] .ov-count .ten-fx::after {
+  content: ''; left: 50%; top: calc(50% - .595em); width: .09em; height: .075em; margin-left: -.045em;
   background: linear-gradient(#ffe2a6, #f4a23c); clip-path: polygon(0 0, 100% 0, 50% 100%); opacity: .8;
 }
-html[data-theme="tva"] .overlay.final .ov-count .val.pop + .ten-fx::after { animation: ten-tva-pointer .4s ease-out both; }
+.overlay.final[data-ten="tva"] .ov-count .val.pop + .ten-fx::after { animation: ten-tva-pointer .4s ease-out both; }
 @keyframes ten-tva-pointer { 0%, 30% { opacity: 1; } 100% { opacity: .8; } }
 
-/* Doom: the number burns in green fire and cools to polished steel, inside a turning ring of dashes
-   and dots. 3, 2, 1: the fire burns longer and the ring turns faster. */
-html[data-theme="doom"] .overlay.final .ov-count .val {
-  color: #c9d1d7;
-  text-shadow: 0 .015em .01em rgba(0, 0, 0, .6), 0 0 .2em rgba(69, 224, 138, .28);
+/* Doom (Cinzel, scratched steel with a glossy green outline): the number burns in green fire and
+   cools to steel, inside a turning ring of dashes and dots. 3, 2, 1: the fire burns longer and the
+   ring turns faster. */
+.overlay[data-ten="doom"] { --ten-face: 'AP Cinzel'; --ten-weight: 900; --ten-acc: #45e08a; --f: .84; --ty: .055em; }
+.overlay.final[data-ten="doom"] .ov-count .val {
+  color: #27c46d; -webkit-text-stroke: .08em #1c9a54;
+  text-shadow: 0 -.014em 0 #b9ffd9, 0 .014em 0 #0b3f22, 0 0 .1em rgba(69, 224, 138, .55), 0 0 .3em rgba(31, 122, 71, .5);
 }
-html[data-theme="doom"] .overlay.final .ov-count .val.pop { animation: ten-doom .15s cubic-bezier(.2, .8, .3, 1) both; }
+.overlay.final[data-ten="doom"] .ov-count .val.pop { animation: ten-doom .15s cubic-bezier(.2, .8, .3, 1) both; }
 @keyframes ten-doom { 0% { transform: scale(1.1); } 100% { transform: none; } }
-/* polished steel over the plain text, and the green fire over both, cooling away */
-html[data-theme="doom"] .overlay.final .ov-count .val::before {
-  content: attr(data-n); color: transparent; text-shadow: none;
-  background: linear-gradient(180deg, #f7fafb 22%, #c4ccd2 42%, #77838b 52%, #d5dce1 64%, #8d99a1 80%);
+/* scratched steel over it, and the green fire over both, cooling away */
+.overlay.final[data-ten="doom"] .ov-count .val::before {
+  content: attr(data-n); color: transparent; -webkit-text-stroke: 0; text-shadow: none;
+  background:
+    linear-gradient(113deg, transparent 27.6%, rgba(255, 255, 255, .7) 28%, transparent 28.6%),
+    linear-gradient(121deg, transparent 41%, rgba(38, 46, 52, .6) 41.4%, transparent 41.9%),
+    linear-gradient(108deg, transparent 52.5%, rgba(255, 255, 255, .55) 52.9%, transparent 53.4%),
+    linear-gradient(64deg, transparent 37%, rgba(255, 255, 255, .45) 37.3%, transparent 37.7%),
+    linear-gradient(117deg, transparent 63.4%, rgba(38, 46, 52, .5) 63.8%, transparent 64.2%),
+    linear-gradient(72deg, transparent 69%, rgba(255, 255, 255, .5) 69.3%, transparent 69.7%),
+    linear-gradient(124deg, transparent 75.6%, rgba(255, 255, 255, .6) 76%, transparent 76.5%),
+    linear-gradient(58deg, transparent 22%, rgba(38, 46, 52, .45) 22.3%, transparent 22.7%),
+    linear-gradient(180deg, #f7fafb 14%, #c9d1d7 36%, #7a868e 50%, #d3dade 62%, #8b979f 86%);
   -webkit-background-clip: text; background-clip: text;
 }
-html[data-theme="doom"] .overlay.final .ov-count .val::after {
-  content: attr(data-n); color: #8affbd; opacity: 0;
+.overlay.final[data-ten="doom"] .ov-count .val::after {
+  content: attr(data-n); color: #8affbd; -webkit-text-stroke: 0; opacity: 0;
   text-shadow: 0 0 .04em #45e08a, 0 0 .16em #45e08a, 0 0 .4em #1f7a47;
 }
-html[data-theme="doom"] .overlay.final .ov-count .val.pop::after { animation: ten-doom-burn .85s cubic-bezier(.5, 0, .7, .4) both; }
-html[data-theme="doom"] .overlay.final .ov-count .val.last.pop::after { animation-name: ten-doom-burn-last; }
+.overlay.final[data-ten="doom"] .ov-count .val.pop::after { animation: ten-doom-burn .62s ease-in-out both; }
+.overlay.final[data-ten="doom"] .ov-count .val.last.pop::after { animation: ten-doom-burn-last .9s cubic-bezier(.5, 0, .7, .4) both; }
 @keyframes ten-doom-burn { 0%, 12% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes ten-doom-burn-last { 0%, 30% { opacity: 1; } 100% { opacity: .1; } }
 /* the ring: a long dash and a dot every 20°; a tick turns it on by 20° */
-html[data-theme="doom"] .overlay.final .ov-count .ten-fx::before {
-  content: ''; --d: 1.18em; z-index: -1; left: 50%; top: 50%; width: var(--d); height: var(--d); margin: calc(var(--d) / -2) 0 0 calc(var(--d) / -2); border-radius: 50%;
+.overlay.final[data-ten="doom"] .ov-count .ten-fx::before {
+  content: ''; --d: 1.2em; z-index: -1; left: 50%; top: 50%; width: var(--d); height: var(--d); margin: calc(var(--d) / -2) 0 0 calc(var(--d) / -2); border-radius: 50%;
   background: repeating-conic-gradient(#b9c2c8 0 9deg, transparent 9deg 13deg, #b9c2c8 13deg 15deg, transparent 15deg 20deg);
   mask: radial-gradient(closest-side, transparent 89%, #000 91%, #000 96%, transparent 98%);
   opacity: .85;
 }
-html[data-theme="doom"] .overlay.final .ov-count .val.pop + .ten-fx::before { animation: ten-doom-ring .95s linear both; }
-html[data-theme="doom"] .overlay.final .ov-count .val.last.pop + .ten-fx::before { animation-name: ten-doom-ring-last; animation-timing-function: cubic-bezier(.2, .7, .4, 1); }
+.overlay.final[data-ten="doom"] .ov-count .val.pop + .ten-fx::before { animation: ten-doom-ring .95s linear both; }
+.overlay.final[data-ten="doom"] .ov-count .val.last.pop + .ten-fx::before { animation-name: ten-doom-ring-last; animation-timing-function: cubic-bezier(.2, .7, .4, 1); }
 @keyframes ten-doom-ring { from { transform: none; } to { transform: rotate(20deg); } }
 @keyframes ten-doom-ring-last { from { transform: none; } to { transform: rotate(60deg); } }
 /* green fire round the ring, dying down (a plain gradient: no mask to draw every frame) */
-html[data-theme="doom"] .overlay.final .ov-count .ten-fx::after {
+.overlay.final[data-ten="doom"] .ov-count .ten-fx::after {
   content: ''; --d: 1.24em; z-index: -1; left: 50%; top: 50%; width: var(--d); height: var(--d); margin: calc(var(--d) / -2) 0 0 calc(var(--d) / -2); border-radius: 50%;
   background: radial-gradient(closest-side, transparent 76%, rgba(31, 122, 71, .5) 84%, rgba(69, 224, 138, .95) 90%, rgba(140, 255, 190, .6) 93%, rgba(31, 122, 71, .4) 97%, transparent 100%);
   opacity: 0;
 }
-html[data-theme="doom"] .overlay.final .ov-count .val.pop + .ten-fx::after { animation: ten-doom-fire .8s ease-out both; }
-html[data-theme="doom"] .overlay.final .ov-count .val.last.pop + .ten-fx::after { animation-duration: .95s; }
+.overlay.final[data-ten="doom"] .ov-count .val.pop + .ten-fx::after { animation: ten-doom-fire .8s ease-out both; }
+.overlay.final[data-ten="doom"] .ov-count .val.last.pop + .ten-fx::after { animation-duration: .95s; }
 @keyframes ten-doom-fire { 0% { transform: scale(.92); opacity: .95; } 100% { transform: none; opacity: 0; } }
 
-/* Less motion asked for: the number just fades in. */
+/* Fireworks (the app's typeface): each number bursts in with a ring of coloured rays and sparks
+   that fly out and fall away; every second has a colour of its own. 3, 2, 1: bigger bursts. */
+.overlay[data-ten="fireworks"] { --ten-acc: #ffd36b; }
+.overlay.final[data-ten="fireworks"] .ov-count .val {
+  --fw: #ffd36b; color: #fff;
+  text-shadow: 0 0 .03em #fff, 0 0 .1em var(--fw), 0 0 .26em color-mix(in srgb, var(--fw) 55%, transparent);
+}
+.overlay.final[data-ten="fireworks"] .ov-count .val:is([data-n="9"], [data-n="4"]) { --fw: #ff5fa2; }
+.overlay.final[data-ten="fireworks"] .ov-count .val:is([data-n="8"], [data-n="3"]) { --fw: #5fd8ff; }
+.overlay.final[data-ten="fireworks"] .ov-count .val:is([data-n="7"], [data-n="2"]) { --fw: #9dff5a; }
+.overlay.final[data-ten="fireworks"] .ov-count .val:is([data-n="6"], [data-n="1"]) { --fw: #c39bff; }
+.overlay.final[data-ten="fireworks"] .ov-count .val[data-n="5"] { --fw: #ff9a3c; }
+.overlay.final[data-ten="fireworks"] .ov-count .val.pop { animation: ten-fw .36s both; }
+@keyframes ten-fw {
+  0% { transform: scale(.6); opacity: .35; animation-timing-function: cubic-bezier(.2, .8, .4, 1); }
+  38% { transform: scale(1.07); opacity: 1; animation-timing-function: ease-in-out; }
+  68% { transform: scale(.985); }
+  100% { transform: none; opacity: 1; }
+}
+/* the rays, in five colours, flying out (turned a little every second) */
+.overlay.final[data-ten="fireworks"] .ov-count .ten-fx::before {
+  content: ''; --d: 1.24em; z-index: -1; left: 50%; top: 50%; width: var(--d); height: var(--d); margin: calc(var(--d) / -2) 0 0 calc(var(--d) / -2); border-radius: 50%;
+  background: repeating-conic-gradient(#ffd36b 0 3deg, transparent 3deg 12deg, #ff5fa2 12deg 15deg, transparent 15deg 24deg,
+    #5fd8ff 24deg 27deg, transparent 27deg 36deg, #9dff5a 36deg 39deg, transparent 39deg 48deg, #c39bff 48deg 51deg, transparent 51deg 60deg);
+  mask: radial-gradient(closest-side, transparent 56%, #000 70%, #000 84%, transparent 98%);
+  opacity: 0;
+}
+.overlay.final[data-ten="fireworks"] .ov-count .val:is([data-n="9"], [data-n="6"], [data-n="3"]) + .ten-fx::before { rotate: 4deg; }
+.overlay.final[data-ten="fireworks"] .ov-count .val:is([data-n="8"], [data-n="5"], [data-n="2"]) + .ten-fx::before { rotate: 8deg; }
+.overlay.final[data-ten="fireworks"] .ov-count .val.pop + .ten-fx::before { animation: ten-fw-rays .7s cubic-bezier(.15, .7, .3, 1) both; }
+.overlay.final[data-ten="fireworks"] .ov-count .val.last.pop + .ten-fx::before { animation-duration: .85s; }
+@keyframes ten-fw-rays { 0% { transform: scale(.55); opacity: 1; } 55% { opacity: .9; } 100% { transform: none; opacity: 0; } }
+/* the sparks at the ends of the rays, falling away as they fade */
+.overlay.final[data-ten="fireworks"] .ov-count .ten-fx::after {
+  content: ''; z-index: -1; inset: 0; opacity: 0;
+  background:
+    radial-gradient(circle at 50% 5%, #fff 0 .013em, #ffd36b .024em, transparent .04em),
+    radial-gradient(circle at 72% 9%, #fff 0 .012em, #ff5fa2 .022em, transparent .036em),
+    radial-gradient(circle at 88% 26%, #fff 0 .013em, #5fd8ff .024em, transparent .04em),
+    radial-gradient(circle at 95% 50%, #fff 0 .012em, #9dff5a .022em, transparent .036em),
+    radial-gradient(circle at 88% 74%, #fff 0 .013em, #c39bff .024em, transparent .04em),
+    radial-gradient(circle at 72% 91%, #fff 0 .012em, #ffd36b .022em, transparent .036em),
+    radial-gradient(circle at 50% 95%, #fff 0 .013em, #ff5fa2 .024em, transparent .04em),
+    radial-gradient(circle at 28% 91%, #fff 0 .012em, #5fd8ff .022em, transparent .036em),
+    radial-gradient(circle at 12% 74%, #fff 0 .013em, #9dff5a .024em, transparent .04em),
+    radial-gradient(circle at 5% 50%, #fff 0 .012em, #c39bff .022em, transparent .036em),
+    radial-gradient(circle at 12% 26%, #fff 0 .013em, #ff9a3c .024em, transparent .04em),
+    radial-gradient(circle at 28% 9%, #fff 0 .012em, #5fd8ff .022em, transparent .036em);
+}
+.overlay.final[data-ten="fireworks"] .ov-count .val.pop + .ten-fx::after { animation: ten-fw-sparks .88s cubic-bezier(.2, .75, .35, 1) both; }
+.overlay.final[data-ten="fireworks"] .ov-count .val.last.pop + .ten-fx::after { animation-name: ten-fw-sparks-last; animation-duration: .93s; }
+@keyframes ten-fw-sparks { 0% { transform: scale(.25); opacity: 1; } 50% { opacity: 1; } 100% { transform: translateY(.06em) scale(.96); opacity: 0; } }
+@keyframes ten-fw-sparks-last { 0% { transform: scale(.25); opacity: 1; } 55% { opacity: 1; } 100% { transform: translateY(.07em) scale(1.06); opacity: 0; } }
+
+/* Minimal (the app's typeface): the number simply fades in, white, no glow. */
+.overlay[data-ten="minimal"] { --ten-acc: rgba(255, 255, 255, .62); }
+.overlay.final[data-ten="minimal"] .ov-count .val { font-weight: 600; text-shadow: 0 .02em .12em rgba(0, 0, 0, .5); }
+.overlay.final[data-ten="minimal"] .ov-count .val.pop { animation: ten-minimal .45s cubic-bezier(.25, .7, .3, 1) both; }
+@keyframes ten-minimal { from { opacity: .1; } to { opacity: 1; } }
+
+/* Less motion asked for: the number just fades in, in its own colours; nothing else moves. */
 @media (prefers-reduced-motion: reduce) {
+  .overlay.final .ov-count .val.pop::before, .overlay.final .ov-count .val.pop::after { animation: none !important; }
   .overlay.final .ov-count .val.pop { animation: ten-fade .3s ease-out both !important; }
-  .overlay.final .ov-count .val::before, .overlay.final .ov-count .val::after, .overlay.final .ov-count .ten-fx { display: none !important; }
+  .overlay.final .ov-count .ten-fx { display: none !important; }
 }
 @keyframes ten-fade { from { opacity: .4; } to { opacity: 1; } }
 
@@ -695,13 +825,27 @@ html[data-theme="doom"] .overlay.final .ov-count .val.last.pop + .ten-fx::after 
 .subs.bg-none .cue { text-shadow: 0 .05em .12em rgba(0, 0, 0, .9); }
 
 /* ---- celebration banner (minimal) & snap cue ---- */
+/* Minimal: small white capitals, widely spaced, over a fine line in the theme's colour. A soft dark
+   halo, with no edge to it, keeps them readable over a bright picture. In and out softly over 8 s
+   (app.js takes it away after). */
 .banner {
   position: absolute; left: 50%; bottom: 16%; translate: -50% 0; z-index: 9; pointer-events: none; white-space: nowrap;
-  padding: .5em 1.3em; border-radius: 999px; font: 700 calc(var(--u) * 3.2) var(--display); letter-spacing: .3em;
-  color: #1a1200; background: linear-gradient(180deg, #ffe7a3, #f6b93b); box-shadow: 0 .4em 2em rgba(246, 185, 59, .5);
+  padding: 0 0 .7em .46em; font: 600 calc(var(--u) * 2.4) var(--display); letter-spacing: .46em; color: #fff;
+  text-shadow: 0 0 .1em rgba(0, 0, 0, .6), 0 .04em .12em rgba(0, 0, 0, .6), 0 0 .5em rgba(0, 0, 0, .32);
   animation: banner 8s ease both;
 }
-@keyframes banner { 0% { opacity: 0; transform: translateY(1em) scale(.94); } 6% { opacity: 1; transform: none; } 88% { opacity: 1; } 100% { opacity: 0; transform: translateY(-.4em); } }
+.banner::before {
+  content: ''; position: absolute; z-index: -1; inset: -1em -.9em -.9em -.5em;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, .24), rgba(0, 0, 0, .1) 60%, transparent);
+}
+.banner::after {
+  content: ''; position: absolute; left: .46em; right: .46em; bottom: 0; height: max(1.5px, .06em);
+  background: linear-gradient(90deg, transparent, var(--acc) 22%, var(--acc) 78%, transparent);
+  box-shadow: 0 0 .4em color-mix(in srgb, var(--acc) 55%, transparent), 0 .03em .1em rgba(0, 0, 0, .45);
+  animation: banner-line 8s ease both;
+}
+@keyframes banner { 0% { opacity: 0; transform: translateY(.4em); } 6% { opacity: 1; transform: none; } 88% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes banner-line { 0% { transform: scaleX(.25); } 9%, 100% { transform: none; } }
 .snapcue {
   position: absolute; left: 50%; top: 9%; translate: -50% 0; z-index: 9; pointer-events: none;
   padding: .45em 1.1em; border-radius: 999px; font: 700 calc(var(--u) * 2.4) var(--display); letter-spacing: .3em;

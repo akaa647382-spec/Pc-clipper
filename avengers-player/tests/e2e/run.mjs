@@ -114,25 +114,64 @@ const stripOpen = (page, timeout) => waitFor(page, () => !!window.__AP.SnapCam.v
 const stripClosed = (page) => waitFor(page, () => !window.__AP.SnapCam.view && document.getElementById('strip').hidden, null, 4000);
 
 /**
- * 10 · 9 · 8 in each app theme's own style, through "Preview 10 · 9 · 8" in the Display tab (open,
- * with a movie loaded and paused): it ticks with the clock in the clock panel, runs the theme's own
- * animation, draws nothing outside the panel, and goes when it is over, clicked again, or a test run
- * starts. The theme is left as it was not.
+ * The Final Countdown for every New Year animation, through "Preview the Final Countdown" in the
+ * Display tab (open, with a movie loaded and paused): it ticks with the clock in the clock panel,
+ * runs that animation's own countdown in that animation's typeface (loaded, and really the one
+ * drawn), draws nothing outside the panel, and goes when it is over, clicked again, or a test run
+ * starts. Stark has the classic one; with the animation off, the app theme's. Settings are left as
+ * they were.
  */
-async function tenPreviews(s, themes) {
+async function tenPreviews(s) {
   const page = s.page;
-  // The val's own animation per theme; its other layers' names start with it too (ten-out is shared).
-  const OWN = { arc: 'ten-arc', hotrod: 'ten-hotrod', infinity: 'ten-infinity', gamma: 'ten-gamma', warmachine: 'ten-wm', tva: 'ten-tva', doom: 'ten-doom' };
+  // Per countdown (data-ten): the number's own animation (its layers' names start with it, ten-out
+  // is shared), whether it has layers, and its typeface: [family, weight, name in the font file], or
+  // null for the app's own.
+  const TEN = {
+    classic: { anim: 'tenpop', layers: false, face: null },
+    arc: { anim: 'ten-arc', layers: true, face: ['AP Michroma', '400', 'Michroma'] },
+    hotrod: { anim: 'ten-hotrod', layers: true, face: ['AP Russo One', '400', 'Russo One'] },
+    infinity: { anim: 'ten-infinity', layers: true, face: ['AP Syncopate', '700', 'Syncopate'] },
+    gamma: { anim: 'ten-gamma', layers: true, face: ['AP Anton', '400', 'Anton'] },
+    warmachine: { anim: 'ten-wm', layers: true, face: ['AP Black Ops One', '400', 'Black Ops One'] },
+    tva: { anim: 'ten-tva', layers: true, face: ['AP Orbitron', '900', 'Orbitron'] },
+    doom: { anim: 'ten-doom', layers: true, face: ['AP Cinzel', '900', 'Cinzel'] },
+    fireworks: { anim: 'ten-fw', layers: true, face: null },
+    minimal: { anim: 'ten-minimal', layers: false, face: null }
+  };
+  // [the animation, the app theme for Off]: the countdown each one plays
+  const CHOICES = [['stark'], ['arc'], ['hotrod'], ['infinity'], ['gamma'], ['warmachine'], ['tva'], ['doom'], ['fireworks'], ['minimal'], ['off', 'tva'], ['off', 'gamma']];
+  const tenOf = (c, theme) => (c === 'stark' ? 'classic' : c === 'off' ? theme : c);
   const look = () => page.evaluate(() => {
     const g = (id) => document.getElementById(id);
     const box = g('ovCount');
     return {
       pv: window.__AP.UI.tenPv, final: g('overlay').classList.contains('final'), shown: !g('overlay').hidden && !g('ovCount').hidden,
       n: g('ovCountVal').textContent, lbl: g('ovCountLbl').textContent, btn: g('previewTen').textContent, toasts: g('toasts').textContent,
+      ten: g('overlay').dataset.ten,
       anims: document.getAnimations().filter((a) => a.effect && a.effect.target && box.contains(a.effect.target) && a.playState !== 'idle')
         .map((a) => a.animationName + (a.effect.pseudoElement || ''))
     };
   });
+  // The typeface of the number: what the page asks for, whether that face is loaded, and what the
+  // browser really drew it with (DevTools: the fonts used for the node's text).
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('DOM.enable');
+  await cdp.send('CSS.enable');
+  const face = async () => {
+    const doc = await cdp.send('DOM.getDocument', { depth: 0 });
+    const q = await cdp.send('DOM.querySelector', { nodeId: doc.root.nodeId, selector: '#ovCountVal' });
+    const drawn = (await cdp.send('CSS.getPlatformFontsForNode', { nodeId: q.nodeId })).fonts;
+    const css = await page.evaluate(() => {
+      const v = getComputedStyle(document.getElementById('ovCountVal'));
+      return { family: v.fontFamily, weight: v.fontWeight, app: getComputedStyle(document.getElementById('ovCountLbl')).fontFamily,
+        loaded: Array.from(document.fonts).filter((f) => f.status === 'loaded').map((f) => f.family.replace(/["']/g, '') + ' ' + f.weight) };
+    });
+    return { ...css, drawn: drawn.map((f) => ({ name: f.familyName, custom: f.isCustomFont, n: f.glyphCount })) };
+  };
+  const faceOk = (f, want) => (want
+    ? f.family.replace(/["']/g, '').startsWith(want[0] + ',') && f.weight === want[1] && f.loaded.includes(want[0] + ' ' + want[1]) &&
+      f.drawn.length > 0 && f.drawn.every((d) => d.custom && d.name.startsWith(want[2]))
+    : f.family === f.app && f.drawn.length > 0 && f.drawn.every((d) => !d.custom));
   // Every frame for `ms`: the number, the clock and where the panel is.
   const frames = (ms) => page.evaluate(async (ms) => {
     const g = (id) => document.getElementById(id);
@@ -212,8 +251,13 @@ async function tenPreviews(s, themes) {
     return !!b && b.offsetWidth > 0 && /Preview the Final Countdown/.test(b.textContent) && sw.nextElementSibling === b;
   }));
 
-  for (const id of themes) {
-    await page.click(`#themeGrid .theme[data-id="${id}"]`);
+  const celebrationBefore = await page.evaluate(() => window.__AP.cfg.celebration);
+  for (const [c, theme] of CHOICES) {
+    const id = c + (theme ? ' (theme ' + theme + ')' : '');
+    const ten = tenOf(c, theme);
+    const want = TEN[ten];
+    if (theme) await page.click(`#themeGrid .theme[data-id="${theme}"]`);
+    await page.click(`#optCelebration [data-v="${c}"]`);
     const before = await settings();
     const rows = await startPreview();
     const i10 = rows.findIndex((r) => r.final && r.shown && r.n === '10');
@@ -225,24 +269,44 @@ async function tenPreviews(s, themes) {
     const boxes = new Set(rows.slice(i10).filter((r) => r.final).map((r) => r.box));
     check(`${id}: the panel does not move or change size from one second to the next`, i8 > i9 && boxes.size === 1, [...boxes].join(' | '));
     const v = await look();
-    const mine = v.anims.filter((a) => a.startsWith(OWN[id]) || a.startsWith('ten-out'));
-    check(`${id}: its own animation is the one running, on the number and its layers`,
-      v.anims.includes(OWN[id]) && mine.length === v.anims.length && v.anims.filter((a) => a.includes('::')).length >= 2 && !v.anims.includes('tenpop'), v.anims.join(' '));
+    const mine = v.anims.filter((a) => a.startsWith(want.anim) || a.startsWith('ten-out'));
+    const layers = v.anims.filter((a) => a.includes('::')).length;
+    check(`${id}: its own countdown (${ten}) is the one running, on the number${want.layers ? ' and its layers' : ' alone'}`,
+      v.ten === ten && v.anims.includes(want.anim) && mine.length === v.anims.length && (want.layers ? layers >= 2 : v.anims.length === 1) && (ten === 'classic' || !v.anims.includes('tenpop')),
+      v.ten + ': ' + v.anims.join(' '));
+    const f = await face();
+    check(`${id}: the number is drawn in ${want.face ? want.face[0] + ', loaded' : 'the app\'s own typeface'}`, faceOk(f, want.face),
+      f.family.split(',')[0] + ' ' + f.weight + ' -> ' + f.drawn.map((d) => d.name + (d.custom ? ' (shipped)' : '')).join(', '));
     await sleep(150);
-    await shot(page, 'ten-' + id);
+    await shot(page, 'ten-' + c + (theme ? '-' + theme : ''));
     // (Should a new tick come in the middle, its frames are as good a sample: around the panel they
     // must not differ either.)
     const o = await outside();
     check(`${id}: nothing is drawn outside the clock panel, all through a tick`, o.worst === 0, JSON.stringify(o));
-    if (id === 'arc') {
-      // A new theme mid-preview: its animation takes over, the old one is gone, the preview goes on.
-      await page.click('#themeGrid .theme[data-id="gamma"]');
+    if (c === 'arc') {
+      // Another animation mid-preview: its countdown takes over, the old one is gone, the preview goes on.
+      await page.click('#optCelebration [data-v="gamma"]');
       await sleep(120);
       const w = await look();
-      check('a theme chosen during the preview takes over at once, the old one stops', w.pv === v.pv && w.final && w.anims.includes('ten-gamma') && !w.anims.some((a) => a.startsWith('ten-arc')), w.anims.join(' '));
-      await page.click('#themeGrid .theme[data-id="arc"]');
+      check('an animation chosen during the preview takes over at once, the old countdown stops', w.pv === v.pv && w.final && w.ten === 'gamma' && w.anims.includes('ten-gamma') && !w.anims.some((a) => a.startsWith('ten-arc')), w.ten + ': ' + w.anims.join(' '));
+      await page.click('#optCelebration [data-v="arc"]');
+      // The app theme has no say while an animation is chosen.
+      const was = await page.evaluate(() => window.__AP.cfg.theme);
+      await page.click('#themeGrid .theme[data-id="doom"]');
+      await sleep(120);
+      const t = await look();
+      check('with an animation chosen, another app theme leaves its countdown as it is', t.final && t.ten === 'arc' && t.anims.includes('ten-arc') && !t.anims.some((a) => a.startsWith('ten-doom')), t.ten + ': ' + t.anims.join(' '));
+      await page.click(`#themeGrid .theme[data-id="${was}"]`);
     }
-    if (id !== themes[themes.length - 1]) {
+    if (c === 'off' && theme === 'tva') {
+      // With the animation off, the countdown is the theme's: another theme mid-preview takes over.
+      await page.click('#themeGrid .theme[data-id="hotrod"]');
+      await sleep(120);
+      const w = await look();
+      check('with the animation off, a theme chosen during the preview takes over the countdown at once', w.final && w.ten === 'hotrod' && w.anims.includes('ten-hotrod') && !w.anims.some((a) => a.startsWith('ten-tva')), w.ten + ': ' + w.anims.join(' '));
+      await page.click('#themeGrid .theme[data-id="tva"]');
+    }
+    if (id !== 'off (theme gamma)') {
       await page.click('#previewTen');
       await noFinal();
       const x = await look();
@@ -254,6 +318,7 @@ async function tenPreviews(s, themes) {
     }
     check(`${id}: the preview changed no setting`, (await settings()) === before, await settings());
   }
+  await page.click(`#optCelebration [data-v="${celebrationBefore}"]`);
 
   // With the clock panel switched off, the preview still shows it, and hides it again after.
   await page.keyboard.press('o');
@@ -392,10 +457,13 @@ const scenarios = {
         return {
           final: document.getElementById('overlay').classList.contains('final'), n: +document.getElementById('ovCountVal').textContent,
           inside: v.left >= ov.left && v.right <= ov.right && v.top >= ov.top && v.bottom <= ov.bottom, under: v.top >= clock.bottom,
-          bigger: v.height > clock.height, stray: !!document.getElementById('bigCount')
+          bigger: v.height > clock.height, stray: !!document.getElementById('bigCount'),
+          ten: document.getElementById('overlay').dataset.ten,
+          anims: document.getAnimations().filter((a) => a.effect && a.effect.target && document.getElementById('ovCount').contains(a.effect.target)).map((a) => a.animationName)
         };
       });
       check('the 10 · 9 · 8 countdown ticks inside the clock panel, under the clock', big.final && big.n >= 1 && big.n <= 10 && big.inside && big.under && big.bigger, JSON.stringify(big));
+      check('with Stark (the default animation) it is the classic Final Countdown', big.ten === 'classic' && big.anims.join() === 'tenpop', big.ten + ': ' + big.anims.join(' '));
       check('nothing is drawn across the picture', !big.stray);
       await shot(s.page, 'snap-final-seconds');
       const m = await measureSync(s.page, 8000);
@@ -2382,7 +2450,7 @@ const scenarios = {
       }
       await s.page.click('#themeGrid .theme[data-id="hotrod"]');
       check('choosing a theme restyles the app', await s.page.evaluate(() => document.documentElement.dataset.theme === 'hotrod' && getComputedStyle(document.documentElement).getPropertyValue('--acc2').trim() === '#e02b35'));
-      await tenPreviews(s, themes);
+      await tenPreviews(s);
       await s.page.click('#themeGrid .theme[data-id="hotrod"]');
       const hidden = (id) => waitFor(s.page, (id) => document.getElementById(id).hidden, id, 2000);
       const shown = (id) => waitFor(s.page, (id) => !document.getElementById(id).hidden, id, 2000);

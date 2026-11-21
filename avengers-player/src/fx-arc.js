@@ -37,15 +37,19 @@
   // A tube glowing without having caught (its blinks at ignition, its last glow going out): cyan
   // neon light, added on top.
   const GLOW = { stops: [[0, '#d8fbff'], [0.5, '#8cecff'], [1, '#4fd6ff']], halo: 'rgba(60,200,255,0.85)' };
-  // A digit filling with the reactor's light: deeper cyan, with the words' dark halo so it reads.
-  const CHARGE = { stops: [[0, '#9cefff'], [0.5, '#5fe3ff'], [1, '#22b8f5']], halo: 'rgba(0,8,20,0.9)', stroke: { width: 0.024, stops: [[0, '#a6f5ff'], [1, '#1fb6f5']] } };
-  // (All of them have a halo, so the pictures of a letter are cut into cells of the same size
-  // and a crop at one height cuts them all at the same place.)
+  // A digit filling with the reactor's light: deeper cyan, laid over the digit in its colour (whose
+  // dark halo it keeps, so it has none of its own: two halos on top of each other would darken
+  // round the digit as it tops out).
+  const CHARGE = { stops: [[0, '#9cefff'], [0.5, '#5fe3ff'], [1, '#22b8f5']], stroke: { width: 0.024, stops: [[0, '#a6f5ff'], [1, '#1fb6f5']] } };
+  // The surface of the light in a digit: a white-hot line inside the strokes only. (No halo: a halo
+  // cut into a thin band shows as a hard-edged slab wider than the digit. Its soft glow is drawn on
+  // its own.) A fill without a halo is cut into smaller cells, so its crops are worked out apart.
+  const SURF = { stops: [[0, '#ffffff'], [0.55, '#f6feff'], [1, '#c4f5ff']] };
 
-  const T_YEAR0 = 1700;         // energy starts pouring into the first digit of the year
-  const YEAR_GAP = 230;         // the next digit starts this much later (less for a long year)
+  const T_YEAR0 = 1700;         // the earliest the energy starts pouring into the first digit
+  const YEAR_GAP = 205;         // the next digit starts this much later (less for a long year)
   const POUR = 120;             // the stream takes this long to reach the digit
-  const FILL_MS = 380;          // and the digit this long to fill
+  const FILL_MS = 350;          // and the digit this long to fill
   const T_YEAR_OUT = 10450;     // the digits drain, the last one first
   const DRAIN_MS = 300;
   const T_TITLE_OUT = 10620;    // the letters of the title go out, from the ends inwards
@@ -74,6 +78,12 @@
   /* ----------------------------------------------------- textures (once) --- */
 
   let TEX = null;
+  // Pictures that depend on the size of the screen, kept between prime() and play() (play() lays the
+  // style out again, and making them there would cost the first frame): the reactor's soft light and
+  // its dark backing (a few, by size), and the ignition's flash over the frame (the last one only:
+  // it is as big as the canvas).
+  const STILLS = new Map();
+  let FLASH = null;
 
   function canvas(w, h) {
     const c = document.createElement('canvas');
@@ -142,19 +152,43 @@
     const START_Y = H * 0.47;
     const K_HOLD = Math.max(0.35, HOLD_R / 225);
     // Once the reactor holds still (from T_RISE1) its halo and its dark backing are always the same
-    // picture: drawn here once at their final size, a frame copies them 1:1 onto whole device pixels
+    // picture: drawn once at their final size, a frame copies them 1:1 onto whole device pixels
     // (a stretched sprite or a big gradient costs several times as much on a software-rendered canvas).
+    // While it rises, its backing is the picture at its starting size fading into the one at its final
+    // size, both copied 1:1 too.
     const DPR = env.dpr || 1;
-    function still(r, stops) {
+    function still(r, stops, name) {
       const px = Math.max(2, Math.ceil(r * 2 * DPR));
-      const c = canvas(px, px);
+      const key = name + px;
+      let c = STILLS.get(key);
+      if (c) return c;
+      c = canvas(px, px);
       const g = c.getContext('2d');
       g.fillStyle = radial(g, px / 2, px / 2, px / 2, stops);
       g.fillRect(0, 0, px, px);
+      STILLS.set(key, c);
+      if (STILLS.size > 9) STILLS.delete(STILLS.keys().next().value);
       return c;
     }
-    const haloPic = still(HOLD_R * 1.25, HALO_STOPS);
-    const scrimPic = still(HOLD_R * 1.32, SCRIM_STOPS);
+    const haloPic = still(HOLD_R * 1.25, HALO_STOPS, 'halo');
+    const scrimPic = still(HOLD_R * 1.32, SCRIM_STOPS, 'scrim');
+    const scrimBorn = still(START_R * 1.32, SCRIM_STOPS, 'scrim');
+    // The flash over the frame at ignition, round the core where it is born: the same picture every
+    // frame but for its strength, so it is drawn once (a gradient over the whole frame each frame
+    // costs most of a frame on a software-rendered canvas).
+    const flashPic = (function () {
+      const cw = ctx.canvas.width;
+      const ch = ctx.canvas.height;
+      const key = cw + 'x' + ch + '@' + DPR + ':' + HOLD_X + ',' + START_Y;
+      if (FLASH && FLASH.key === key) return FLASH.pic;
+      const c = canvas(cw, ch);
+      const g = c.getContext('2d');
+      g.fillStyle = radial(g, HOLD_X * DPR, START_Y * DPR, Math.max(W, H) * 0.75 * DPR,
+        [[0, 'rgba(200,247,255,1)'], [0.25, 'rgba(80,200,255,0.5)'], [1, 'rgba(30,140,255,0)']]);
+      g.fillRect(0, 0, cw, ch);
+      FLASH = { key: key, pic: c };
+      return c;
+    })();
 
     // The pose of this frame (set by pose(t)): centre, radius, and the scale of lines and specks.
     let X = HOLD_X;
@@ -474,12 +508,40 @@
       return { g: g, blinks: blinks, at: at, strike: strike, caught: at + s, out: out, down: down, dark: out + o };
     });
 
+    // Where a letter's ink really is, measured once in this style's face: fx.js only guesses (cy +-
+    // 0.37 of the size), and Michroma's capitals and figures sit higher than that, so a fill that
+    // trusted the guess would top out with the top of the digit still dark, which then popped in.
+    const FACE = typeof APFx.face === 'function' ? APFx.face('arc') : null;
+    function inkOf(g) {
+      const k = { top: g.top, bottom: g.bottom, left: g.x0, right: g.x1 };
+      if (!FACE) return k;
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.font = FACE.weight + ' ' + g.size + 'px ' + FACE.family;
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+      const m = ctx.measureText(g.ch);
+      ctx.restore();
+      const up = m.actualBoundingBoxAscent;
+      const down = m.actualBoundingBoxDescent;
+      if (isFinite(up) && isFinite(down) && up + down > g.size * 0.2) { k.top = g.cy - up; k.bottom = g.cy + down; }
+      const lf = m.actualBoundingBoxLeft;
+      const rt = m.actualBoundingBoxRight;
+      if (isFinite(lf) && isFinite(rt) && lf + rt > 0) { k.left = g.x0 - lf; k.right = g.x0 + rt; }
+      return k;
+    }
+
+    // The year waits for the title: the light reaches the first digit as the last letter of the
+    // title catches, so the two lines are never being built at the same time.
+    let titleLit = 0;
+    for (const tb of tubes) titleLit = Math.max(titleLit, tb.caught);
+    const T_Y0 = clamp(titleLit - POUR - 60, T_YEAR0, T_YEAR0 + 600);
     // The year: energy pours from the reactor into each digit in turn, which fills from the bottom up.
     const nY = YEAR.length;
     const yGap = nY > 1 ? Math.min(YEAR_GAP, 820 / (nY - 1)) : 0;
     const digits = YEAR.map((g, j) => {
-      const at = T_YEAR0 + j * yGap + rnd() * 40;
-      return { g: g, at: at, full: at + POUR + FILL_MS, drain: T_YEAR_OUT + (nY - 1 - j) * 110 + rnd() * 30 };
+      const at = T_Y0 + j * yGap + rnd() * 40;
+      return { g: g, ink: inkOf(g), at: at, full: at + POUR + FILL_MS, drain: T_YEAR_OUT + (nY - 1 - j) * 110 + rnd() * 30 };
     });
     // How full a digit is (0-1) at t: it fills quickly at first, then tops out; it drains smoothly.
     function level(d, t) {
@@ -487,13 +549,18 @@
       const u = clamp((t - d.at - POUR) / FILL_MS, 0, 1);
       return 1 - (1 - u) * (1 - u);
     }
-    // The height of the surface at that level (a little past the ink at both ends), and where that
-    // height cuts the letter's picture: fx.js cuts each letter into a cell this tall, halo included.
-    const levelY = (g, lv) => lerp(g.bottom + g.size * 0.05, g.top - g.size * 0.05, lv);
+    // When the drain's surface is at level lv (the inverse of the smoothstep in level()).
+    const drainAt = (lv) => DRAIN_MS * (0.5 - Math.sin(Math.asin(clamp(2 * lv - 1, -1, 1)) / 3));
+    // The height of the surface at that level: from just under the ink (its outline included) to
+    // just over it, where little of the halo is left to cut.
+    const levelY = (d, lv) => lerp(d.ink.bottom + d.g.size * 0.05, d.ink.top - d.g.size * 0.08, lv);
+    // Where that height cuts a letter's picture: fx.js cuts each letter into a cell this tall, the
+    // margin round it set by the fill's halo (as fx.js works it out).
     const CELL_PAD = (Math.max(6, L.titleSize * 0.28) * 1.6 + L.titleSize * 0.04) / Math.min(1, DPR) + 2;
-    function cropAt(g, y) {
-      const top = Math.floor((g.cy - g.size * 0.62 - CELL_PAD) * DPR) / DPR;
-      const bottom = Math.ceil((g.cy + g.size * 0.62 + CELL_PAD) * DPR) / DPR;
+    const SURF_PAD = (L.titleSize * 0.04) / Math.min(1, DPR) + 2;
+    function cropAt(g, y, pad) {
+      const top = Math.floor((g.cy - g.size * 0.62 - pad) * DPR) / DPR;
+      const bottom = Math.ceil((g.cy + g.size * 0.62 + pad) * DPR) / DPR;
       return clamp((y - top) / Math.max(1, bottom - top), 0, 1);
     }
 
@@ -520,10 +587,9 @@
       for (const e of list) { const dd = Math.abs(e.g.cx - wx[i]); if (dd < bd) { bd = dd; best = e; } }
       if (!best) { wReach[i] = -1e9; wOut[i] = -1e9; continue; }
       if (year) {
-        const g = best.g;
-        const lv = clamp((levelY(g, 0) - wy[i]) / (levelY(g, 0) - levelY(g, 1)), 0, 1);
+        const lv = clamp((levelY(best, 0) - wy[i]) / (levelY(best, 0) - levelY(best, 1)), 0, 1);
         wReach[i] = best.at + POUR + FILL_MS * (1 - Math.sqrt(1 - lv)) + wReach[i] * 0.4;
-        wOut[i] = best.drain + DRAIN_MS * (1 - lv);
+        wOut[i] = best.drain + drainAt(lv);
       } else {
         wReach[i] += shockTime(Math.hypot(wx[i] - HOLD_X, wy[i] - HOLD_Y));
         wOut[i] = best.dark + wReach[i] % 40;
@@ -575,14 +641,9 @@
       if (t >= 320) return;
       const a = 0.2 * Math.pow(1 - t / 320, 2) * fade;
       if (a <= 0.004) return;
-      const reach = Math.max(W, H) * 0.75;
-      const g = ctx.createRadialGradient(X, Y, 0, X, Y, reach);
-      g.addColorStop(0, 'rgba(200,247,255,1)');
-      g.addColorStop(0.25, 'rgba(80,200,255,0.5)');
-      g.addColorStop(1, 'rgba(30,140,255,0)');
+      // (The reactor is still where it is born: the picture is centred on it.)
       ctx.globalAlpha = a;
-      ctx.fillStyle = g;
-      ctx.fillRect(Math.max(0, X - reach), Math.max(0, Y - reach), Math.min(W, X + reach) - Math.max(0, X - reach), Math.min(H, Y + reach) - Math.max(0, Y - reach));
+      ctx.drawImage(flashPic, 0, 0, flashPic.width / DPR, flashPic.height / DPR);
       count++;
     }
 
@@ -660,18 +721,10 @@
       const a = 0.85 * smooth(T_RISE0 - 250, T_RISE1, t) * (1 - smooth(T_BREAK + 300, T_CORE_OUT + 300, t)) * fade;
       if (a <= 0.004) return;
       ctx.globalCompositeOperation = 'source-over';
-      if (t >= T_RISE1) blit(scrimPic, X, Y, a);
-      else {
-        const r = RR * 1.32;
-        const g = ctx.createRadialGradient(X, Y, 0, X, Y, r);
-        for (const st of SCRIM_STOPS) g.addColorStop(st[0], st[1]);
-        const x0 = Math.max(0, X - r);
-        const y0 = Math.max(0, Y - r);
-        ctx.globalAlpha = a;
-        ctx.fillStyle = g;
-        ctx.fillRect(x0, y0, Math.min(W, X + r) - x0, Math.min(H, Y + r) - y0);
-        count++;
-      }
+      // While it rises (and shrinks), the backing at its first size gives way to the one at its last.
+      const u = smooth(T_RISE0, T_RISE1, t);
+      if (u < 1) blit(scrimBorn, X, Y, a * (1 - u));
+      if (u > 0) blit(scrimPic, X, Y, a * u);
       ctx.globalCompositeOperation = 'lighter';
     }
 
@@ -1354,19 +1407,31 @@
         if (t < d.full || t >= d.drain) {
           const lv = level(d, t);
           if (lv <= 0.002) continue;
-          const v = cropAt(g, levelY(g, lv));
-          const band = cropAt(g, levelY(g, lv) + g.size * 0.05) - v;
-          // Filling: the light below the surface in cyan, the surface itself white-hot. Draining:
-          // the digit keeps its colour below a falling surface.
-          env.glyph(g, fade, t < d.full ? CHARGE : FILL, { crop: [0, v, 1, 1] });
-          env.glyph(g, 0.95 * fade, HOT, { op: 'lighter', crop: [0, v, 1, Math.min(1, v + band)] });
-          count += 2;
+          const y = levelY(d, lv);
+          const filling = t < d.full;
+          // Below the surface: the digit (with its halo), in cyan while it fills; the surface itself
+          // a white-hot line in the strokes with a soft glow along it. Draining: the digit keeps its
+          // colour below a falling surface.
+          env.glyph(g, fade, FILL, { crop: [0, cropAt(g, y, CELL_PAD), 1, 1] });
+          if (filling) env.glyph(g, fade, CHARGE, { crop: [0, cropAt(g, y, SURF_PAD), 1, 1] });
+          env.glyph(g, 0.95 * fade, SURF, { op: 'lighter', crop: [0, cropAt(g, y, SURF_PAD), 1, cropAt(g, y + g.size * 0.05, SURF_PAD)] });
+          const w = d.ink.right - d.ink.left;
+          const ga = 0.6 * Math.min(1, lv * 6) * (filling ? 1 - smooth(FILL_MS - 80, FILL_MS, t - d.at - POUR) : smooth(0, 60, t - d.drain)) * fade;
+          if (ga > 0.004) {
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.globalAlpha = ga;
+            ctx.drawImage(tex.streak, d.ink.left - w * 0.22, y - g.size * 0.07, w * 1.44, g.size * 0.14);
+            ctx.restore();
+          }
+          count += 4;
         } else {
+          // Topped out: the cyan gives way to the digit's colour through a white-hot flash.
           const c = t - d.full;
           env.glyph(g, fade, FILL);
           const cyan = 1 - smooth(0, 260, c);
           if (cyan > 0.01) env.glyph(g, cyan * fade, CHARGE);
-          const hot = 0.9 * Math.exp(-c / 140) * (1 - smooth(240, 420, c));
+          const hot = 1.15 * smooth(0, 50, c) * Math.exp(-c / 160) * (1 - smooth(260, 440, c));
           if (hot > 0.01) env.glyph(g, hot * fade, HOT, LIGHT);
           count += 3;
         }
@@ -1383,7 +1448,7 @@
         const s = t - d.at;
         if (s <= 0 || s >= POUR + FILL_MS + 160) continue;
         const x1 = d.g.cx;
-        const y1 = levelY(d.g, level(d, t));
+        const y1 = levelY(d, level(d, t));
         const e = Math.atan2(y1 - Y, x1 - X);
         const x0 = X + Math.cos(e) * RR * 0.97;
         const y0 = Y + Math.sin(e) * RR * 0.97;
@@ -1428,25 +1493,26 @@
         const g = d.g;
         if (s < POUR + FILL_MS + 160) {
           // Where the stream leaves the reactor's rim.
-          const y1 = levelY(g, level(d, t));
+          const y1 = levelY(d, level(d, t));
           const e = Math.atan2(y1 - Y, g.cx - X);
           const out = smooth(0, 60, s) * (1 - smooth(POUR + FILL_MS, POUR + FILL_MS + 160, s));
           sprite(glowCyan, X + Math.cos(e) * RR * 0.97, Y + Math.sin(e) * RR * 0.97, 46 * KK, 0.8 * out * fade);
         }
         if (s < POUR + FILL_MS) {
-          const y1 = levelY(g, level(d, t));
+          const y1 = levelY(d, level(d, t));
           if (s < POUR) {
             const head = easeOut(s / POUR);
             const e = Math.atan2(y1 - Y, g.cx - X);
             sprite(glowIce, lerp(X + Math.cos(e) * RR * 0.97, g.cx, head), lerp(Y + Math.sin(e) * RR * 0.97, y1, head), 34 * KK, 0.9 * fade);
           } else {
-            sprite(glowIce, g.cx, y1, g.size * 0.55, 0.55 * fade);
+            // (Gone by the time the digit tops out, so its flash takes over without a jump.)
+            sprite(glowIce, g.cx, y1, g.size * 0.55, 0.55 * (1 - smooth(POUR + FILL_MS - 80, POUR + FILL_MS, s)) * fade);
           }
         } else {
           // Topped out: a small flash at the top of the digit.
           const c = s - POUR - FILL_MS;
-          const a = 0.75 * Math.exp(-c / 140) * fade;
-          if (a > 0.01) sprite(glowIce, g.cx, g.top, g.size * (0.7 + 0.5 * (1 - Math.exp(-c / 120))), a);
+          const a = 0.95 * smooth(0, 50, c) * Math.exp(-c / 150) * fade;
+          if (a > 0.01) sprite(glowIce, g.cx, d.ink.top, g.size * (0.7 + 0.5 * (1 - Math.exp(-c / 120))), a);
         }
       }
     }
@@ -1510,7 +1576,7 @@
         env.warm(FILL);
         env.warm(HOT);
         if (nT) env.warm(GLOW, L.title, 0);
-        if (nY) env.warm(CHARGE, L.year, 1);
+        if (nY) { env.warm(CHARGE, L.year, 1); env.warm(SURF, L.year, 1); }
       }
     };
   }
