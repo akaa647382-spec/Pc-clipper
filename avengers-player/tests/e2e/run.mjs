@@ -3111,6 +3111,8 @@ const scenarios = {
         await waitFor(s.page, () => /^9:29:00 PM: watch it start by itself at 9:29:30 PM$/.test(document.querySelector('#tsNightAt option[value="start"]').textContent), null, 3000),
         await s.page.$eval('#tsNightAt option[value="start"]', (o) => o.textContent));
       await s.page.click('[data-test="night"]');
+      // The Mission card is redrawn on the next frame, not inside the click.
+      await waitFor(s.page, () => /9:29:30/.test(document.getElementById('ktStart').textContent), null, 3000);
       const nv = await s.page.evaluate(() => {
         const { Engine, cfg } = window.__AP;
         const st = new Date(Engine.session.startEpoch);
