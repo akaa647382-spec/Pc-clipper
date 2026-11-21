@@ -1752,9 +1752,11 @@ const scenarios = {
       check('with the year, and how close to the clock the snap landed', made.title === 'You did it. Happy New Year ' + year + '!' && made.body.startsWith(year) &&
         /The snap landed on the stroke of midnight, (to the millisecond|\d+ ms from the clock)\./.test(made.body), JSON.stringify(made));
       await shot(s.page, 'newyear-madeit');
+      check('the Mission card, stopped: THE SNAP HIT MIDNIGHT, never "MISSED"', await s.page.evaluate(() => document.getElementById('stLabel').textContent === 'THE SNAP HIT MIDNIGHT' && /HAPPY NEW YEAR/.test(document.getElementById('stBig').textContent)), await s.page.textContent('#stLabel'));
       await s.page.click('#modalActions .btn-primary');
       await sleep(1500);
       check('it is said once', !(await congrats(s.page)) && await s.page.evaluate(() => window.__AP.cfg.madeIt === 0));
+      check('and the card still says the snap hit midnight', await s.page.evaluate(() => document.getElementById('stLabel').textContent === 'THE SNAP HIT MIDNIGHT' && !/Better luck/.test(document.getElementById('stSub').textContent)), await s.page.textContent('#stLabel') + ' | ' + await s.page.textContent('#stSub'));
       check('no page errors', s.errors.length === 0, s.errors.join(' | '));
     } finally { await s.close(); }
 
@@ -1774,6 +1776,30 @@ const scenarios = {
       check('no congratulations while the movie plays', !(await congrats(s.page)));
       check('the movie runs to its end, then: "You did it"', await waitFor(s.page, () => !document.getElementById('modal').hidden && /You did it/.test(document.getElementById('modalTitle').textContent), null, 40000) &&
         await s.page.evaluate(() => window.__AP.Engine.events.some((e) => /The movie finished/.test(e.text)) && window.__AP.Engine.mode === 'free'));
+      check('no page errors', s.errors.length === 0, s.errors.join(' | '));
+    } finally { await s.close(); }
+
+    // 2c. A hit, the app closed before the end and opened again after it: congratulated then.
+    t = until(25);
+    const profile2 = newProfile();
+    s = await launch(profile2, { AP_FAKE_NTP: t.fake });
+    try {
+      await onTime(s.page);
+      await loadMovie(s.page, MOVIE);
+      await setSnap(s.page, 190);                       // the 200 s clip ends 10 s after midnight
+      await waitFor(s.page, () => !document.getElementById('late').hidden, null, 10000);
+      await s.page.click('#lateBtn');
+      await waitSynced(s.page, 20000);
+      const ms = await toMidnight(s.page, t.target);
+      await sleep(Math.max(0, ms) + 2000);
+      check('hit at midnight, then the app is closed with the film still playing', await s.page.evaluate((x) => window.__AP.cfg.madeIt === x && window.__AP.cfg.armed, t.target));
+    } finally { await s.close(); }
+    await sleep(10000);                                   // the film is over by now
+    s = await launch(profile2, { AP_FAKE_NTP: t.fake });
+    try {
+      await onTime(s.page);
+      check('opened after the end: the countdown is found finished, and "You did it"', await waitFor(s.page, () => !document.getElementById('modal').hidden && /You did it/.test(document.getElementById('modalTitle').textContent), null, 30000) &&
+        await s.page.evaluate(() => !window.__AP.cfg.armed), JSON.stringify(await s.page.evaluate(() => ({ armed: window.__AP.cfg.armed, madeIt: window.__AP.cfg.madeIt, ev: window.__AP.Engine.events.slice(-5).map((e) => e.text) }))));
       check('no page errors', s.errors.length === 0, s.errors.join(' | '));
     } finally { await s.close(); }
 

@@ -104,7 +104,9 @@
     learnedLatency: 0.07, learnedSeekLead: 0.6,
     rehearsed: {},
     newYearSeen: 0,             // the New Year midnight already passed (and, if missed, said so)
-    madeIt: 0, madeItDrift: 0, madeItSnap: true   // a New Year hit, not yet congratulated (see MadeIt)
+    newYearArmed: 0,            // the New Year midnight the countdown was armed at
+    madeIt: 0, madeItDrift: 0, madeItSnap: true,  // a New Year hit, not yet congratulated (see MadeIt)
+    madeItSaid: 0, madeItReplay: ''               // the hit already congratulated; its replay of midnight
   };
 
   const cfg = (() => {
@@ -135,6 +137,8 @@
     if (typeof c.rehearsed !== 'object' || Array.isArray(c.rehearsed)) c.rehearsed = {};
     if (!Number.isFinite(c.newYearSeen)) c.newYearSeen = 0;
     if (!Number.isFinite(c.madeIt) || !Number.isFinite(c.madeItDrift)) { c.madeIt = 0; c.madeItDrift = 0; }
+    if (!Number.isFinite(c.madeItSaid)) c.madeItSaid = 0;
+    if (!Number.isFinite(c.newYearArmed)) c.newYearArmed = 0;
     // The snap point each film file was given: only well-formed entries survive, in a fresh object.
     const byFile = {};
     if (c.snapByFile && typeof c.snapByFile === 'object' && !Array.isArray(c.snapByFile)) {
@@ -1228,6 +1232,7 @@
           toast('That countdown has already finished.');
           this.session = this.computeFree();
           UI.onMode();
+          MadeIt.over();
           return;
         }
         toast('That moment has already passed. Pick a later target in Setup.', 'bad');
@@ -2215,6 +2220,7 @@
       if (now < t || cfg.newYearSeen === t) return;
       if (cfg.armed || Engine.mode === 'armed' || now - t > this.WINDOW_MS) {   // done, or long past
         cfg.newYearSeen = t;
+        if (cfg.armed || Engine.mode === 'armed') cfg.newYearArmed = t;
         save();
         return;
       }
@@ -2246,6 +2252,7 @@
     DAY_MS: 24 * 3600000,
     simAt: 0,          // the simulated midnight the film was on the clock at (a rehearsal: not kept)
     due: false,        // the movie is over: say it as soon as nothing else is on screen
+    dueAt: 0,
 
     /** The instant of the target in an armed countdown: was the film on the clock? */
     reached(s) {
@@ -2261,32 +2268,48 @@
       Engine.logEvent('New Year hit: the film was ' + fmtMs(d) + ' from the clock at midnight');
     },
 
-    /** Whether the film was on the clock at the target of `s`. */
-    hit(s) { return !!s && (Engine.test ? this.simAt === s.targetEpoch : cfg.madeIt === s.targetEpoch); },
+    /** Whether the film was on the clock at the target of `s` (congratulated yet or not). */
+    hit(s) { return !!s && (Engine.test ? this.simAt === s.targetEpoch : cfg.madeIt === s.targetEpoch || cfg.madeItSaid === s.targetEpoch); },
 
-    /** The movie is over: the end of the file, or the countdown stopped. */
-    over() { if (cfg.madeIt && Clock.now() >= cfg.madeIt) this.due = true; },
+    /**
+     * The movie is over: the end of the file, the countdown stopped, a restored countdown found
+     * finished, or its resume card discarded. A hit more than a day old is let go.
+     */
+    over() {
+      const t = cfg.madeIt;
+      if (!t) return;
+      if (Clock.now() - t >= this.DAY_MS) { cfg.madeIt = 0; save(); return; }
+      if (Clock.now() >= t) { this.due = true; this.dueAt = performance.now(); }
+    },
 
-    /** At start-up: a New Year hit with the app closed before the movie was over. */
+    /**
+     * At start-up: a New Year hit with the app closed before the movie was over. Before the internet
+     * time is known: the PC clock can be minutes off either way, so only a hit a day old is let go.
+     */
     boot() {
       if (!cfg.madeIt || cfg.armed) return;
-      if (Date.now() >= cfg.madeIt && Date.now() - cfg.madeIt < this.DAY_MS) this.due = true;
-      else { cfg.madeIt = 0; save(); }
+      const age = Date.now() - cfg.madeIt;
+      if (Math.abs(age) < this.DAY_MS) { this.due = true; this.dueAt = performance.now(); } else { cfg.madeIt = 0; save(); }
     },
 
     tick() {
       if (!this.due || Engine.test || Modal.isOpen || SnapCam.busy || SnapCam.view) return;
       if ((Celebration.fx && Celebration.fx.running) || !el.banner.hidden) return;     // the animation first
+      // The replay of midnight still being written: wait for it (a few seconds at most), to point to it.
+      const r = Replay.rec || Replay.finishing;
+      if (r && r.kind === 'midnight' && !r.sim && r.session === cfg.madeIt && performance.now() - this.dueAt < 15000) return;
       this.due = false;
       const t = cfg.madeIt;
       if (!t) return;
       const d = cfg.madeItDrift;
       const snap = cfg.madeItSnap;
+      const replay = !!cfg.madeItReplay;
       cfg.madeIt = 0;
+      cfg.madeItSaid = t;
+      cfg.madeItReplay = '';
       saveNow();
       const year = new Date(t).getFullYear();
       const off = Math.abs(d) < 0.0005 ? 'to the millisecond' : '<b>' + fmtOff(d) + '</b> from the clock';
-      const replay = !!Replay.midnightFile;
       Engine.logEvent('Congratulations shown: New Year ' + year + ' hit');
       Modal.open({
         title: 'You did it. Happy New Year ' + year + '!',
@@ -2312,7 +2335,7 @@
    */
   const Replay = {
     rec: null,                 // the recording under way
-    midnightFile: '',          // where the replay of the real midnight was saved
+    finishing: null,           // the recording being written out (stop() under way)
     done: Object.create(null), // the moments already recorded (or tried) in this session
 
     /** The moments of this countdown that are recorded, on its clock. */
@@ -2413,13 +2436,20 @@
       const rec = this.rec;
       this.rec = null;
       if (!rec || !rec.recorder) return;
-      await new Promise((res) => { rec.recorder.onstop = res; try { rec.recorder.stop(); } catch (e) { res(); } });
-      rec.tracks.forEach((t) => { try { t.stop(); } catch (e) { /* gone */ } });
-      await rec.parts;
-      const file = await native.replayEnd(rec.out.id, true, performance.now() - rec.startedAt);
+      this.finishing = rec;
+      let file = null;
+      try {
+        await new Promise((res) => { rec.recorder.onstop = res; try { rec.recorder.stop(); } catch (e) { res(); } });
+        rec.tracks.forEach((t) => { try { t.stop(); } catch (e) { /* gone */ } });
+        await rec.parts;
+        file = await native.replayEnd(rec.out.id, true, performance.now() - rec.startedAt);
+      } finally {
+        if (this.finishing === rec) this.finishing = null;
+      }
       if (!file) return;
       const name = String(file).split(/[\\/]/).pop();
-      if (rec.kind === 'midnight' && !rec.sim) this.midnightFile = file;
+      // The congratulation (MadeIt) points to it, also after a restart.
+      if (rec.kind === 'midnight' && !rec.sim && cfg.madeIt === rec.session) { cfg.madeItReplay = String(file); save(); }
       toast((rec.sim ? 'Rehearsal replay saved: ' : 'Replay saved: ') + 'Videos › Avengers Player › ' + name, 'good', 9000);
       Engine.logEvent('Replay saved: ' + file);
     }
@@ -5120,7 +5150,13 @@
       const cdSnap = C.untilClockSecond(s.targetEpoch, now);
       if (e.mode !== 'armed') {
         if (toStart > 0) { label = 'READY · NOT ARMED'; big = startCountdown(s, now); sub = 'until the movie has to start'; }
-        else if (newYear && toSnap <= 0) { label = 'MISSED · NOT ARMED'; big = 'HAPPY NEW YEAR'; sub = 'The countdown did not run this time. Better luck next year.'; }
+        else if (newYear && toSnap <= 0) {
+          // After midnight: missed only when the countdown was not running at it.
+          big = 'HAPPY NEW YEAR';
+          if (MadeIt.hit(s) && cfg.madeItSnap) { state = 'done'; label = 'THE SNAP HIT MIDNIGHT'; sub = 'What a way to start the year.'; }
+          else if (MadeIt.hit(s) || cfg.newYearArmed === s.targetEpoch) { state = 'done'; label = 'THE COUNTDOWN IS OVER'; sub = 'It was running at midnight. See you next year.'; }
+          else { label = 'MISSED · NOT ARMED'; sub = 'The countdown did not run this time. Better luck next year.'; }
+        }
         else if (Late.position(now) != null) { state = 'slipped'; label = 'LATE · NOT ARMED'; big = C.fmtDuration(Math.max(0, C.filmSecondOnClock(s, now)), { forceHours: true }); sub = 'is where the movie should be now. Press JOIN NOW to jump in.'; }
         else { label = 'READY · NOT ARMED'; big = startCountdown(s, now); sub = 'until the movie has to start'; }
       } else if (e.phase === 'slipped' || e.phase === 'blocked') {
@@ -5467,6 +5503,7 @@
       cfg.armed = false; cfg.armedTarget = null; cfg.armedEnd = null; saveNow();
       tellArmed(false);
       UI.renderResume();
+      MadeIt.over();
     });
 
     const dropTargets = [el.importView, el.stage];
