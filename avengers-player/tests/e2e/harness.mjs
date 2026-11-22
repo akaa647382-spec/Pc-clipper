@@ -33,9 +33,18 @@ export function ensureMedia() {
   if (r.status !== 0) throw new Error('Could not generate the test clips (is ffmpeg installed?).');
 }
 
+const PROFILES = [];
 export function newProfile() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'avengers-player-test-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'avengers-player-test-'));
+  PROFILES.push(dir);
+  return dir;
 }
+// Each profile holds copies of the test films (about 100 MB): a full run leaves gigabytes behind, so
+// they go when the run ends (AP_KEEP_PROFILES=1 keeps them, to look into a failure).
+process.on('exit', () => {
+  if (process.env.AP_KEEP_PROFILES) return;
+  for (const dir of PROFILES) { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { /* best effort */ } }
+});
 
 /**
  * Starts the app. `profile` is the userData folder (reuse it to simulate closing and reopening).

@@ -8,7 +8,9 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { Store, writeDurable } = require('../../main/store.js');
 
-const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'ap-store-'));
+const made = [];
+const tmp = () => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'ap-store-')); made.push(d); return d; };
+test.after(() => { for (const d of made) fs.rmSync(d, { recursive: true, force: true }); });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 test('a save reaches the disk whole and reads back', () => {
