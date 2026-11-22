@@ -5047,9 +5047,12 @@
       const lateNow = Late.position(now) != null;
       if (lateNow !== this.lateNow) { this.lateNow = lateNow; this.renderArmButton(); }
 
-      // A few seconds before the moment, the animation gets ready, so it starts on the very frame.
-      if (s && Engine.mode === 'armed' && s.targetEpoch - now < 12000 && s.targetEpoch - now > 0 && this.primedFor !== s.targetEpoch) {
-        this.primedFor = s.targetEpoch;
+      // A minute before the moment, the animation gets ready (the heavier ones build their pictures a few
+      // milliseconds at a time in the background), so it starts on the very frame. Another animation
+      // picked in that last minute is made ready at once.
+      const primeKey = s ? s.targetEpoch + '|' + cfg.celebration : '';
+      if (s && Engine.mode === 'armed' && s.targetEpoch - now < 60000 && s.targetEpoch - now > 0 && this.primedFor !== primeKey) {
+        this.primedFor = primeKey;
         Celebration.prime(s.targetEpoch);
       }
       // The instant of the snap: fire the celebration within one frame of it.
@@ -5710,7 +5713,11 @@
     bindSelect(el.optPos, 'overlayPos');
     bindSelect(el.optSize, 'overlaySize');
     bindSelect(el.opt24h, 'use24h', (v) => v === '24');
-    $$('button', el.optCelebration).forEach((b) => b.addEventListener('click', () => setCfg('celebration', b.dataset.v)));
+    // A style is made ready as soon as it is picked, so its preview (and a midnight close by) starts at once.
+    $$('button', el.optCelebration).forEach((b) => b.addEventListener('click', () => {
+      setCfg('celebration', b.dataset.v);
+      Celebration.prime(Engine.session ? Engine.session.targetEpoch : Date.now());
+    }));
     el.previewTen.addEventListener('click', () => UI.toggleTenPreview());
     el.previewCelebration.addEventListener('click', () => {
       if (cfg.celebration === 'off') { toast('The animation is switched off'); return; }
