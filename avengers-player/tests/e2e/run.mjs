@@ -131,7 +131,7 @@ async function tenPreviews(s) {
     arc: { anim: 'ten-arc', layers: true, face: ['AP Michroma', '400', 'Michroma'] },
     hotrod: { anim: 'ten-hotrod', layers: true, face: ['AP Russo One', '400', 'Russo One'] },
     infinity: { anim: 'ten-infinity', layers: true, face: ['AP Syncopate', '700', 'Syncopate'] },
-    gamma: { anim: 'ten-gamma', layers: true, face: ['AP Anton', '400', 'Anton'] },
+    gamma: { anim: 'ten-gamma', layers: true, face: ['AP Gasoek One', '400', 'Gasoek One'] },
     warmachine: { anim: 'ten-wm', layers: true, face: ['AP Black Ops One', '400', 'Black Ops One'] },
     tva: { anim: 'ten-tva', layers: true, face: ['AP Orbitron', '900', 'Orbitron'] },
     doom: { anim: 'ten-doom', layers: true, face: ['AP Cinzel', '900', 'Cinzel'] },

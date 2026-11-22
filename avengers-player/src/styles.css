@@ -497,71 +497,83 @@ kbd {
   100% { transform: scale(.4); opacity: 0; }
 }
 
-/* Gamma (Anton, lime to green inside a thick dark outline): a green flash and a jolt that shakes the
-   number, a jagged crack of lightning behind it and a shock ring along the ground. 3, 2, 1: harder. */
-.overlay[data-ten="gamma"] { --ten-face: 'AP Anton'; --ten-weight: 400; --ten-acc: #d8ff5a; --f: .86; --ty: 0em; }
+/* Gamma (Gasoek One cut in photographed rock, its side wall below it, lit green from the ground): each
+   number slams down onto its feet with a jolt, a crack of green light runs along the ground under it
+   and dust kicks out to both sides. 3, 2, 1: harder, and the number lands glowing hot, cooling to stone. */
+.overlay[data-ten="gamma"] { --ten-face: 'AP Gasoek One'; --ten-weight: 400; --ten-acc: #7dff6a; --f: .8; --ty: -.02em; }
+/* the number itself is the side wall: near-black stone stacked under the face, green from below, a soft shadow */
 .overlay.final[data-ten="gamma"] .ov-count .val {
-  color: #03150a; -webkit-text-stroke: .14em #03150a;
-  text-shadow: 0 0 .1em rgba(92, 255, 154, .6), 0 0 .3em rgba(18, 184, 90, .45);
+  color: #0b110c; transform-origin: 50% 86%;
+  text-shadow: 0 .012em 0 #111811, 0 .024em 0 #0e150f, 0 .036em 0 #0c120c, 0 .048em 0 #0a0f0a,
+    0 .056em .03em rgba(70, 255, 120, .38), 0 .1em .16em rgba(0, 0, 0, .6);
 }
-.overlay.final[data-ten="gamma"] .ov-count .val.pop { animation: ten-gamma .29s linear both; }
-.overlay.final[data-ten="gamma"] .ov-count .val.last.pop { animation: ten-gamma-last .34s linear both; }
+.overlay.final[data-ten="gamma"] .ov-count .val.pop { animation: ten-gamma .44s linear both; }
+.overlay.final[data-ten="gamma"] .ov-count .val.last.pop { animation: ten-gamma-last .52s linear both; }
 @keyframes ten-gamma {
-  0% { transform: scale(1.16); opacity: .7; }
-  15.6% { transform: translate(-.035em, .012em) scale(1.03); opacity: 1; }
-  31.3% { transform: translate(.03em, -.01em) scale(1.01); }
-  46.9% { transform: translate(-.022em, .006em); }
-  62.5% { transform: translate(.014em, -.004em); }
-  81.3% { transform: translate(-.006em, 0); }
+  0% { transform: translateY(-.42em) scale(1.05); opacity: 0; animation-timing-function: cubic-bezier(.55, 0, 1, .45); }
+  10% { opacity: 1; }
+  20% { transform: translateY(0) scale(1.05, .92); animation-timing-function: cubic-bezier(.2, .7, .3, 1); }
+  31% { transform: translate(-.022em, -.012em) scale(.985, 1.02); }
+  43% { transform: translate(.016em, .004em); }
+  57% { transform: translate(-.009em, 0); }
+  72% { transform: translate(.004em, 0); }
   100% { transform: none; opacity: 1; }
 }
 @keyframes ten-gamma-last {
-  0% { transform: scale(1.24); opacity: .7; }
-  13.2% { transform: translate(-.05em, .018em) scale(1.05); opacity: 1; }
-  26.3% { transform: translate(.045em, -.016em) scale(1.02); }
-  39.5% { transform: translate(-.034em, .01em); }
-  52.6% { transform: translate(.024em, -.006em); }
-  68.4% { transform: translate(-.012em, .003em); }
-  84.2% { transform: translate(.005em, 0); }
+  0% { transform: translateY(-.6em) scale(1.08); opacity: 0; animation-timing-function: cubic-bezier(.6, 0, 1, .4); }
+  8% { opacity: 1; }
+  17% { transform: translateY(0) scale(1.08, .88); animation-timing-function: cubic-bezier(.2, .7, .3, 1); }
+  26% { transform: translate(-.04em, -.018em) scale(.98, 1.03); }
+  36% { transform: translate(.03em, .008em); }
+  47% { transform: translate(-.02em, -.004em); }
+  60% { transform: translate(.01em, 0); }
+  76% { transform: translate(-.004em, 0); }
   100% { transform: none; opacity: 1; }
 }
-/* lime to green, white-hot as it lands */
+/* the face: photographed rock (CC0, ambientCG), lit from above, a breath of green at its foot */
 .overlay.final[data-ten="gamma"] .ov-count .val::after {
-  content: attr(data-n); color: transparent; -webkit-text-stroke: 0; text-shadow: none;
-  background: linear-gradient(180deg, #f4ffad 8%, #d4ff4f 34%, #78f35c 64%, #1fbf55 98%);
+  content: attr(data-n); color: transparent; text-shadow: none; translate: 0 -.05em;
+  background:
+    linear-gradient(180deg, rgba(235, 245, 230, .26) 0%, rgba(235, 245, 230, 0) 42%, rgba(0, 0, 0, .18) 70%, rgba(70, 255, 120, .2) 100%),
+    url('textures/gamma-count-rock.jpg') 30% 40% / 2.2em auto;
   -webkit-background-clip: text; background-clip: text;
 }
-.overlay.final[data-ten="gamma"] .ov-count .val.pop::after { animation: ten-gamma-hot .42s ease-out both; }
-.overlay.final[data-ten="gamma"] .ov-count .val.last.pop::after { animation-duration: .6s; }
-@keyframes ten-gamma-hot { from { filter: brightness(1.8); } to { filter: none; } }
-/* the flash behind it */
+.overlay.final[data-ten="gamma"] .ov-count .val:is([data-n="9"], [data-n="7"], [data-n="5"], [data-n="3"], [data-n="1"])::after { background-position: 0 0, 70% 15%; }
+/* the heat on landing: a hot core in the stone that cools from the edges in (weak on 10 to 4, hot on 3, 2, 1) */
 .overlay.final[data-ten="gamma"] .ov-count .val::before {
-  content: ''; z-index: -1; border-radius: 50%; opacity: 0;
-  background: radial-gradient(closest-side, rgba(216, 255, 90, .5), rgba(92, 255, 154, .2) 55%, transparent);
+  content: attr(data-n); z-index: 1; color: transparent; text-shadow: none; translate: 0 -.05em; opacity: 0; mix-blend-mode: screen;
+  background: radial-gradient(ellipse 60% 55% at 50% 60%, #f4ffd8 0%, #b8ff5c 30%, #3fe06a 62%, rgba(20, 120, 50, .4) 85%);
+  -webkit-background-clip: text; background-clip: text;
 }
-.overlay.final[data-ten="gamma"] .ov-count .val.pop::before { animation: ten-out .38s ease-out both; }
-/* the crack (mirrored every other second) */
+.overlay.final[data-ten="gamma"] .ov-count .val.pop::before { animation: ten-gamma-heat .5s ease-out .07s both; }
+.overlay.final[data-ten="gamma"] .ov-count .val.last.pop::before { animation: ten-gamma-hot .9s cubic-bezier(.3, .6, .4, 1) .07s both; }
+@keyframes ten-gamma-heat { 0% { opacity: .55; } 100% { opacity: 0; } }
+@keyframes ten-gamma-hot { 0% { opacity: 1; } 35% { opacity: .75; } 100% { opacity: 0; } }
+/* the crack of light along the ground under it (mirrored every other second) */
 .overlay.final[data-ten="gamma"] .ov-count .ten-fx::after {
-  content: ''; z-index: -1; inset: 0; opacity: 0;
-  background: linear-gradient(135deg, #fbffe8, #d8ff5a 45%, #5cff9a);
-  clip-path: polygon(10% 16%, 30% 36%, 25% 41%, 49% 56%, 44% 61%, 73% 79%, 69% 82%, 90% 92%,
-    88% 94.5%, 66% 85%, 70% 82%, 41% 64%, 46% 59%, 22% 44%, 27% 39%, 8% 18.5%);
+  content: ''; z-index: -1; left: -.06em; right: -.06em; top: 80%; height: .09em; opacity: 0;
+  background: linear-gradient(90deg, transparent, #3fe06a 18%, #eaffc4 50%, #3fe06a 82%, transparent);
+  clip-path: polygon(0 55%, 12% 40%, 21% 62%, 33% 30%, 41% 52%, 50% 20%, 58% 50%, 67% 35%, 78% 60%, 88% 42%, 100% 55%,
+    100% 70%, 88% 58%, 78% 80%, 67% 52%, 58% 70%, 50% 45%, 41% 72%, 33% 50%, 21% 82%, 12% 58%, 0 70%);
+  filter: drop-shadow(0 0 .03em #5cff8a);
 }
 .overlay.final[data-ten="gamma"] .ov-count .val:is([data-n="9"], [data-n="7"], [data-n="5"], [data-n="3"], [data-n="1"]) + .ten-fx::after { scale: -1 1; }
-.overlay.final[data-ten="gamma"] .ov-count .val.pop + .ten-fx::after { animation: ten-gamma-crack .32s linear .02s both; }
-.overlay.final[data-ten="gamma"] .ov-count .val.last.pop + .ten-fx::after { animation-duration: .5s; }
-@keyframes ten-gamma-crack {
-  0% { opacity: 0; } 8% { opacity: 1; } 22% { opacity: .25; } 34% { opacity: 1; } 52% { opacity: .5; } 64% { opacity: .9; } 100% { opacity: 0; }
-}
-/* the shock ring along the ground */
+.overlay.final[data-ten="gamma"] .ov-count .val.pop + .ten-fx::after { animation: ten-gamma-crack .5s ease-out .08s both; }
+.overlay.final[data-ten="gamma"] .ov-count .val.last.pop + .ten-fx::after { animation-duration: .8s; }
+@keyframes ten-gamma-crack { 0% { opacity: 0; transform: scaleX(.2); } 10% { opacity: 1; } 30% { transform: none; } 100% { opacity: 0; transform: none; } }
+/* the dust kicked out to both sides along the ground */
 .overlay.final[data-ten="gamma"] .ov-count .ten-fx::before {
-  content: ''; z-index: -1; left: 50%; top: 82%; width: 1.5em; height: .3em; margin: -.15em 0 0 -.75em; border-radius: 50%;
-  border: .018em solid rgba(216, 255, 90, .9); box-shadow: 0 0 .05em #5cff9a, inset 0 0 .05em #5cff9a;
-  opacity: 0;
+  content: ''; z-index: -1; left: -.25em; right: -.25em; top: 62%; height: .36em; opacity: 0;
+  background:
+    radial-gradient(ellipse 34% 48% at 24% 62%, rgba(132, 122, 104, .62), rgba(132, 122, 104, 0) 70%),
+    radial-gradient(ellipse 34% 48% at 76% 62%, rgba(132, 122, 104, .62), rgba(132, 122, 104, 0) 70%),
+    radial-gradient(ellipse 30% 40% at 50% 74%, rgba(90, 160, 100, .45), rgba(90, 160, 100, 0) 72%);
 }
-.overlay.final[data-ten="gamma"] .ov-count .val.pop + .ten-fx::before { animation: ten-gamma-ring .55s cubic-bezier(.1, .65, .35, 1) .03s both; }
-.overlay.final[data-ten="gamma"] .ov-count .val.last.pop + .ten-fx::before { border-width: .028em; animation-duration: .7s; }
-@keyframes ten-gamma-ring { 0% { transform: scale(.15); opacity: 0; } 3% { opacity: 1; } 100% { transform: none; opacity: 0; } }
+.overlay.final[data-ten="gamma"] .ov-count .val.pop + .ten-fx::before { animation: ten-gamma-dust .7s cubic-bezier(.15, .6, .35, 1) .08s both; }
+.overlay.final[data-ten="gamma"] .ov-count .val.last.pop + .ten-fx::before { animation-duration: .95s; }
+@keyframes ten-gamma-dust {
+  0% { transform: scale(.35, .6); opacity: 0; } 12% { opacity: .9; } 100% { transform: translateY(-.06em) scale(1.25, 1); opacity: 0; }
+}
 
 /* War Machine (Black Ops One, gunmetal with a fine red edge): corner brackets snap shut around the
    number and blink red as they lock on, while a scan line wipes the number in. 3, 2, 1: the lock
