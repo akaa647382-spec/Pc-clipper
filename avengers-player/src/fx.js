@@ -130,6 +130,7 @@
     let lastStepT = -1;      // the last moment simulated (a resize mid-way does not replay the bursts)
     let stepT = 0;           // the time of the step being run (cues carry it)
     let cueLive = false;     // cues go out only while an animation plays (or renderAt runs), never from prime()
+    let priming = false;     // true while prime() runs: a style's create() can then build its pictures in the background
     let cueFloor = -1;       // after a mid-animation re-layout, moments up to here were already reported
     let wordsCache = Object.create(null);    // these three are kept until the size changes:
     let sampleCache = Object.create(null);   // prime() fills them before midnight, so the first
@@ -393,6 +394,9 @@
         // Reports a moment for the sound (sfx.js): cue(name, { x: 0..1 across, … }, atMs). See plugCue().
         cue: plugCue,
         low: () => low,                       // true once the PC cannot keep 60 frames a second: draw less
+        // true when create() runs for prime(), seconds before midnight: slow pictures can then be made a few
+        // milliseconds at a time in the background; false when it runs for play(), renderAt() or a resize.
+        priming: priming,
         clamp: clamp, lerp: lerp, smooth: smooth, easeOut: easeOut, easeIn: easeIn, mulberry32: mulberry32
       };
     }
@@ -1068,6 +1072,7 @@
     function prime(o) {
       if (running || W < 8 || H < 8) return;
       cueLive = false;
+      priming = true;
       try {
         opts = options(o);
         prepare();
@@ -1075,6 +1080,7 @@
         if (lines) { glyphSet(GOLD, 0, layout.title); if (layout.year) glyphSet(GOLD, 1, layout.year); }
         if (custom && custom.prime) custom.prime();
       } catch (e) { /* only a head start */ }
+      priming = false;
       opts = null;
       layout = null;
       dust = null;
