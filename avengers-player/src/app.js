@@ -4391,7 +4391,7 @@
     arc: 'An arc reactor ignites; its shockwave strikes each letter on like a neon tube, then energy fills the year digit by digit.',
     hotrod: 'Red and gold: 2027 is struck digit by digit from molten metal, then a welding torch writes HAPPY NEW YEAR in sparks.',
     infinity: 'Thanos: a snap, six coloured lights collide into a gold blaze that forges 2027, ash rises into the greeting, then half of it turns to dust. Perfectly balanced.',
-    gamma: 'Green gamma storm: the new year smashes down digit by digit, then lightning bolts write HAPPY NEW YEAR one letter at a time.',
+    gamma: 'Ground zero: something colossal lands, the new year grinds up out of the rubble in glowing stone, HAPPY NEW YEAR slams in, a heartbeat shakes it all, and a final blow breaks the letters into rock.',
     warmachine: 'A tactical HUD boots, a target box locks each letter as a scan renders it in steel, then the year\'s counter rolls and locks.',
     tva: 'Amber TVA bureau: an old split-flap clock flips over to the new year, then HAPPY NEW YEAR types out on a terminal.',
     doom: 'Green fire burns the title in letter by letter, then the rune circle surges and brands the year, centre digits first.',
@@ -4709,6 +4709,11 @@
       $$('.tab').forEach((t) => t.classList.toggle('on', t.dataset.tab === id));
       $$('.pane').forEach((p) => p.classList.toggle('on', p.id === 'pane-' + id));
       this.dirty.all = true;
+      // Where the animation can be previewed: the chosen one gets ready in the background.
+      if (id === 'display' && !this.primedDisplay && Celebration.fx) {
+        this.primedDisplay = true;
+        Celebration.prime(Engine.session ? Engine.session.targetEpoch : Date.now());
+      }
     },
 
     applyTheme() {

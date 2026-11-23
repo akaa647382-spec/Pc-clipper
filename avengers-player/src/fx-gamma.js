@@ -1,31 +1,137 @@
 /*!
- * Avengers Player: 'gamma', a gamma surge at the instant of the snap.
+ * Avengers Player: 'gamma', GROUND ZERO. Mass, impact, rage.
  *
- * Smash, then strike. At midnight a green thunderclap cracks across the sky and the year comes down
- * out of it: the digits plunge in at the top of the picture one after another, white-hot with green
- * trails, and hit the ground one, two, three, four, each slamming a ring out from under it. As the
- * last one lands the shock goes off: heavy rings slam out, the digits jolt and settle, arcs race away
- * along the ground and glassy shards fly. Then lightning writes the title: for each letter in turn
- * the air charges, a bolt feels its way down from the sky and hits it (now and then one fork hits
- * two), the charge pours into the letter from where it was hit, and it flashes white-hot and cools to
- * pale lime. From then on the words burn in a glow of their own that beats like a heart: lightning
- * leaps around them and along the edges of the picture, electricity crawls over the letters, embers
- * and shards rise, and half-way through it all surges again. At the end the arcs die down and the
- * letters short out one by one, left to right, in a last crackle and a spray of sparks. (No year: the
- * thunderclap is a bolt into the ground under the words, and the lightning writes the title.) The
- * year is only ever the one given: there is no old year rolling over.
+ * At midnight something colossal lands on the ground under the words. Nothing of it is ever seen:
+ * only what it does. The frame is blown out white for two frames; as it clears (the exposure falls
+ * off as green-white light around the crater, torn by the dust it shines through, never a veil) the
+ * camera is knocked down hard and a berm of broken rock is thrown up where the words will stand:
+ * every rock on its own arc out of the pit, opaque from its first frame, over a bed of dust that
+ * gathers under it. A few large, sharp, dark pieces come up through the bottom corners of the
+ * frame, close to the lens. A low shock of dust races along the ground to both edges of the frame,
+ * fans of dust and grit (lit green from below) shoot up out of the pit, rock flies under gravity, a
+ * few thin sparks streak away. The rocks are dark, opaque basalt at all times: the crater's light
+ * is only an underlight on their down-turned facets, and leaks up BETWEEN them.
+ * The year breaks up through the rubble digit by digit: each grinds up in surges and stalls, the
+ * chunks before it heaved up and aside, grit pouring off its shoulders; it comes up incandescent (a
+ * dark crust broken into plates, pale heat only in the narrow cracks and along some edges, a thin
+ * glow given off by those), hangs, drops, and the stone gives for two or three frames as it lands
+ * in a ring of dust; it cools from its edges inward to grey rock with a cool key along its top
+ * chamfers, green only from below. The title then comes at the camera word by word (each one
+ * picture, with a true zoom blur, shrinking onto its place); the last word is the biggest hit: a
+ * camera knock and a short, low bloom.
+ * While the words hold, the scene breathes like rage: the pit glows (a wide, level glow behind the
+ * letters), flickers and slowly brightens, embers climb, low sheets of dust roll outward along the
+ * ground, the light in the cracks wavers, and a heartbeat (lub-dub, harder each time) flares the
+ * pit and the cracks, drops the camera, swells the whole lockup by a per cent or two, makes grit
+ * hop and, from the third beat, shakes the berm and breathes dust out of it. Three times a glint
+ * crosses the stone along its chamfers. At 6 s a second smash (a burst of green-white light, no
+ * white frame) throws the block of letters into the air: not as one rigid slab, each letter a
+ * little higher or lower than its neighbour, drifting, the title's letters turning a degree, and
+ * the title comes down a frame or two after the year. Each letter cracks as it lands: fissures run
+ * up it from its foot in five or six frames, white-hot at their tips, wide at the foot and a hair
+ * at their ends, along the valleys of the rock, never straight. From 10 s the ground trembles. At
+ * 11 s the final pound: a burst of light, the cracks blaze, the letters break along them into thick
+ * pieces that go cold within a fifth of a second, come down on the rubble where they stood (their
+ * feet behind the row of rock in front), bounce once and topple flat behind it; then the heap
+ * itself gives way from its ends inward, every rock tumbling forward and settling flat into the
+ * dust; the last of it settles with a low thud, and the light and the dust die to nothing in
+ * 180 ms. Nothing is left to cut.
  *
- * Light only, the movie is under the canvas: everything but the letters is added with 'lighter'.
- * Every bolt, letter and particle path is worked out in create(), and the frame for a time t depends
- * only on the seed and t (nothing is simulated from frame to frame, so step() has nothing to do).
+ * Timeline (ms; with a four-digit year and a three-word title):
+ *       0        IMPACT: the frame white for two frames, then green-white light falling off around
+ *                the crater (gone by ~150), a faint lens streak
+ *      14..310   the berm is thrown up, rock by rock, from the middle outward
+ *      30        the camera is knocked down (about 15, 34, 29, 21 px on frames 3 to 6) and shaken;
+ *                the shock of dust reaches both edges of the frame by ~250; fans of lit dust and
+ *                grit up to half the frame high; rock, low debris, sparks
+ *      40..150   four large pieces of rock enter through the bottom corners, close to the lens
+ *                (gone by ~700)
+ *     330..930   a digit starts every 200 ms: 310 ms grinding up through the rubble (three surges,
+ *                two stalls), 90 ms hanging, 100 ms dropping
+ *     830..1430  ... and each lands (the stone squashes for 2-3 frames, the camera drops ~9 px, a
+ *                ring of dust), incandescent; its edges are cold after ~0.2 s, its cracks after ~0.7 s
+ *    1750..2350  the title words slam in toward the camera, one every 300 ms (each travels 85 ms);
+ *                the LAST (2350) is the hero hit: camera knock, a short low bloom, low dust, rock
+ *    3000, 4350, 5250   heartbeat (lub at the beat, dub 230 ms later): the camera drops 8, 9, 10 px,
+ *                the lockup swells 0.9 .. 1.2 %
+ *    3500, 7000, 9100   a glint crosses the letters (900 ms each; the year 140 ms after the title)
+ *    6000        SECOND SMASH: a burst of green-white light around the crater (no white frame),
+ *                shock dust, fans of grit, rock; the letters are thrown up (each a little apart) ...
+ *    6380        ... the year crashes back (camera, rubble kicked up, dust, chips), the title 25 ms
+ *                later; each letter cracks from its foot to its head in 90 ms
+ *    7550, 8750, 9750, 10450   heartbeat, harder each time (camera 11, 12, 13, 14 px; the lockup
+ *                swells up to 1.9 %; the berm shudders and breathes dust)
+ *   10000..11000 the ground trembles, more and more
+ *   11000        FINAL POUND: a burst of light, the cracks blaze (90 ms) ...
+ *   11090        ... the letters break along their cracks into thick pieces; their light dies in
+ *                ~0.17 s; they come down on the rubble (rumbles at ~11420 and ~11610), bounce,
+ *                topple flat (all down by ~12100)
+ *   11720..12120 the heap gives way, rock by rock, from its ends inward, in dust
+ *   12120        the last of it settles: a low thud (camera 15 px), a last flare of the pit ...
+ *   12300        ... and light and dust have died to nothing (180 ms): nothing is drawn from here
+ *   12500        end
+ * Without a year the crater is under the title and its words slam in from 560 ms.
  *
- * Speed, measured on a software-rendered canvas: a long stroke costs about the same whatever its
- * width, a 1-pixel one a sixth of that, and a stretched image several times more per pixel than
- * one drawn at its own size. So only a bolt's trunk gets a glow (its core and its branches are
- * 1-pixel lines), a letter is only stretched while it falls or is hit, its white heat is the small
- * halo-less picture added on top (not a second picture with a halo), once every letter has settled
- * the words are stamped in one piece, and the big glows (each letter's and each line's, the pool on
- * the ground, the bloom of a hit, the edges) are rendered once at their final size and only copied.
+ * Nothing here is a character: no figure, fist, face or logo, only forces and materials. The only
+ * text is the words given.
+ *
+ * The letters (Gasoek One, OFL; the Y redrawn) are never typed text: the mask of each is carved once
+ * (corners cleaved off, angular bites; a digit keeps all but one outer corner, the Y its stem, fork
+ * and notch), and the stone is worked out per pixel: distance to the edge -> a thin, broken
+ * chamfer; a photograph of rock (ambientCG Rock023, CC0, shipped in fx-gamma-tex.js) gives the
+ * colour (as a grey: the grade, dark and a little olive, is ours), the fine relief (its normal
+ * map), the occlusion and the network of cracks; a few tilted facets make the face hewn. The
+ * light: a raking key from the upper left; gamma green only as light, from below (what faces down,
+ * the low part of the face, the bottom of the side walls, the thin hot core of the cracks). The
+ * depth of a letter is a side wall found per pixel, of the same rock, near black; it stops short
+ * inside counters, so they stay open. The light is a separate picture (that is what pulses);
+ * incandescent is another (dark crust in patches, heat in the cracks and edges, capped below
+ * white) cross-faded into the stone in two stages. After the second smash the letter is cut by the
+ * fissures it will break along (the cheapest ways from its foot to its edge over rock of uneven
+ * strength: jagged, branching); at the end each piece is that part of the stone with a wall of dark
+ * rock under every cut, its light apart.
+ * The berm is made of single rocks (angular outlines, the photograph of basalt Rock030 for their
+ * surface, the letters' lights), drawn back to front over a dark bed where they lie close; rock
+ * sprites are the same rocks at 16 angles. Dust is never a round billow: it is wide, low, streaky
+ * sheets (dense and dark at the ground, torn into wisps above, green from below near the crater)
+ * that are thrown out and roll along the ground, and narrow fans of streaks shot up out of the pit.
+ * The photographs are decoded off the main thread when the file loads and read into arrays once;
+ * if a picture must be made before that, relief from noise stands in (and the scene is remade).
+ *
+ * Light and solids: the movie is under the canvas, so no backdrop is ever painted and the film is
+ * never darkened as a whole. Light is added ('lighter'); the white-out is a brief veil of white.
+ * Letters, rock, rubble and dust are solid or semi-transparent things drawn normally; they are
+ * local or brief. The film cannot shake, so everything drawn here does: by whole pixels, all of it
+ * by the same amount (there is no zoom), so the lockup always moves as one; when it swells on a
+ * heartbeat, every letter is drawn through one transform. The whole lockup is raised so that its
+ * middle sits at 0.6 of the height.
+ *
+ * Deterministic: everything is worked out from the seed, and a frame depends only on the seed and
+ * t (step() has nothing to do).
+ *
+ * Speed (software canvas, 1920x1080): every picture is made once per size, text and seed and kept
+ * in a module cache: about 4 s of work, done by a generator that yields every few milliseconds,
+ * in the order the pictures are needed (lights, sprites, dust, berm; digits; title; glint; pieces).
+ * prime() (env.priming; under the Final Countdown) does 5 ms of it and then a 5.5 ms slice every
+ * few ms until it is done (about 7 s here). Asked to play before that is through (or without it),
+ * the first frame makes what is missing at once (up to ~4 s: one wait, then every frame is on
+ * time; the pictures are the same either way). After a resize mid-run the pictures of the old size
+ * are drawn scaled until the new ones are made in slices.
+ * Per frame: no text, shadow, gradient or path; everything big is drawn 1:1 on whole pixels from
+ * pictures cut to their content; only small things are turned or scaled. env.low() halves dust,
+ * grit and embers.
+ *
+ * Sound: one env.cue('plan', {...}, 0) at create() carries every moment (ms, x 0..1): impact (t,
+ * knock: when the camera is hit), lens[] (the large rocks close to the lens: t, x, dir), digits[]
+ * (rise, hang, land), words[] (land, punch, letters), accent (the hero hit), beats[] (t, dub,
+ * strength 1 .. 2.15), sweeps[] (t, dur: the glints), smash (t, knock, hopLand: the year lands,
+ * titleLand: the title lands, cracks[]: per letter t and dur of its cracking), tremble (t, until),
+ * exit (t, knock, blaze, burst, shatters[], pieceLands[]: the two rumbles of pieces coming down,
+ * crumble .. crumbleEnd: the heap giving way, thud: the last settle, dark: every light gone),
+ * rockLands[], debris[] (rock thrown low past the lens: t, x, dir), jets[] (the fans of grit: at the
+ * three great blows), flybys[] (empty), dust[] (dust kicked up: t, x, power), shockwaves[] (the dust
+ * front along the ground: t, dur), fissures (t, dur: the berm coming up), cool, lastPulse (= thud),
+ * gone, duration.
  */
 (function (root) {
   'use strict';
@@ -33,1531 +139,3119 @@
   const FX = root.APFx;
   if (!FX || typeof FX.register !== 'function') return;
 
-  const DURATION = 12800;
-  const FADE_AT = DURATION - 1500;      // everything fades out from here ...
-  const GONE_AT = DURATION - 90;        // ... and nothing at all is drawn from here on
-  const MID = 5800;                     // the second surge
-  const STRIKES_END = DURATION - 2300;  // the last arc
-  const BEAT = 1600;                    // while the words hold, the surge beats like a heart
-  const WORD_BUDGET = 1500;             // points on the letters, for the light that plays over them
+  const DURATION = 12500;
+  const REVEAL = 310;                   // the berm is thrown up from the middle outward in this time
+  const D0 = 330;                       // the first digit starts to push up
+  const RISE = 310;                     // a digit grinds up through the rock in this time ...
+  const HANG = 90;                      // ... hangs ...
+  const FALL = 100;                     // ... and drops onto the ground
+  const PUNCH = 85;                     // a title word travels this long before it lands
+  const SMASH = 6000;                   // the second smash
+  const HOP = 380;                      // the block of letters is in the air this long after it
+  const EXIT = 11000;                   // the final pound
+  const BLAZE = 90;                     // the cracks blaze this long before the letters burst
+  const CRUMBLE = EXIT + 720;           // the heap of rubble starts to give way (from its ends inward)
+  const SINK = [240, 100];              // ... the middle this much later than the ends; a rock takes about this long to go
+  const LAG = 25;                       // the title lands this long after the year when the block comes down
+  const CRACK = 90;                     // a letter cracks from its foot to its head in this time
+  const FADE = 180;                     // after the last thud every light dies to nothing in this time
+  const GONE = 12300;                   // nothing at all is drawn from here on
+  const KNOCK = 30;                     // the camera is knocked as the white-out clears (frame 3)
+  const TREMBLE = 10000;                // the ground starts to tremble before the pound
+  const LAST = 12120;                   // the last of the rubble settles: the final low thud
+  const BEATS = [3000, 4350, 5250, 7550, 8750, 9750, 10450];
+  const DUB = 230;                      // the second thump of a heartbeat
+  const SWEEPS = [3500, 7000, 9100];    // a band of light crosses the stone
+  const SWEEP = 900;
+  const EXT = 0.085;                    // how deep a letter is, as a share of its size
+  const BEV = 0.02;                      // the width of its hard bevel
+  const KY = 0.27;                      // the ground is seen this flat
+  const KZ = 0.92;
 
-  // How the words arrive and leave.
-  const FALL = 300;                     // a digit plunges from above the picture to the ground in this time (ms)
-  const LEAD = 70;                      // a bolt's leader feels its way down this long before it hits its letter
-  const LEAD_STEPS = 6;                 // ... and is drawn in this many stages
-  const WIPE = 90;                      // the charge pours into a letter from where the bolt hits, top to bottom
-  const TITLE_SPAN = 1300;              // the lightning writes the title in at most this time
-  const LEAVE_AT = 10600;               // the first letter crackles off ...
-  const LEAVE_SPAN = 1250;              // ... the last one this much later ...
-  const LEAVE_DUR = 300;                // ... and each takes this long to go out
+  const FAMILY = "'AP Gasoek One', \"Bahnschrift\", \"DIN Alternate\", \"Segoe UI\", system-ui, sans-serif";
+  const FACE = { family: 'AP Gasoek One', weight: 400, tracking: 0.07, scale: 1.3 };
+  const TAU = Math.PI * 2;
 
-  // The words: pale lime to green. HOT is the white heat they flash back to in the surge (the words
-  // in one piece); FLASH is pure light in their shapes (no halo): added on a letter, it is the white
-  // heat a letter arrives with (white plus lime is white), and the flash as it is hit or lands.
-  const FILL = { stops: [[0, '#f4ffd6'], [0.42, '#d8ff5a'], [1, '#17c25d']], halo: 'rgba(0,0,0,0.88)', stroke: { width: 0.05, color: '#03200e' } };
-  const HOT = { stops: [[0, '#ffffff'], [0.55, '#f3ffdc'], [1, '#c8ff92']], halo: 'rgba(0,0,0,0.7)' };
-  const FLASH = { stops: [[0, '#ffffff'], [0.5, '#f2ffe0'], [1, '#c4ffa0']], halo: null };
+  const clamp = (x, lo, hi) => (x < lo ? lo : x > hi ? hi : x);
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+  const now = () => (root.performance ? root.performance.now() : Date.now());
 
-  const BOLT_BLOOM = 'rgb(30,210,100)';
-  const BOLT_GLOW = 'rgb(80,255,150)';
-  const BOLT_MID = 'rgb(200,255,130)';
-  const BOLT_CORE = 'rgb(246,255,236)';
-  const BOLT_BRANCH = 'rgb(150,255,170)';
-  const RING_GLOW = 'rgb(40,230,120)';
-  const RING_CORE = 'rgb(240,255,214)';
-  const SHARD_COLORS = ['rgb(200,255,80)', 'rgb(90,255,150)', 'rgb(230,255,170)'];
-
-  /* ------------------------------------------------------- textures --- */
-
-  let TEX = null;                       // made once per page: none of them depends on the screen
-  const SIZED = { key: '', v: null };   // made once per screen size and words (kept across create())
-
-  function makeCanvas(w, h) {
+  function mk(w, h) {
     const c = document.createElement('canvas');
-    c.width = Math.max(1, w);
-    c.height = Math.max(1, h);
+    c.width = Math.max(1, Math.ceil(w));
+    c.height = Math.max(1, Math.ceil(h));
     return c;
   }
-
-  function radialTex(size, stops) {
-    const c = makeCanvas(size, size);
-    const g = c.getContext('2d');
-    const r = size / 2;
-    const grad = g.createRadialGradient(r, r, 0, r, r, r);
-    for (const s of stops) grad.addColorStop(s[0], s[1]);
-    g.fillStyle = grad;
-    g.fillRect(0, 0, size, size);
-    return c;
-  }
-
-  /** A soft glow along one edge of the picture: strongest at the edge. */
-  function edgeTex(side) {
-    const across = side === 0 || side === 1;
-    const c = makeCanvas(across ? 64 : 8, across ? 8 : 64);
-    const g = c.getContext('2d');
-    const grad = across
-      ? g.createLinearGradient(side === 0 ? 0 : 64, 0, side === 0 ? 64 : 0, 0)
-      : g.createLinearGradient(0, side === 2 ? 0 : 64, 0, side === 2 ? 64 : 0);
-    grad.addColorStop(0, 'rgba(90,255,150,1)');
-    grad.addColorStop(0.28, 'rgba(30,210,100,0.42)');
-    grad.addColorStop(1, 'rgba(0,120,50,0)');
-    g.fillStyle = grad;
-    g.fillRect(0, 0, c.width, c.height);
-    return c;
-  }
-
-  function emberTex(rgb) {
-    return radialTex(32, [[0, 'rgba(255,255,240,1)'], [0.18, 'rgba(' + rgb + ',1)'], [0.42, 'rgba(' + rgb + ',0.38)'], [1, 'rgba(' + rgb + ',0)']]);
-  }
-
-  /** The green trail a falling digit leaves: bright where the digit is (the bottom), gone at the top. */
-  function trailTex() {
-    const c = makeCanvas(32, 256);
-    const g = c.getContext('2d');
-    const across = g.createLinearGradient(0, 0, 32, 0);
-    across.addColorStop(0, 'rgba(40,220,110,0)');
-    across.addColorStop(0.28, 'rgba(90,255,150,0.55)');
-    across.addColorStop(0.5, 'rgba(236,255,220,1)');
-    across.addColorStop(0.72, 'rgba(90,255,150,0.55)');
-    across.addColorStop(1, 'rgba(40,220,110,0)');
-    g.fillStyle = across;
-    g.fillRect(0, 0, 32, 256);
-    g.globalCompositeOperation = 'destination-in';
-    const along = g.createLinearGradient(0, 0, 0, 256);
-    along.addColorStop(0, 'rgba(0,0,0,0)');
-    along.addColorStop(0.6, 'rgba(0,0,0,0.35)');
-    along.addColorStop(1, 'rgba(0,0,0,1)');
-    g.fillStyle = along;
-    g.fillRect(0, 0, 32, 256);
-    return c;
-  }
-
-  function textures() {
-    if (TEX) return TEX;
-    const streak = makeCanvas(256, 32);
-    const g = streak.getContext('2d');
-    g.setTransform(4, 0, 0, 0.5, 0, 0);        // a round glow squeezed into a long thin one
-    const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-    grad.addColorStop(0, 'rgba(255,255,255,1)');
-    grad.addColorStop(0.08, 'rgba(235,255,210,0.9)');
-    grad.addColorStop(0.3, 'rgba(120,255,160,0.35)');
-    grad.addColorStop(1, 'rgba(0,140,60,0)');
-    g.fillStyle = grad;
-    g.fillRect(0, 0, 64, 64);
-    TEX = {
-      // soft green light: the glow under and around the words, out-of-focus embers
-      glow: radialTex(128, [[0, 'rgba(170,255,190,1)'], [0.22, 'rgba(70,240,130,0.55)'], [0.6, 'rgba(20,160,80,0.15)'], [1, 'rgba(0,90,40,0)']]),
-      // white heat: the impact, where an arc touches, a shard catching the light
-      hot: radialTex(64, [[0, 'rgba(255,255,255,1)'], [0.12, 'rgba(245,255,225,0.95)'], [0.32, 'rgba(190,255,130,0.45)'], [0.65, 'rgba(60,230,120,0.12)'], [1, 'rgba(0,120,50,0)']]),
-      streak: streak,
-      trail: trailTex(),
-      edge: [edgeTex(0), edgeTex(1), edgeTex(2), edgeTex(3)],
-      ember: [emberTex('216,255,90'), emberTex('110,255,160'), emberTex('236,255,190')]
+  function mulberry(seed) {
+    let a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
-    return TEX;
+  }
+  const hash2 = (i, j, k) => {
+    let h = Math.imul(i | 0, 374761393) ^ Math.imul(j | 0, 668265263) ^ Math.imul(k | 0, 2147483647);
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  };
+
+  /* ------------------------------------------------------------ noise --- */
+
+  /** A 256 x 256 tile of fractal noise, 0..1, that repeats without a seam; made once. */
+  const NT = (function () {
+    const N = 256;
+    const out = new Float32Array(N * N);
+    const R = mulberry(0x6A77A);
+    let amp = 1;
+    let tot = 0;
+    for (let cells = 4; cells <= 64; cells *= 2) {
+      const lat = new Float32Array(cells * cells);
+      for (let i = 0; i < lat.length; i++) lat[i] = R();
+      const sc = cells / N;
+      for (let y = 0; y < N; y++) {
+        const fy = y * sc;
+        const y0 = Math.floor(fy);
+        let ty = fy - y0;
+        ty = ty * ty * (3 - 2 * ty);
+        const ya = (y0 % cells) * cells;
+        const yb = ((y0 + 1) % cells) * cells;
+        for (let x = 0; x < N; x++) {
+          const fx = x * sc;
+          const x0 = Math.floor(fx);
+          let tx = fx - x0;
+          tx = tx * tx * (3 - 2 * tx);
+          const xa = x0 % cells;
+          const xb = (x0 + 1) % cells;
+          const a = lat[ya + xa] + (lat[ya + xb] - lat[ya + xa]) * tx;
+          const b = lat[yb + xa] + (lat[yb + xb] - lat[yb + xa]) * tx;
+          out[y * N + x] += (a + (b - a) * ty) * amp;
+        }
+      }
+      tot += amp;
+      amp *= 0.55;
+    }
+    let lo = 1e9;
+    let hi = -1e9;
+    for (let i = 0; i < out.length; i++) { out[i] /= tot; if (out[i] < lo) lo = out[i]; if (out[i] > hi) hi = out[i]; }
+    for (let i = 0; i < out.length; i++) out[i] = (out[i] - lo) / (hi - lo);
+    return out;
+  })();
+  /** The noise at (x, y), any real numbers (one tile is 256 across). */
+  function ns(x, y) {
+    const x0 = Math.floor(x);
+    const y0 = Math.floor(y);
+    const tx = x - x0;
+    const ty = y - y0;
+    const xa = x0 & 255;
+    const xb = (x0 + 1) & 255;
+    const ya = (y0 & 255) << 8;
+    const yb = ((y0 + 1) & 255) << 8;
+    const a = NT[ya + xa] + (NT[ya + xb] - NT[ya + xa]) * tx;
+    const b = NT[yb + xa] + (NT[yb + xb] - NT[yb + xa]) * tx;
+    return a + (b - a) * ty;
+  }
+  /** Smooth noise along one axis, -1..1 (the camera's shake, flicker). */
+  function vn(x, seed) {
+    const i = Math.floor(x);
+    let f = x - i;
+    f = f * f * f * (f * (f * 6 - 15) + 10);
+    const a = hash2(i, seed, 7) * 2 - 1;
+    const b = hash2(i + 1, seed, 7) * 2 - 1;
+    return a + (b - a) * f;
+  }
+
+  /** A box blur of a w x h float picture, `passes` times (three passes are close to a Gaussian). */
+  function blur(src, w, h, r, passes) {
+    r = Math.max(1, Math.round(r));
+    let a = src;
+    const tmp = new Float32Array(w * h);
+    let out = new Float32Array(w * h);
+    const inv = 1 / (2 * r + 1);
+    for (let p = 0; p < (passes || 1); p++) {
+      for (let y = 0; y < h; y++) {                     // along x
+        const o = y * w;
+        let s = 0;
+        for (let k = -r; k <= r; k++) s += a[o + clamp(k, 0, w - 1)];
+        for (let x = 0; x < w; x++) {
+          tmp[o + x] = s * inv;
+          const xo = x - r;
+          const xi = x + r + 1;
+          s += a[o + (xi < w ? xi : w - 1)] - a[o + (xo > 0 ? xo : 0)];
+        }
+      }
+      for (let x = 0; x < w; x++) {                     // along y
+        let s = 0;
+        for (let k = -r; k <= r; k++) s += tmp[clamp(k, 0, h - 1) * w + x];
+        for (let y = 0; y < h; y++) {
+          out[y * w + x] = s * inv;
+          const yo = y - r;
+          const yi = y + r + 1;
+          s += tmp[(yi < h ? yi : h - 1) * w + x] - tmp[(yo > 0 ? yo : 0) * w + x];
+        }
+      }
+      if (a === src) a = new Float32Array(w * h);
+      const sw = a; a = out; out = sw;
+    }
+    return a;
+  }
+
+  /** The same in thin slices: it yields every 50 000 pixels or so (never a whole pass at once). */
+  function* blurG(src, w, h, r, passes) {
+    r = Math.max(1, Math.round(r));
+    let a = src;
+    const tmp = new Float32Array(w * h);
+    const inv = 1 / (2 * r + 1);
+    const ey = Math.max(4, Math.round(50000 / w)), ex = Math.max(4, Math.round(30000 / h));
+    for (let p = 0; p < passes; p++) {
+      const out = new Float32Array(w * h);
+      for (let y = 0; y < h; y++) {                     // along x
+        const o = y * w;
+        let s = 0;
+        for (let k = -r; k <= r; k++) s += a[o + clamp(k, 0, w - 1)];
+        for (let x = 0; x < w; x++) {
+          tmp[o + x] = s * inv;
+          const xo = x - r;
+          const xi = x + r + 1;
+          s += a[o + (xi < w ? xi : w - 1)] - a[o + (xo > 0 ? xo : 0)];
+        }
+        if (y % ey === ey - 1) yield;
+      }
+      for (let x = 0; x < w; x++) {                     // along y
+        let s = 0;
+        for (let k = -r; k <= r; k++) s += tmp[clamp(k, 0, h - 1) * w + x];
+        for (let y = 0; y < h; y++) {
+          out[y * w + x] = s * inv;
+          const yo = y - r;
+          const yi = y + r + 1;
+          s += tmp[(yi < h ? yi : h - 1) * w + x] - tmp[(yo > 0 ? yo : 0) * w + x];
+        }
+        if (x % ex === ex - 1) yield;
+      }
+      a = out;
+      yield;
+    }
+    return a;
+  }
+
+  /** For every pixel inside (A >= 0.5): how far the nearest pixel outside is (px); 0 outside. */
+  function* distInside(A, w, h) {
+    const INF = 1e12;
+    const n = w * h;
+    const d = new Float64Array(n);
+    for (let i = 0; i < n; i++) d[i] = A[i] >= 0.5 ? INF : 0;
+    yield;
+    const m = Math.max(w, h);
+    const f = new Float64Array(m);
+    const v = new Int32Array(m);
+    const z = new Float64Array(m + 1);
+    const pass = (off, step, len) => {
+      for (let q = 0; q < len; q++) f[q] = d[off + q * step];
+      let k = 0;
+      v[0] = 0; z[0] = -INF; z[1] = INF;
+      for (let q = 1; q < len; q++) {
+        let s;
+        do {
+          const p = v[k];
+          s = ((f[q] + q * q) - (f[p] + p * p)) / (2 * q - 2 * p);
+        } while (s <= z[k] && --k >= 0);
+        k++;
+        v[k] = q; z[k] = s; z[k + 1] = INF;
+      }
+      k = 0;
+      for (let q = 0; q < len; q++) {
+        while (z[k + 1] < q) k++;
+        const p = v[k];
+        d[off + q * step] = (q - p) * (q - p) + f[p];
+      }
+    };
+    for (let x = 0; x < w; x++) { pass(x, w, h); if ((x & 63) === 63) yield; }
+    for (let y = 0; y < h; y++) { pass(y * w, 1, w); if ((y & 63) === 63) yield; }
+    yield;
+    const out = new Float32Array(n);
+    for (let i = 0; i < n; i++) out[i] = d[i] > 0 ? Math.sqrt(d[i]) - 0.5 : 0;
+    return out;
+  }
+
+  /** A canvas from RGBA bytes. */
+  function toCanvas(px, w, h) {
+    const c = mk(w, h);
+    const q = c.getContext('2d');
+    const im = q.createImageData(w, h);
+    im.data.set(px);
+    q.putImageData(im, 0, 0);
+    return c;
+  }
+  /** Bytes cut down to the box that holds something. */
+  function cropped(px, w, h) {
+    let x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for (let y = 0; y < h; y++) {
+      const o = y * w * 4 + 3;
+      for (let x = 0; x < w; x++) if (px[o + x * 4]) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; y1 = y; }
+    }
+    if (x1 < 0) return { c: mk(1, 1), x: 0, y: 0, w: 1, h: 1 };
+    const cw = x1 - x0 + 1, ch = y1 - y0 + 1;
+    const out = new Uint8ClampedArray(cw * ch * 4);
+    for (let y = 0; y < ch; y++) out.set(px.subarray(((y + y0) * w + x0) * 4, ((y + y0) * w + x0 + cw) * 4), y * cw * 4);
+    return { c: toCanvas(out, cw, ch), x: x0, y: y0, w: cw, h: ch };
+  }
+
+  /** Light to be added: RGB (0..255+, any) written so that 'lighter' adds exactly it. */
+  function putLight(px, o, r, g, b, least) {
+    const m = r > g ? (r > b ? r : b) : (g > b ? g : b);
+    if (m < (least || 0.6)) { px[o + 3] = 0; return; }
+    const k = 255 / m;
+    px[o] = r * k; px[o + 1] = g * k; px[o + 2] = b * k; px[o + 3] = m > 255 ? 255 : m;
+  }
+  /** A real motion blur of RGBA bytes along (dx, dy), worked out in floats (any length, no banding). */
+  function* smearPx(src, w, h, dx, dy, soft) {
+    const n = Math.max(2, Math.ceil(Math.hypot(dx, dy)) + 1);
+    const px = Math.ceil(Math.abs(dx) / 2) + 2 + (soft | 0), py = Math.ceil(Math.abs(dy) / 2) + 2 + (soft | 0);
+    const W2 = w + 2 * px, H2 = h + 2 * py;
+    let acc = new Float32Array(W2 * H2 * 4);
+    for (let k = 0; k < n; k++) {
+      const u = k / (n - 1) - 0.5;
+      const sx = Math.round(px + dx * u), sy = Math.round(py + dy * u);
+      for (let y = 0; y < h; y++) {
+        let o = ((y + sy) * W2 + sx) * 4, i = y * w * 4;
+        for (let x = 0; x < w; x++, o += 4, i += 4) {
+          const a = src[i + 3];
+          if (!a) continue;
+          acc[o] += src[i] * a; acc[o + 1] += src[i + 1] * a; acc[o + 2] += src[i + 2] * a; acc[o + 3] += a;
+        }
+      }
+      if (w * h * (k + 1) % 200000 < w * h) yield;
+    }
+    if (soft) {                                           // and a little out of focus
+      for (let c = 0; c < 4; c++) {
+        const ch = new Float32Array(W2 * H2);
+        for (let i = 0; i < W2 * H2; i++) ch[i] = acc[i * 4 + c];
+        const b = yield* blurG(ch, W2, H2, soft, 2);
+        for (let i = 0; i < W2 * H2; i++) acc[i * 4 + c] = b[i];
+      }
+    }
+    const out = new Uint8ClampedArray(W2 * H2 * 4);
+    for (let i = 0; i < W2 * H2 * 4; i += 4) {
+      const a = acc[i + 3];
+      if (a <= 0) continue;
+      out[i] = acc[i] / a; out[i + 1] = acc[i + 1] / a; out[i + 2] = acc[i + 2] / a; out[i + 3] = a / n;
+    }
+    return { c: toCanvas(out, W2, H2), px: px, py: py };
+  }
+  /** A real motion blur of a picture: `n` copies spread along (dx, dy), averaged. */
+  function smear(src, dx, dy, n) {
+    const px = Math.ceil(Math.abs(dx) / 2) + 1;
+    const py = Math.ceil(Math.abs(dy) / 2) + 1;
+    const c = mk(src.width + 2 * px, src.height + 2 * py);
+    const q = c.getContext('2d');
+    q.globalCompositeOperation = 'lighter';
+    q.globalAlpha = 1 / n;
+    for (let k = 0; k < n; k++) {
+      const u = n > 1 ? k / (n - 1) - 0.5 : 0;
+      q.drawImage(src, px + dx * u, py + dy * u);
+    }
+    return { c: c, px: px, py: py };
+  }
+
+  /* ------------------------------------------------- the rock pictures --- */
+
+  /**
+   * Photographs of rock (ambientCG Rock023 for the letters, Rock030 for the rubble; CC0), shipped
+   * as JPEG data: URLs in fx-gamma-tex.js (window.APGammaTex). They are decoded off the main thread
+   * as soon as this file loads and read into typed arrays once. Each set: lum (the colour as
+   * luminance), disp (height), ao, rough, and the normal (nx, ny as bytes around 128; y down).
+   * If a picture has to be made before they are there, relief worked out from noise stands in
+   * (TEX.real is false then, and the scenes made with it are remade once the real ones arrive).
+   */
+  const TEX = { A: null, B: null, real: false, done: false, imgs: null, left: 0, raw: {} };
+  const TEXN = { a: 1024, b: 512 };
+  const TEXMAPS = ['a_lum', 'a_disp', 'a_ao', 'a_rough', 'a_nrm', 'b_lum', 'b_disp', 'b_ao', 'b_nrm'];
+
+  function texReadOne(name) {
+    if (TEX.raw[name]) return true;
+    const im = TEX.imgs && TEX.imgs[name];
+    if (!im || !im.complete || !im.naturalWidth) return false;
+    const n = TEXN[name[0]];
+    const c = mk(n, n);
+    const q = c.getContext('2d', { willReadFrequently: true });
+    q.drawImage(im, 0, 0, n, n);
+    const d = q.getImageData(0, 0, n, n).data;
+    if (name.slice(2) === 'nrm') {
+      const x = new Uint8Array(n * n), y = new Uint8Array(n * n);
+      for (let i = 0, o = 0; i < n * n; i++, o += 4) { x[i] = d[o]; y[i] = 255 - d[o + 1]; }
+      TEX.raw[name] = [x, y];
+    } else {
+      const a = new Uint8Array(n * n);
+      for (let i = 0, o = 0; i < n * n; i++, o += 4) a[i] = d[o];
+      TEX.raw[name] = a;
+    }
+    return true;
+  }
+  function texSet(p, n) {
+    const r = TEX.raw;
+    return { n: n, m: n - 1, sh: Math.round(Math.log2(n)), lum: r[p + '_lum'], disp: r[p + '_disp'], ao: r[p + '_ao'], rough: r[p + '_rough'] || null, nx: r[p + '_nrm'][0], ny: r[p + '_nrm'][1] };
+  }
+  function texFinish() {
+    for (const nm of TEXMAPS) if (!TEX.raw[nm]) return false;
+    TEX.A = texSet('a', TEXN.a);
+    TEX.B = texSet('b', TEXN.b);
+    TEX.real = true; TEX.done = true; TEX.imgs = null;
+    return true;
+  }
+  /** Relief from noise, for when the photographs are not there (yet). */
+  function texFallback() {
+    const make = (n, seed, strata) => {
+      const lum = new Uint8Array(n * n), disp = new Uint8Array(n * n), ao = new Uint8Array(n * n), rough = new Uint8Array(n * n), nx = new Uint8Array(n * n), ny = new Uint8Array(n * n);
+      const hf = new Float32Array(n * n);
+      const k = 256 / n;
+      for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+        const X = x * k, Y = y * k;
+        const rdg = 1 - Math.abs(2 * ns(X * 2 + seed, Y * 2 + 7) - 1);
+        const cr = smooth(0.93, 0.99, rdg);
+        const h = ns(X + seed, Y * (strata ? 3 : 1)) * 0.6 + ns(X * 4 + 9, Y * 4 + seed) * 0.3 + ns(X * 16, Y * 16 + 3) * 0.1 - cr * 0.3;
+        hf[y * n + x] = h;
+        lum[y * n + x] = clamp(70 + 110 * (ns(X * 8 + 3, Y * 8) * 0.5 + ns(X * 32, Y * 32 + seed) * 0.5) - 60 * cr, 0, 255);
+        disp[y * n + x] = clamp(h * 255, 0, 255);
+        ao[y * n + x] = 255 * (1 - 0.8 * cr);
+        rough[y * n + x] = 150;
+      }
+      for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+        const i = y * n + x;
+        nx[i] = clamp(128 - (hf[y * n + ((x + 1) & (n - 1))] - hf[y * n + ((x - 1) & (n - 1))]) * 900, 0, 255);
+        ny[i] = clamp(128 - (hf[((y + 1) & (n - 1)) * n + x] - hf[((y - 1) & (n - 1)) * n + x]) * 900, 0, 255);
+      }
+      return { n: n, m: n - 1, sh: Math.round(Math.log2(n)), lum: lum, disp: disp, ao: ao, rough: rough, nx: nx, ny: ny };
+    };
+    TEX.A = make(512, 11, true);
+    TEX.B = make(256, 57, false);
+    TEX.done = true; TEX.real = false;
+  }
+  /** The pictures are needed now: read whatever is loaded, or fall back. */
+  function texNow() {
+    if (TEX.real) return;
+    if (TEX.imgs) { let all = true; for (const nm of TEXMAPS) if (!texReadOne(nm)) all = false; if (all && texFinish()) return; }
+    if (!TEX.A) texFallback();
+  }
+  (function () {
+    const src = root.APGammaTex;
+    if (!src || typeof root.Image === 'undefined') return;
+    TEX.imgs = {};
+    const queue = TEXMAPS.slice();
+    const readNext = () => {                              // one map per turn of the event loop
+      if (TEX.real || !TEX.imgs) return;
+      const nm = queue.shift();
+      if (nm === undefined) { texFinish(); return; }
+      texReadOne(nm);
+      root.setTimeout(readNext, 0);
+    };
+    // An image is ready when its decode() settles (it is decoded off the main thread then) or, if that does not
+    // come (decode() can wait for a frame to be painted), 1.2 s after it has loaded.
+    const fin = (im) => { if (im.__fin) return; im.__fin = true; if (--TEX.left === 0) root.setTimeout(readNext, 0); };
+    for (const nm of TEXMAPS) {
+      if (!src[nm]) { TEX.imgs = null; return; }
+      const im = new root.Image();
+      im.decoding = 'async';
+      TEX.imgs[nm] = im;
+      TEX.left++;
+      const loaded = () => root.setTimeout(() => fin(im), 1200);
+      im.onload = loaded; im.onerror = () => fin(im);
+      im.src = src[nm];
+      if (im.decode) im.decode().then(() => fin(im), () => { if (im.complete) fin(im); });
+    }
+  })();
+
+  /** A map at (u, v), 0..255: between the four texels, repeating. */
+  function tx(a, T, u, v) {
+    const x0 = Math.floor(u), y0 = Math.floor(v);
+    const fx = u - x0, fy = v - y0;
+    const m = T.m, sh = T.sh;
+    const xa = x0 & m, xb = (x0 + 1) & m, ya = (y0 & m) << sh, yb = ((y0 + 1) & m) << sh;
+    const p = a[ya + xa], r = a[yb + xa];
+    const t = p + (a[ya + xb] - p) * fx;
+    return t + (r + (a[yb + xb] - r) * fx - t) * fy;
+  }
+  /* ------------------------------------------------- the stone letters --- */
+
+  const nrm = (x, y, z) => { const l = Math.hypot(x, y, z); return [x / l, y / l, z / l]; };
+  const KEY = nrm(-0.52, -0.66, 0.54);          // the key light: from the upper left, raking
+  const HALF = nrm(KEY[0], KEY[1], KEY[2] + 1); // ... and where its glint sits
+  const SWL = nrm(-0.22, -0.34, 0.92);          // the light of the sweep: nearly from the front
+  const LIFT = 1.42;                            // how light the rock of the letters is (against a dark film)
+  const RIM = 225;                             // the cool key along the top chamfers
+  const font = (size) => FACE.weight + ' ' + size + 'px ' + FAMILY;
+
+  /** Walks out from `src` over a mask, eight ways (cost per pixel 1..44): how far every pixel is, and from which pixel it was reached. */
+  function* walk(A, cost, w, h, src) {
+    const n = w * h;
+    const dist = new Int32Array(n).fill(0x3fffffff);
+    const prev = new Int32Array(n).fill(-1);
+    const NB = 128;
+    const buckets = [];
+    for (let k = 0; k < NB; k++) buckets.push([]);
+    dist[src] = 0; buckets[0].push(src);
+    let left = 1, done = 0;
+    for (let d = 0; left > 0; d++) {
+      if (done > 6000) { done = 0; yield; }
+      const b = buckets[d & (NB - 1)];
+      for (let q = 0; q < b.length; q++) {
+        const i = b[q];
+        left--; done++;
+        if (dist[i] !== d) continue;
+        const x = i % w, y = (i / w) | 0;
+        for (let e = 0; e < 8; e++) {
+          const X = x + (e === 0 || e === 4 || e === 6 ? -1 : e === 1 || e === 5 || e === 7 ? 1 : 0);
+          const Y = y + (e === 2 || e === 4 || e === 5 ? -1 : e === 3 || e === 6 || e === 7 ? 1 : 0);
+          if (X < 0 || Y < 0 || X >= w || Y >= h) continue;
+          const j = Y * w + X;
+          if (A[j] < 0.5) continue;
+          const nd = d + (e < 4 ? cost[j] : (cost[j] * 1.42 + 0.5) | 0);
+          if (nd < dist[j]) { dist[j] = nd; prev[j] = i; buckets[nd & (NB - 1)].push(j); left++; }
+        }
+      }
+      b.length = 0;
+    }
+    return { dist: dist, prev: prev };
   }
 
   /**
-   * The light that belongs to this screen and these words, rendered at device resolution so that a
-   * frame only copies it: the glow of each letter (it comes and goes with its letter), the pool of
-   * light on the ground under the words, and the four edges.
+   * One letter, hewn from dark rock and shaded per pixel, once. The mask of the letter is carved
+   * (corners cleaved off, angular bites and notches; the Y's stem, fork and notch are left alone),
+   * then: distance to the edge -> a thin, broken chamfer; the photograph of the rock (Rock023) gives
+   * the colour (as a grey: the grade is ours), the fine relief (its normal map), the occlusion and
+   * the network of cracks; a few tilted facets make the face hewn. The light: a raking key from the
+   * upper left, and the crater's green from below (on what faces down, on the low part of the face,
+   * along the bottom of the side walls, in the cracks). The depth of the letter is a side wall found
+   * per pixel, of the same rock, near black. Gives: stone before and after the second smash, the
+   * light of each (it pulses), the incandescent letter and its glow, what a passing light picks out,
+   * and (later, on demand) the pieces it breaks into along its cracks.
    */
-  function sized(env, geo) {
-    const L = env.layout;
-    const key = env.W + 'x' + env.H + '@' + env.dpr + '|' + L.title + '|' + L.year;
-    if (SIZED.key === key && SIZED.v) return SIZED.v;
-    const T = textures();
-    const W = env.W;
-    const H = env.H;
-    const dpr = env.dpr;
-    const S = env.scale;
-    const P = geo.P;
-    const n = P.length >> 1;
-    const every = Math.max(1, Math.round(n / 700));
-    const area = every * geo.step * geo.step;          // letter area each sprite stands for
+  function* makeGlyph(g, S, exx, R) {
+    const T = TEX.A, TB = TEX.B;
+    const size = g.size;
+    const P = Math.ceil(size * 0.2) + 6;
+    const ox = Math.floor(g.x0) - P;
+    const gw = Math.ceil(g.x1 - g.x0) + 2 * P + 1;
+    const gh = Math.ceil(size * 1.12) + 2 * P;
+    const oy = Math.round(g.cy - gh / 2);
+    const n = gw * gh;
+    const cv = mk(gw, gh);
+    const q = cv.getContext('2d', { willReadFrequently: true });
+    q.font = font(size);
+    q.textBaseline = 'middle';
+    q.textAlign = 'left';
+    q.fillStyle = '#fff';
+    q.fillText(g.ch, g.x0 - ox, g.cy - oy);
+    const alphaOf = (ctx2) => {
+      const d = ctx2.getImageData(0, 0, gw, gh).data;
+      const a = new Float32Array(n);
+      for (let i = 0; i < n; i++) a[i] = d[i * 4 + 3] / 255;
+      return a;
+    };
+    let A = alphaOf(q);
+    const A0 = A;
+    yield;
 
-    // The glow of the letters for which has(k) is true: soft light stacked on their points.
-    function glowOf(has) {
-      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-      for (let i = 0; i < n; i += every) {
-        const k = geo.pG[i];
-        if (k < 0 || !has(k)) continue;
-        const s = geo.G[k].size * 0.46;
-        const x = P[i * 2];
-        const y = P[i * 2 + 1];
-        if (x - s / 2 < x0) x0 = x - s / 2; if (x + s / 2 > x1) x1 = x + s / 2;
-        if (y - s / 2 < y0) y0 = y - s / 2; if (y + s / 2 > y1) y1 = y + s / 2;
-      }
-      if (!(x1 >= x0)) return null;
-      x0 = Math.floor(x0 - 1); x1 = Math.ceil(x1 + 1); y0 = Math.floor(y0 - 1); y1 = Math.ceil(y1 + 1);
-      const c = makeCanvas(Math.round((x1 - x0) * dpr), Math.round((y1 - y0) * dpr));
-      const g = c.getContext('2d');
-      g.setTransform(dpr, 0, 0, dpr, -x0 * dpr, -y0 * dpr);
-      g.globalCompositeOperation = 'lighter';
-      for (let i = 0; i < n; i += every) {
-        const k = geo.pG[i];
-        if (k < 0 || !has(k)) continue;
-        const s = geo.G[k].size * 0.46;
-        g.globalAlpha = Math.min(0.5, 4.2 * area / (s * s));
-        g.drawImage(T.glow, P[i * 2] - s / 2, P[i * 2 + 1] - s / 2, s, s);
-      }
-      return { canvas: c, x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
-    }
-    // each letter's own (it comes and goes with its letter), and each line's in one piece (for while
-    // the whole line simply stands there)
-    const glows = geo.G.map((g, k) => glowOf((j) => j === k));
-    const lineGlows = [0, 1].map((line) => glowOf((j) => geo.G[j].line === line));
-
-    // The pool of light on the ground under the words.
-    const poolW = W * 0.62;
-    const poolH = H * 0.22;
-    const px0 = Math.max(0, Math.floor(geo.gx - poolW / 2));
-    const px1 = Math.min(W, Math.ceil(geo.gx + poolW / 2));
-    const py0 = Math.max(0, Math.floor(geo.gy - poolH * 0.45));
-    const py1 = Math.max(py0 + 1, Math.min(H, Math.ceil(geo.gy + poolH * 0.55)));
-    const pc = makeCanvas(Math.round((px1 - px0) * dpr), Math.round((py1 - py0) * dpr));
-    const pg = pc.getContext('2d');
-    pg.setTransform(dpr, 0, 0, dpr, -px0 * dpr, -py0 * dpr);
-    pg.globalAlpha = 0.5;
-    pg.drawImage(T.glow, geo.gx - poolW / 2, geo.gy - poolH * 0.45, poolW, poolH);
-    const pool = { canvas: pc, x: px0, y: py0, w: px1 - px0, h: py1 - py0 };
-
-    // The edges of the picture, each a strip of light.
-    const ew = Math.round(90 * S);
-    const edges = [];
-    for (let e = 0; e < 4; e++) {
-      const across = e < 2;
-      const w = across ? ew : W;
-      const h = across ? H : ew;
-      const k = makeCanvas(Math.round(w * dpr), Math.round(h * dpr));
-      k.getContext('2d').drawImage(T.edge[e], 0, 0, k.width, k.height);
-      edges.push({ canvas: k, x: e === 1 ? W - ew : 0, y: e === 3 ? H - ew : 0, w: w, h: h });
-    }
-    // The bloom of green light round a letter as a bolt hits it, at its final size (copied, never stretched).
-    const bs = Math.ceil(L.titleSize * 2.4);
-    const bloom = makeCanvas(Math.round(bs * dpr), Math.round(bs * dpr));
-    bloom.getContext('2d').drawImage(T.glow, 0, 0, bloom.width, bloom.height);
-    const hs = Math.ceil(L.titleSize * 1.5);
-    const heat = makeCanvas(Math.round(hs * dpr), Math.round(hs * dpr));
-    heat.getContext('2d').drawImage(T.hot, 0, 0, heat.width, heat.height);
-    SIZED.key = key;
-    SIZED.v = { glows: glows, lineGlows: lineGlows, pool: pool, edges: edges, bloom: { canvas: bloom, s: bs }, heat: { canvas: heat, s: hs } };
-    return SIZED.v;
-  }
-
-  // A repeatable flicker: the same t always gives the same value.
-  function hash01(n) {
-    const x = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
-    return x - Math.floor(x);
-  }
-
-  const bump = (t, at, w) => { const d = (t - at) / w; return Math.exp(-d * d); };
-
-  /* --------------------------------------------------------- create --- */
-
-  function create(env) {
-    const ctx = env.ctx;
-    const W = env.W;
-    const H = env.H;
-    const S = env.scale;
-    const L = env.layout;
-    const rnd = env.rnd;
-    const clamp = env.clamp;
-    const smooth = env.smooth;
-    const lerp = env.lerp;
-    const easeOut = env.easeOut;
-    const T = textures();
-    const R = (a, b) => a + (b - a) * rnd();
-    const hair = 1 / Math.max(0.5, env.dpr || 1);        // one device pixel: the cheapest line there is
-
-    /* -- the letters, the points on them, and which letter each point is on -- */
-    const G = env.glyphs();
-    const NG = G.length;
-    const wp = env.wordPoints(WORD_BUDGET);
-    const P = wp.pts;
-    const NP = P.length >> 1;
-    const step = Math.max(2, wp.step || 4);
-    const year = !!L.year;
-    // Between the two lines' ink, not their centres: Anton's digits reach ~0.6 of their size above the
-    // year's centre, so the midpoint of the centres would hand the digit tops to the title letters.
-    const split = year ? (L.titleY + L.titleSize * 0.3 + L.yearY - L.yearSize * 0.6) / 2 : Infinity;
-    const pG = new Int16Array(NP);
-    for (let i = 0; i < NP; i++) {
-      const x = P[i * 2];
-      const line = P[i * 2 + 1] < split ? 0 : 1;
-      let best = -1;
-      let bd = Infinity;
-      for (let k = 0; k < NG; k++) {
-        const g = G[k];
-        if (g.line !== line) continue;
-        const d = x < g.x0 ? g.x0 - x : x > g.x1 ? x - g.x1 : 0;
-        if (d < bd) { bd = d; best = k; }
-      }
-      pG[i] = best;
-    }
-    const gPts = [];                                          // the points on each letter
-    for (let k = 0; k < NG; k++) gPts.push([]);
-    for (let i = 0; i < NP; i++) if (pG[i] >= 0) gPts[pG[i]].push(i);
-
-    /* -- where the words are: the box of each line, from the points on its letters -- */
-    let tx0 = Infinity, tx1 = -Infinity, ty0 = Infinity, ty1 = -Infinity;
-    let yx0 = Infinity, yx1 = -Infinity, yy0 = Infinity, yy1 = -Infinity;
-    for (let i = 0; i < NP; i++) {
-      const x = P[i * 2];
-      const y = P[i * 2 + 1];
-      if (y < split) {
-        if (x < tx0) tx0 = x; if (x > tx1) tx1 = x; if (y < ty0) ty0 = y; if (y > ty1) ty1 = y;
-      } else {
-        if (x < yx0) yx0 = x; if (x > yx1) yx1 = x; if (y < yy0) yy0 = y; if (y > yy1) yy1 = y;
+    /* ---- the edge of the letter: where it turns a corner, where it runs straight ---- */
+    const rr = Math.max(3, Math.round(size * 0.055));
+    const I = new Int32Array((gw + 1) * (gh + 1));
+    for (let y = 0; y < gh; y++) {
+      let row = 0;
+      for (let x = 0; x < gw; x++) {
+        row += A[y * gw + x] >= 0.5 ? 1 : 0;
+        I[(y + 1) * (gw + 1) + x + 1] = I[y * (gw + 1) + x + 1] + row;
       }
     }
-    if (!(tx1 > tx0)) {
-      tx0 = L.cx - W * 0.3; tx1 = L.cx + W * 0.3;
-      ty0 = L.titleY - L.titleSize * 0.36; ty1 = L.titleY + L.titleSize * 0.36;
-    }
-    if (!(yx1 > yx0)) {
-      if (year) {
-        yx0 = L.cx - W * 0.17; yx1 = L.cx + W * 0.17;
-        yy0 = L.yearY - L.yearSize * 0.36; yy1 = L.yearY + L.yearSize * 0.36;
-      } else {
-        yx0 = tx0; yx1 = tx1; yy0 = ty0; yy1 = ty1;   // one line only: the "lower line" is the title
+    const box = (x, y) => {
+      const x0 = Math.max(0, x - rr), x1 = Math.min(gw, x + rr + 1), y0 = Math.max(0, y - rr), y1 = Math.min(gh, y + rr + 1);
+      return (I[y1 * (gw + 1) + x1] - I[y0 * (gw + 1) + x1] - I[y1 * (gw + 1) + x0] + I[y0 * (gw + 1) + x0]) / ((2 * rr + 1) * (2 * rr + 1));
+    };
+    yield;
+    // the Y keeps its stem, its fork and its notch whole: only the outer tops of its arms may break
+    const isY = g.ch === 'Y';
+    const yHalf = (g.x1 - g.x0) * 0.27, yMid = g.cx - ox, yTop = g.cy - oy - size * 0.1;
+    const free = (p) => !isY || (Math.abs(p.x - yMid) > yHalf + size * 0.05 && p.y < yTop);
+    const edge = [];
+    for (let y = 1; y < gh - 1; y++) {
+      for (let x = 1; x < gw - 1; x++) {
+        const i = y * gw + x;
+        if (A[i] >= 0.5 && (A[i - 1] < 0.5 || A[i + 1] < 0.5 || A[i - gw] < 0.5 || A[i + gw] < 0.5)) { const p = { x: x, y: y, f: box(x, y) }; if (free(p)) edge.push(p); }
       }
     }
-    ty0 -= step / 2; ty1 += step / 2; yy0 -= step / 2; yy1 += step / 2;
-    const gap = L.titleSize * 0.22;                           // how far the arcs keep off the letters
-    const gx = L.cx;                                          // the impact: just under the words
-    const gy = Math.min(H - 10 * S, yy1 + L.titleSize * 0.42);
-    const pre = sized(env, { P: P, step: step, G: G, pG: pG, gx: gx, gy: gy });
-
-    /* -- when each letter arrives and leaves -- */
-    const born = new Float32Array(NG);        // the moment a digit lands or a letter is hit
-    const leave = new Float32Array(NG);       // the moment it starts to crackle off
-    const fallD = new Float32Array(NG);       // how far a digit falls
-    const rsT = new Float32Array(NG * 2).fill(-1e9);    // a letter's bolt striking again
-    const YG = [];
-    const TG = [];
-    for (let k = 0; k < NG; k++) (G[k].line === 1 ? YG : TG).push(k);
-    // The year smashes down first, digit after digit, coming in at the top of the picture.
-    let tland = FALL;
-    for (const k of YG) {
-      born[k] = tland;
-      fallD[k] = G[k].cy + G[k].size * 0.4;
-      tland += R(36, 58);
-    }
-    const landN = YG.length ? born[YG[YG.length - 1]] : 0;
-    const SMASH = landN;          // the last digit down: the shock (with no year: the thunderclap's bolt hits the ground)
-    // Then the lightning writes the title: one strike per letter, or one fork for two, quick within a
-    // word and with a breath between words.
-    const sameWord = (a, b) => G[b].x0 - G[a].x1 < G[a].size * 0.3;
-    const groups = [];
-    for (let j = 0; j < TG.length;) {
-      if (j > 0 && j + 1 < TG.length && sameWord(TG[j], TG[j + 1]) && rnd() < 0.3) { groups.push([TG[j], TG[j + 1]]); j += 2; }
-      else { groups.push([TG[j]]); j += 1; }
-    }
-    const at = [];
-    let tt = 0;
-    for (let q = 0; q < groups.length; q++) {
-      at.push(tt);
-      const last = groups[q][groups[q].length - 1];
-      tt += q + 1 < groups.length && sameWord(last, groups[q + 1][0]) ? R(70, 100) : R(170, 230);
-    }
-    const span = at.length ? at[at.length - 1] : 0;
-    const squeeze = span > TITLE_SPAN ? TITLE_SPAN / span : 1;
-    const T0 = YG.length ? landN + 330 : 300;                 // the first letter is hit
-    for (let q = 0; q < groups.length; q++) for (const k of groups[q]) born[k] = T0 + at[q] * squeeze;
-    const titleDone = TG.length ? T0 + span * squeeze : landN;
-    const settleAt = Math.max(titleDone, landN) + 1700;      // every letter cool and still: stamped in one piece
-    // each line's glow in one piece from when its last letter's flare has died down until its first letter goes
-    const lineStill = [[TG.length ? titleDone + 1000 : Infinity, Infinity], [YG.length ? landN + 1000 : Infinity, Infinity]];
-    // At the end they crackle off one by one, left to right across both lines.
-    const order = [];
-    for (let k = 0; k < NG; k++) order.push([G[k].cx / W + R(-0.035, 0.035), k]);
-    order.sort((a, b) => a[0] - b[0]);
-    order.forEach((o, r) => { leave[o[1]] = LEAVE_AT + (NG > 1 ? r / (NG - 1) : 0) * LEAVE_SPAN; });
-    for (let k = 0; k < NG; k++) lineStill[G[k].line][1] = Math.min(lineStill[G[k].line][1], leave[k]);
-    const pBorn = new Float32Array(NP);
-    const pLeave = new Float32Array(NP);
-    for (let i = 0; i < NP; i++) { pBorn[i] = pG[i] >= 0 ? born[pG[i]] : 0; pLeave[i] = pG[i] >= 0 ? leave[pG[i]] : LEAVE_AT; }
-
-    /* -- lightning -- */
-
-    // Midpoint displacement: n = 2^levels segments, ends pinned at 0, roughly within +-1.5.
-    function jag(levels, rough) {
-      const n = 1 << levels;
-      const d = new Float32Array(n + 1);
-      let amp = 1;
-      for (let size = n; size > 1; size >>= 1) {
-        const half = size >> 1;
-        for (let i = half; i < n; i += size) d[i] = (d[i - half] + d[i + half]) * 0.5 + (rnd() * 2 - 1) * amp;
-        amp *= rough;
+    yield;
+    /** Which way is out of the stone at an edge point. */
+    const outward = (p) => {
+      let sx = 0, sy = 0, c = 0;
+      for (let y = Math.max(0, p.y - rr); y <= Math.min(gh - 1, p.y + rr); y++) {
+        for (let x = Math.max(0, p.x - rr); x <= Math.min(gw - 1, p.x + rr); x++) if (A[y * gw + x] >= 0.5) { sx += x; sy += y; c++; }
       }
-      return d;
-    }
-
-    /** A jagged line from A to B that bulges by `bow` pixels towards (ux, uy). */
-    function polyline(ax, ay, bx, by, bow, ux, uy, jit, levels) {
-      const n = 1 << levels;
-      const dx = bx - ax;
-      const dy = by - ay;
-      const len = Math.hypot(dx, dy) || 1;
-      let nx = -dy / len;
-      let ny = dx / len;
-      if (nx * ux + ny * uy < 0) { nx = -nx; ny = -ny; }
-      const d = jag(levels, 0.56);
-      const amp = len * jit;
-      const out = new Float32Array((n + 1) * 2);
-      for (let i = 0; i <= n; i++) {
-        const u = i / n;
-        const off = 4 * u * (1 - u) * bow + d[i] * amp;
-        const slide = i > 0 && i < n ? (rnd() - 0.5) * (len / n) * 0.7 : 0;
-        out[i * 2] = ax + dx * u + nx * off + (dx / len) * slide;
-        out[i * 2 + 1] = ay + dy * u + ny * off + (dy / len) * slide;
+      const dx = p.x - sx / Math.max(1, c), dy = p.y - sy / Math.max(1, c);
+      const l = Math.hypot(dx, dy) || 1;
+      return [dx / l, dy / l];
+    };
+    const pickApart = (list, want, gap) => {
+      const out = [];
+      for (let tries = 0; tries < want * 12 && out.length < want && list.length; tries++) {
+        const p = list[(R() * list.length) | 0];
+        if (out.every((o) => Math.hypot(o.x - p.x, o.y - p.y) > gap)) out.push(p);
       }
+      return out;
+    };
+    const big = g.line === 1 || size > 190 * S;
+    if (edge.length > 8) {
+      q.globalCompositeOperation = 'destination-out';
+      q.fillStyle = '#000';
+      const poly = (pts) => { q.beginPath(); pts.forEach((p, k) => (k ? q.lineTo(p[0], p[1]) : q.moveTo(p[0], p[1]))); q.closePath(); q.fill(); };
+      yield;
+      // corners: most are cleaved off by one straight cut, some by an angular bite (two cuts meeting in a sharp corner)
+      const corners = [];
+      edge.filter((p) => p.f < 0.37).sort((a, b) => a.f - b.f).forEach((p) => {
+        if (corners.length < 18 && corners.every((o) => Math.hypot(o.x - p.x, o.y - p.y) > size * 0.11)) corners.push(p);
+      });
+      // one outer corner of a digit takes a real hit (never an inner one: the figure must stay itself)
+      let heavy = -1;
+      if (big) {
+        const gx0 = g.x0 - ox, gx1 = g.x1 - ox, gy0 = g.cy - oy - size * 0.37, gy1 = g.cy - oy + size * 0.37;
+        const outer = [];
+        corners.forEach((p, ci) => { if (Math.min(Math.abs(p.x - gx0), Math.abs(p.x - gx1)) < size * 0.1 && Math.min(Math.abs(p.y - gy0), Math.abs(p.y - gy1)) < size * 0.1) outer.push(ci); });
+        const pick = R();
+        if (outer.length) heavy = outer[(pick * outer.length) | 0];
+      }
+      yield;
+      // what makes a letter itself is left whole: the N's diagonal and notches, the D's square back, the T's bar
+      const chr = g.ch, gmx = (g.x0 + g.x1) / 2 - ox, gbx0 = g.x0 - ox, gbx1 = g.x1 - ox, gwd = g.x1 - g.x0;
+      const spare = (p) => (chr === 'N' && Math.min(Math.abs(p.x - gbx0), Math.abs(p.x - gbx1)) > gwd * 0.12) || (chr === 'D' && p.x < gmx) || (chr === 'T' && p.y < g.cy - oy - size * 0.1) || chr === 'W' || chr === 'M';
+      corners.forEach((p, ci) => {
+        const k = R();
+        if ((big || k < 0.3 || spare(p)) && ci !== heavy) return;       // a digit keeps its other corners: it must read at once
+        const o = outward(p);
+        const tx0 = -o[1], ty0 = o[0];
+        const F = size * 0.16;
+        if (big || k < 0.8 || chr === 'N' || chr === 'D' || chr === 'T') {
+          const dd = size * (ci === heavy ? 0.05 + R() * 0.03 : big ? 0.012 + R() * 0.018 : 0.016 + R() * 0.04);
+          const a = Math.atan2(o[1], o[0]) + (R() - 0.5) * (ci === heavy ? 0.5 : 0.9);
+          const nx = Math.cos(a), ny = Math.sin(a), L = size * 0.22;
+          const cx0 = p.x - o[0] * dd, cy0 = p.y - o[1] * dd;
+          poly([[cx0 - ny * L, cy0 + nx * L], [cx0 + ny * L, cy0 - nx * L], [cx0 + ny * L + nx * F, cy0 - nx * L + ny * F], [cx0 - ny * L + nx * F, cy0 + nx * L + ny * F]]);
+        } else {
+          const dd = size * (0.026 + R() * 0.026), l1 = size * (0.03 + R() * 0.04), l2 = size * (0.03 + R() * 0.04), j = (R() - 0.5) * size * 0.03;
+          const ax = p.x - o[0] * dd + tx0 * j, ay = p.y - o[1] * dd + ty0 * j;
+          const mx = p.x + tx0 * l1 * 0.5 - o[0] * dd * (0.3 + R() * 0.5), my = p.y + ty0 * l1 * 0.5 - o[1] * dd * (0.3 + R() * 0.5);
+          poly([[p.x + tx0 * l1 + o[0] * F, p.y + ty0 * l1 + o[1] * F], [p.x + tx0 * l1 + o[0] * 2, p.y + ty0 * l1 + o[1] * 2], [mx, my], [ax, ay],
+            [p.x - tx0 * l2 + o[0] * 2, p.y - ty0 * l2 + o[1] * 2], [p.x - tx0 * l2 + o[0] * F, p.y - ty0 * l2 + o[1] * F]]);
+        }
+      });
+      q.getImageData(0, 0, 1, 1); yield;                  // (what is cut so far is rasterized now, not all at the end)
+      // straight runs: a few shallow breaks, and (on a digit) a deep wedge or two
+      const straight = edge.filter((p) => p.f > 0.44 && p.f < 0.56 && !spare(p));
+      for (const p of pickApart(straight, big ? 4 : 2, size * 0.2)) {
+        const o = outward(p);
+        const tx0 = -o[1], ty0 = o[0];
+        const len = size * (0.05 + R() * 0.1);
+        const dep = size * (0.012 + R() * 0.022);
+        const u1 = -0.5 + 0.1 + R() * 0.5;
+        poly([[p.x - tx0 * len / 2 + o[0] * 4, p.y - ty0 * len / 2 + o[1] * 4], [p.x - tx0 * len / 2, p.y - ty0 * len / 2],
+          [p.x + tx0 * len * u1 - o[0] * dep, p.y + ty0 * len * u1 - o[1] * dep],
+          [p.x + tx0 * len / 2, p.y + ty0 * len / 2], [p.x + tx0 * len / 2 + o[0] * 4, p.y + ty0 * len / 2 + o[1] * 4]]);
+      }
+      for (const p of pickApart(straight, big ? 1 : 0, size * 0.3)) {
+        const o = outward(p);
+        const a = Math.atan2(-o[1], -o[0]) + (R() - 0.5) * 0.9;
+        const dep = size * (0.024 + R() * 0.02);
+        const hw = size * (0.014 + R() * 0.02);
+        const tx0 = -o[1], ty0 = o[0];
+        poly([[p.x - tx0 * hw + o[0] * 4, p.y - ty0 * hw + o[1] * 4], [p.x + tx0 * hw * (0.6 + R()) + o[0] * 4, p.y + ty0 * hw * (0.6 + R()) + o[1] * 4],
+          [p.x + Math.cos(a) * dep, p.y + Math.sin(a) * dep]]);
+      }
+      q.globalCompositeOperation = 'source-over';
+      q.getImageData(0, 0, 1, 1); yield;
+      A = alphaOf(q);
+      if (isY) { const c0 = Math.max(0, Math.floor(yMid - yHalf)), c1 = Math.min(gw - 1, Math.ceil(yMid + yHalf)); for (let y = 0; y < gh; y++) for (let x = c0; x <= c1; x++) A[y * gw + x] = A0[y * gw + x]; }
+      yield;
+      // the counters (the holes of D, A, P, R, 0 ...) are slits in this face: they are cut wider, so that they read small
+      {
+        const out = new Uint8Array(n);
+        const st2 = [];
+        for (let x = 0; x < gw; x++) { st2.push(x, (gh - 1) * gw + x); }
+        for (let y = 0; y < gh; y++) { st2.push(y * gw, y * gw + gw - 1); }
+        for (let cnt = 0; st2.length; cnt++) {
+          if ((cnt & 16383) === 16383) yield;
+          const i = st2.pop();
+          if (out[i] || A[i] >= 0.5) continue;
+          out[i] = 1;
+          const x = i % gw;
+          if (x > 0) st2.push(i - 1);
+          if (x < gw - 1) st2.push(i + 1);
+          if (i >= gw) st2.push(i - gw);
+          if (i < n - gw) st2.push(i + gw);
+        }
+        yield;
+        const m = new Float32Array(n);
+        let any = 0;
+        for (let i = 0; i < n; i++) { if (A[i] < 0.5 && !out[i]) any++; else m[i] = 1; }
+        if (any > 12) {
+          const dc = yield* distInside(m, gw, gh);
+          const rc = size * (chr === 'D' ? 0.034 : chr === 'O' || chr === '0' ? 0.02 : 0.014);
+          for (let i = 0; i < n; i++) if (A[i] > 0 && m[i] && dc[i] < rc + 1) A[i] *= clamp(dc[i] - rc + 0.5, 0, 1);
+        }
+      }
+      yield;
+      // what is too thin to be rock goes (an opening: sharp corners stay sharp), and so does anything left standing apart
+      const ro = Math.max(1.2, size * 0.012);
+      const D1 = yield* distInside(A, gw, gh);
+      yield;
+      const inv = new Float32Array(n);
+      for (let i = 0; i < n; i++) inv[i] = D1[i] > ro ? 0 : 1;
+      const D2 = yield* distInside(inv, gw, gh);
+      yield;
+      for (let i = 0; i < n; i++) if (A[i] > 0 && D1[i] <= ro) A[i] *= clamp(ro + 1.7 - D2[i], 0, 1);
+      yield;
+      const comp = new Int32Array(n);
+      const areas = [0];
+      const stack = [];
+      for (let i0 = 0; i0 < n; i0++) {
+        if (A[i0] < 0.5 || comp[i0]) continue;
+        const id = areas.length;
+        let area = 0;
+        comp[i0] = id; stack.push(i0);
+        while (stack.length) {
+          const i = stack.pop();
+          area++;
+          const x = i % gw;
+          if (x > 0 && A[i - 1] >= 0.5 && !comp[i - 1]) { comp[i - 1] = id; stack.push(i - 1); }
+          if (x < gw - 1 && A[i + 1] >= 0.5 && !comp[i + 1]) { comp[i + 1] = id; stack.push(i + 1); }
+          if (i >= gw && A[i - gw] >= 0.5 && !comp[i - gw]) { comp[i - gw] = id; stack.push(i - gw); }
+          if (i < n - gw && A[i + gw] >= 0.5 && !comp[i + gw]) { comp[i + gw] = id; stack.push(i + gw); }
+        }
+        areas.push(area);
+      }
+      yield;
+      const most = Math.max.apply(null, areas);
+      const keep = (i) => comp[i] && areas[comp[i]] >= most * 0.12;
+      for (let y = 1; y < gh - 1; y++) for (let x = 1; x < gw - 1; x++) {
+        const i = y * gw + x;
+        if (A[i] <= 0) continue;
+        if (A[i] >= 0.5) { if (!keep(i)) A[i] = 0; } else if (!(keep(i - 1) || keep(i + 1) || keep(i - gw) || keep(i + gw) || keep(i - gw - 1) || keep(i - gw + 1) || keep(i + gw - 1) || keep(i + gw + 1))) A[i] = 0;
+      }
+    }
+    yield;
+
+    /* ---- the rock: its photograph under the letter ---- */
+    const fq = 1 / S;
+    const tk = (big ? 1.0 : 0.72) * fq * T.n / 1024;             // texels per pixel (a small letter: the rock seen closer, so that it is not grain)
+    const det = big ? 1 : 0.6;                                   // ... and its fine relief and contrast held back
+    // every letter is hewn from its own block: the photograph is moved and turned for each (the strata never run through a line)
+    const hs = (k) => hash2(g.ch.charCodeAt(0) * 31 + g.i * 7, g.line * 5 + 3, k);
+    const tAng = (hs(1) - 0.5) * 1.0 + (hs(4) < 0.5 ? 0 : Math.PI);
+    const tca = Math.cos(tAng) * tk, tsa = Math.sin(tAng) * tk, tcn = Math.cos(tAng), tsn = Math.sin(tAng);
+    const tu0 = hs(2) * T.n - (g.cx * tca - g.cy * tsa), tv0 = hs(3) * T.n - (g.cx * tsa + g.cy * tca);
+    const tl = new Float32Array(n), ta = new Float32Array(n), tnx = new Float32Array(n), tny = new Float32Array(n), td = new Float32Array(n);
+    const b = Math.max(1.6, BEV * size);
+    let Dm = yield* distInside(A, gw, gh);
+    yield;
+    const Ab = yield* blurG(A, gw, gh, 1, 2);
+    yield;
+    for (let y = 0; y < gh; y++) {
+      for (let x = 0; x < gw; x++) {
+        const i = y * gw + x;
+        if (Ab[i] < 0.01) { ta[i] = 1; continue; }
+        const u = (x + ox) * tca - (y + oy) * tsa + tu0, v = (x + ox) * tsa + (y + oy) * tca + tv0;
+        tl[i] = tx(T.lum, T, u, v) / 255;
+        ta[i] = tx(T.ao, T, u, v) / 255;
+        td[i] = tx(T.disp, T, u, v) / 255;
+        const mx = (tx(T.nx, T, u, v) - 128) / 127, my = (tx(T.ny, T, u, v) - 128) / 127;
+        tnx[i] = (mx * tcn + my * tsn) * det;
+        tny[i] = (-mx * tsn + my * tcn) * det;
+      }
+      if ((y & 7) === 7) yield;
+    }
+    // its cracks: the dark valleys of the photograph
+    const cr = new Float32Array(n);
+    for (let i = 0; i < n; i++) cr[i] = A[i] > 0.02 ? smooth(0.86, 0.48, ta[i]) * Math.min(1, Dm[i] / (b * 0.8) + 0.15) : 0;
+    yield;
+
+    /* ---- the lines it will break along: fissures that run from its foot (where the blow comes from) up through the
+       valleys of the rock to its edge, branching; the pieces are what lies between them ---- */
+    const major = new Float32Array(n);                // how deep the stone is cut by a fissure here
+    const mcore = new Float32Array(n);                // the hot hairline in it (it wavers along the line; parts are dark)
+    const lab = new Uint8Array(n).fill(255);          // which piece a pixel belongs to
+    let nLab = 0;
+    {
+      const rimP = [];
+      let yMax = 0, area = 0;
+      for (let y = 1; y < gh - 1; y++) for (let x = 1; x < gw - 1; x++) {
+        const i = y * gw + x;
+        if (A[i] < 0.5) continue;
+        area++;
+        if (A[i - 1] < 0.5 || A[i + 1] < 0.5 || A[i - gw] < 0.5 || A[i + gw] < 0.5) { rimP.push(i); if (y > yMax) yMax = y; }
+      }
+      yield;
+      if (rimP.length > 20) {
+        // where it starts: on the foot, on the side of the crater
+        const wantX = g.cx - ox - clamp(exx * 9, -1, 1) * (g.x1 - g.x0) * 0.3;
+        let src = rimP[0], bd = 1e9;
+        for (const i of rimP) { const y = (i / gw) | 0; if (y < yMax - size * 0.05) continue; const d = Math.abs((i % gw) - wantX) + (yMax - y) * 2; if (d < bd) { bd = d; src = i; } }
+        const crS = yield* blurG(cr, gw, gh, 1, 1);
+        const cost = new Uint8Array(n);
+        const eb = Math.max(3, size * 0.05);
+        for (let y = 0; y < gh; y++) {
+          for (let x = 0; x < gw; x++) {
+            const i = y * gw + x;
+            if (A[i] < 0.5) continue;
+            const X = (x + ox) * fq, Y = (y + oy) * fq;
+            // cheap along the rock's own valleys; and every bit of rock is of its own strength (so a line is never straight)
+            const rnd = hash2(x >> 1, y >> 1, 77) * 0.6 + hash2(x >> 2, y >> 2, 78) * 0.4;
+            cost[i] = clamp(Math.round(1 + 15 * (1 - Math.min(1, crS[i] * 1.6)) + 12 * (1 - smooth(0, eb, Dm[i])) + 26 * Math.abs(ns(X * 0.02 + 60, Y * 0.02 + 14) - 0.5) + 22 * rnd * rnd), 1, 44);
+          }
+          if ((y & 15) === 15) yield;
+        }
+        cost[src] = 1;
+        const wk = yield* walk(A, cost, gw, gh, src);
+        yield;
+        const K = big ? 3 + (R() < 0.5 ? 1 : 0) : (R() < 0.5 ? 1 : 2);
+        const sx0 = src % gw, sy0 = (src / gw) | 0;
+        const ends = [];
+        for (let k = 0; k < K; k++) {
+          let best = -1, bi = -1;
+          for (let q = 0; q < rimP.length; q += 2) {
+            const i = rimP[q];
+            if (wk.prev[i] < 0) continue;
+            const x = i % gw, y = (i / gw) | 0;
+            let dmin = Math.hypot(x - sx0, y - sy0) * (k ? 1 : 0.6);
+            for (const e of ends) { const d = Math.hypot(x - (e % gw), y - ((e / gw) | 0)); if (d < dmin) dmin = d; }
+            dmin *= 0.7 + 0.6 * R();
+            if (dmin > best) { best = dmin; bi = i; }
+          }
+          if (bi >= 0) ends.push(bi);
+        }
+        // twigs: short fissures that leave a line and die out inside the stone
+        const twig = [];
+        for (let k = 0; k < (big ? 3 : 1); k++) {
+          let i = 0, tries = 0;
+          do { i = (R() * n) | 0; tries++; } while (tries < 400 && (A[i] < 0.5 || Dm[i] < eb || wk.prev[i] < 0));
+          if (tries < 400) twig.push(i);
+        }
+        yield;
+        const ord = new Int32Array(n).fill(-1);       // how far along the line from the foot (steps)
+        const flow = new Uint8Array(n);
+        const onPath = new Uint8Array(n);
+        let ordMax = 1;
+        const lines = [];
+        const trace = (end, cuts) => {
+          const pts = [];
+          for (let i = end; i >= 0; i = wk.prev[i]) pts.push(i);
+          pts.reverse();
+          let from = 0;
+          if (!cuts) { for (let q = pts.length - 1; q >= 0; q--) if (onPath[pts[q]]) { from = q; break; } }
+          const line = [];
+          for (let q = from; q < pts.length; q++) {
+            const i = pts[q];
+            if (ord[i] < 0) ord[i] = q;
+            if (q > ordMax) ordMax = q;
+            if (cuts) { onPath[i] = 1; if (flow[i] < 9) flow[i]++; }
+            line.push(i);
+          }
+          lines.push({ pts: line, cuts: cuts, len: pts.length });
+        };
+        for (const e of ends) trace(e, true);
+        for (const e of twig) trace(e, false);
+        yield;
+        // the lines as grooves: wide at the foot, a hair at their ends; the hot core wavers along them
+        const sk = size / 300;
+        lines.forEach((ln, li) => {
+          const m = ln.pts.length;
+          for (let q = 0; q < m; q++) {
+            const i = ln.pts[q];
+            const x = i % gw, y = (i / gw) | 0;
+            const s = ord[i] / ordMax;
+            const along = ln.cuts ? 1 : smooth(1, 0.35, (q + 1) / m);                         // a twig dies out
+            const wv = 0.55 + 0.9 * ns(ord[i] * 0.045 / sk + li * 31, li * 17 + 5);
+            const rad = (0.55 + (2.3 * sk + 0.5) * Math.pow(1 - s, 1.4) * (flow[i] > 1 ? 1.2 : 1)) * wv * along + (ln.cuts ? 0 : -0.2);
+            if (rad <= 0.1) continue;
+            const bri = smooth(0.34, 0.6, ns(ord[i] * 0.03 / sk + 90 + li * 13, li * 7 + 40)) * (0.45 + 0.55 * Math.pow(1 - s, 0.8)) * along;
+            const rr2 = Math.ceil(rad + 1);
+            for (let dy = -rr2; dy <= rr2; dy++) for (let dx = -rr2; dx <= rr2; dx++) {
+              const X = x + dx, Y = y + dy;
+              if (X < 0 || Y < 0 || X >= gw || Y >= gh) continue;
+              const j = Y * gw + X;
+              const d = Math.hypot(dx, dy);
+              const v = clamp(rad - d + 0.6, 0, 1);
+              if (v > major[j]) major[j] = v;
+              const c = clamp(1 - d / (0.4 * rad + 0.55), 0, 1) * bri;
+              if (c > mcore[j]) mcore[j] = c;
+            }
+          }
+        });
+        yield;
+        // the pieces: what the lines that cut leave apart
+        const stack = [];
+        const sizes = [];
+        for (let i0 = 0; i0 < n; i0++) {
+          if (A[i0] < 0.5 || onPath[i0] || lab[i0] !== 255 || nLab >= 250) continue;
+          const id = nLab++;
+          let cnt = 0;
+          lab[i0] = id; stack.push(i0);
+          while (stack.length) {
+            const i = stack.pop();
+            cnt++;
+            const x = i % gw;
+            if (x > 0) { const j = i - 1; if (A[j] >= 0.5 && !onPath[j] && lab[j] === 255) { lab[j] = id; stack.push(j); } }
+            if (x < gw - 1) { const j = i + 1; if (A[j] >= 0.5 && !onPath[j] && lab[j] === 255) { lab[j] = id; stack.push(j); } }
+            if (i >= gw) { const j = i - gw; if (A[j] >= 0.5 && !onPath[j] && lab[j] === 255) { lab[j] = id; stack.push(j); } }
+            if (i < n - gw) { const j = i + gw; if (A[j] >= 0.5 && !onPath[j] && lab[j] === 255) { lab[j] = id; stack.push(j); } }
+          }
+          sizes.push(cnt);
+        }
+        yield;
+        // slivers join their neighbours, and so do the pixels of the lines themselves
+        const small = Math.max(40, area * 0.03);
+        const queue = [];
+        for (let i = 0; i < n; i++) { if (lab[i] !== 255 && sizes[lab[i]] < small) lab[i] = 255; }
+        yield;
+        for (let i = gw; i < n - gw; i++) if (lab[i] !== 255 && (lab[i - 1] === 255 || lab[i + 1] === 255 || lab[i - gw] === 255 || lab[i + gw] === 255)) queue.push(i);
+        yield;
+        for (let q = 0; q < queue.length; q++) {
+          const i = queue[q];
+          const x = i % gw;
+          if (x > 0) { const j = i - 1; if (A[j] >= 0.5 && lab[j] === 255) { lab[j] = lab[i]; queue.push(j); } }
+          if (x < gw - 1) { const j = i + 1; if (A[j] >= 0.5 && lab[j] === 255) { lab[j] = lab[i]; queue.push(j); } }
+          if (i >= gw) { const j = i - gw; if (A[j] >= 0.5 && lab[j] === 255) { lab[j] = lab[i]; queue.push(j); } }
+          if (i < n - gw) { const j = i + gw; if (A[j] >= 0.5 && lab[j] === 255) { lab[j] = lab[i]; queue.push(j); } }
+          if ((q & 8191) === 8191) yield;
+        }
+      }
+      if (!nLab) { for (let i = 0; i < n; i++) if (A[i] >= 0.5) lab[i] = 0; nLab = 1; }
+    }
+    yield;
+
+    /* ---- what does not depend on the cracks ---- */
+    Dm = yield* blurG(Dm, gw, gh, 1, 1);
+    // chisel facets: the face is a handful of planes, each tilted its own way
+    const nf = big ? 8 : 4;
+    const fs = [];
+    for (let k = 0; k < nf; k++) fs.push([P + R() * (gw - 2 * P), P + R() * (gh - 2 * P), (R() - 0.5) * 0.5, (R() - 0.5) * 0.5]);
+    let TX = new Float32Array(n);
+    let TY = new Float32Array(n);
+    const h0 = new Float32Array(n);
+    const BW = new Float32Array(n);                   // how wide the chamfer is here (it is broken)
+    for (let y = 0; y < gh; y++) {
+      for (let x = 0; x < gw; x++) {
+        const i = y * gw + x;
+        if (Ab[i] < 0.01) continue;
+        const d = Dm[i];
+        let best = 1e9, bk = 0;
+        for (let k = 0; k < nf; k++) { const dx = x - fs[k][0], dy = (y - fs[k][1]) * 1.3; const dd = dx * dx + dy * dy + ns(x * 0.05 + k * 9, y * 0.05) * size * size * 0.05; if (dd < best) { best = dd; bk = k; } }
+        const X = (x + ox) * fq, Y = (y + oy) * fq;
+        const bl = b * (0.25 + 1.5 * smooth(0.3, 0.75, ns(X * 0.045 + 11, Y * 0.045 + 77))) * (0.7 + 0.6 * td[i]);
+        BW[i] = bl;
+        const top = smooth(bl * 0.9, bl * 1.4 + 1, d);
+        TX[i] = fs[bk][2] * top; TY[i] = fs[bk][3] * top;
+        h0[i] = (d < bl ? d : bl) * 1.25;
+      }
+      if ((y & 15) === 15) yield;
+    }
+    TX = yield* blurG(TX, gw, gh, 1, 1);
+    TY = yield* blurG(TY, gw, gh, 1, 1);
+    yield;
+
+    /* ---- the side wall: for a pixel under an edge, how far back the face is ---- */
+    const E = Math.max(3, Math.round(EXT * size));
+    const el = Math.hypot(exx, 1);
+    const ex = exx / el, ey = 1 / el;
+    /** The rock of a wall `s` px behind an edge whose outward normal is (gx, gy2): near black; only its low edge takes the crater's light. */
+    const wall = [0, 0, 0, 0];
+    const wallAt = (x, y, s, depth, gx, gy2, inner) => {
+      const u = ((x + ox) * tca - (y + oy) * tsa) * 1.3 + tu0 + 77, v = ((x + ox) * tsa + (y + oy) * tca) * 1.3 + s * 1.3 * tk + tv0 + 500;
+      const l = tx(T.lum, T, u, v) / 255, a = tx(T.ao, T, u, v) / 255;
+      const rock = (0.2 + 2.6 * l * l) * (0.25 + 0.75 * a);
+      const dep = s / depth;
+      // one light on it, from the crater below: it falls off up the wall, and every facet takes it differently (never a line)
+      const fac = ns((x + ox) * fq * 0.07 + 300, (y + oy) * fq * 0.05 + s * 0.05);
+      const under = Math.max(0, gy2 * 0.9 + 0.1) * Math.pow(dep, 1.7) * (0.25 + 1.5 * smooth(0.3, 0.75, fac)) * (0.3 + 1.2 * l) * (0.4 + 0.6 * a);
+      const kl = Math.max(0, gx * KEY[0] + gy2 * KEY[1]) * (1 - 0.5 * dep);
+      const con = s < 2.2 ? 0.5 + 0.22 * s : 1;                       // the dark line where wall meets face
+      const base = inner ? 22 : 13;
+      wall[0] = (base * rock + 46 * kl * rock) * con + 3 * under;
+      wall[1] = (base * 1.12 * rock + 50 * kl * rock) * con + 17 * under;
+      wall[2] = (base * 0.95 * rock + 44 * kl * rock) * con + 7 * under;
+      wall[3] = under;
+    };
+    yield;
+    const sideRGB = new Uint8ClampedArray(n * 3);
+    const SC = new Float32Array(n);                   // how much of the pixel the side wall covers
+    const SD = new Float32Array(n);                   // how close to the hot face the wall is here
+    const SG = new Float32Array(n);                   // how much of the crater's light it takes
+    for (let y = 0; y < gh; y++) {
+      for (let x = 0; x < gw; x++) {
+        const i = y * gw + x;
+        if (A[i] > 0.996) continue;
+        let cov = 0, hit = 0, hi = -1;
+        for (let s = 1; s <= E; s++) {
+          const xs = Math.round(x - ex * s), ys = Math.round(y - ey * s);
+          if (xs < 1 || ys < 1 || xs >= gw - 1 || ys >= gh - 1) break;
+          const j = ys * gw + xs;
+          let a = A[j];
+          if (s > E - 1.5) a *= 0.5;
+          if (a > cov) cov = a;
+          if (a >= 0.5 && !hit) { hit = s; hi = j; }
+          if (a > 0.98) break;
+        }
+        if (cov <= 0.004) continue;
+        if (!hit) { hit = E; hi = Math.round(y - ey * E) * gw + Math.round(x - ex * E); }
+        // inside a counter or between two arms the wall stops short: the opening stays open
+        let below = 0;
+        for (let s = 1; s <= E * 3; s++) {
+          const xs = Math.round(x + ex * s), ys = Math.round(y + ey * s);
+          if (xs < 1 || ys < 1 || xs >= gw - 1 || ys >= gh - 1) break;
+          if (A[ys * gw + xs] >= 0.5) { below = s; break; }
+        }
+        if (below) { cov *= smooth(0.42, 0.3, hit / (hit + below)); if (cov <= 0.004) continue; }
+        let gx = Ab[hi + 1] - Ab[hi - 1], gy2 = Ab[hi + gw] - Ab[hi - gw];
+        const gl2 = Math.hypot(gx, gy2) || 1;
+        gx = -gx / gl2; gy2 = -gy2 / gl2;                 // out of the stone
+        wallAt(x, y, hit, E, gx, gy2, false);
+        SC[i] = cov;
+        SG[i] = wall[3];
+        SD[i] = Math.pow(1 - hit / E, 2);
+        sideRGB[i * 3] = wall[0]; sideRGB[i * 3 + 1] = wall[1]; sideRGB[i * 3 + 2] = wall[2];
+      }
+      if ((y & 7) === 7) yield;
+    }
+    // a soft, wide, faint shadow where the letter stands against the film
+    const U8 = new Float32Array(n);
+    for (let i = 0; i < n; i++) U8[i] = Math.max(A[i], SC[i]);
+    const SH = yield* blurG(U8, gw, gh, Math.max(2, size * 0.04), 3);
+    const shOff = 0;
+    yield;
+    // the tight box of the letter itself, and where its feet are
+    let tx0 = gw, ty0 = gh, tx1 = 0, ty1 = 0;
+    for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) if (U8[y * gw + x] > 0.05) { if (x < tx0) tx0 = x; if (x > tx1) tx1 = x; if (y < ty0) ty0 = y; if (y > ty1) ty1 = y; }
+    if (tx1 < tx0) { tx0 = ty0 = 0; tx1 = gw - 1; ty1 = gh - 1; }
+    let fy1 = 0, fy0 = 0;
+    for (let y = gh - 1; y >= 0 && !fy1; y--) for (let x = 0; x < gw; x++) if (A[y * gw + x] > 0.5) { fy1 = y; break; }
+    for (let y = 0; y < gh && !fy0; y++) for (let x = 0; x < gw; x++) if (A[y * gw + x] > 0.5) { fy0 = y; break; }
+    // heat: where the cracks are (widely), for the incandescent letter
+    const thin = new Float32Array(n);                 // the cracks that are lines (a wide dark hollow carries no light)
+    { const cs = yield* blurG(cr, gw, gh, Math.max(2, Math.round(size * 0.009)), 2); for (let i = 0; i < n; i++) thin[i] = clamp((cr[i] - cs[i] * 1.15) * 2.6, 0, 1); }
+    const crW = yield* blurG(thin, gw, gh, Math.max(2, Math.round(size * 0.022)), 2);
+    yield;
+
+    /* ---- the stone and its light, for one state of the cracks ---- */
+    const hot = new Uint8ClampedArray(n * 4);         // incandescent: crust, heat in the cracks and on the edges
+    const hot2 = new Uint8ClampedArray(n * 4);        // ... later: the edges have gone cold, the cracks inside still glow
+    const EM = new Float32Array(n);                   // how much a pixel of the incandescent letter gives off
+    const spec = new Uint8ClampedArray(n * 4);
+    const keep = {};
+    function* stone(second) {
+      // how deep the stone is cut here, and how much of the cut glows
+      const gv = new Float32Array(n);
+      const core = new Float32Array(n);
+      for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
+        if (x === 0 && (y & 31) === 31) yield;
+        const i = y * gw + x;
+        if (A[i] < 0.02) continue;
+        const X = (x + ox) * fq, Y = (y + oy) * fq;
+        const reg = ns(X * 0.012 + 150, Y * 0.012 + 33);
+        const live = smooth(0.5, 0.62, reg);                                             // where the rock's own cracks carry light
+        const mj = second ? major[i] : 0;
+        gv[i] = Math.min(1, cr[i] * 0.85 + mj);
+        core[i] = Math.max(thin[i] * live * (0.45 + 0.55 * ns(X * 0.09 + 9, Y * 0.09 + 70)), second ? mcore[i] : 0);
+      }
+      yield;
+      const GV = yield* blurG(gv, gw, gh, 1, 1);
+      const GLW = yield* blurG(core, gw, gh, Math.max(1, Math.round(size * 0.007)), 2);
+      const h = new Float32Array(n);
+      const depth = Math.max(2.5, size * 0.02);
+      for (let i = 0; i < n; i++) h[i] = h0[i] - GV[i] * depth * 0.4 - (second ? major[i] * depth * 1.3 : 0);
+      yield;
+      const hb = yield* blurG(h, gw, gh, Math.max(2, Math.round(b * 0.8)), 2);
+      yield;
+      const px = new Uint8ClampedArray(n * 4);
+      const em = new Uint8ClampedArray(n * 4);
+      const fh = Math.max(1, fy1 - fy0);
+      for (let y = 1; y < gh - 1; y++) {
+        const low = clamp((y - fy0) / fh, 0, 1);                       // 0 at the head of the letter, 1 at its feet
+        const wash = low * low * low;
+        for (let x = 1; x < gw - 1; x++) {
+          const i = y * gw + x;
+          const o = i * 4;
+          const a = A[i];
+          const sc = SC[i];
+          const shs = i - shOff >= 0 ? SH[i - shOff] : 0;
+          if (a <= 0.004 && sc <= 0.004) {
+            if (shs > 0.01) px[o + 3] = shs * 0.3 * 255;
+            if (GLW[i] > 0.01) putLight(em, o, 10 * GLW[i], 60 * GLW[i], 22 * GLW[i]);
+            continue;
+          }
+          let r = 0, gg = 0, bb = 0, er = 0, eg = 0, eb = 0;
+          if (a > 0.004) {
+            const bx = -(h[i + 1] - h[i - 1]) * 0.5, by = -(h[i + gw] - h[i - gw]) * 0.5;      // the chamfer and the cuts
+            let nx = bx + TX[i] + tnx[i] * 0.95;
+            let ny = by + TY[i] + tny[i] * 0.95;
+            const il = 1 / Math.sqrt(nx * nx + ny * ny + 1);
+            nx *= il; ny *= il;
+            const nz = il;
+            const kd = Math.max(0, nx * KEY[0] + ny * KEY[1] + nz * KEY[2]);
+            const wear = (h[i] - hb[i]) / b;
+            const g1 = GV[i];
+            const ao = (0.3 + 0.7 * ta[i]) * (1 - 0.7 * clamp(-wear * 1.2, 0, 1)) * (1 - 0.6 * g1);
+            const X = (x + ox) * fq, Y = (y + oy) * fq;
+            // the colour of the rock: its photograph as a grey, graded dark and a little olive
+            const l = clamp((tl[i] - 0.47) * (1.1 + 0.7 * det) + 0.42 + (ns(X * 0.016 + 5, Y * 0.016) - 0.5) * 0.3, 0, 1);
+            const v = LIFT * (0.068 + 0.27 * l * l + 0.09 * l);
+            const ar = 255 * v * 0.93, ag = 255 * v, ab = 255 * v * 0.9;
+            const lit = 0.34 * ao + 1.62 * kd * (0.3 + 0.7 * ao);
+            const fill = Math.max(0, by * 0.8 + ny * 0.25 - 0.05) * ao;                     // what faces down takes the crater's green
+            // a cool key from above and behind: it catches the chamfer along the top of every stroke (the stone stands off a dark film)
+            const rimT = clamp(-by * 0.95 - 0.08, 0, 1) * (1 - smooth(BW[i] * 0.9 + 0.6, BW[i] * 1.5 + 2.2, Dm[i])) * (0.55 + 0.45 * ao) * (0.7 + 0.3 * smooth(0.3, 0.6, ns(X * 0.13 + 20, Y * 0.13)));
+            const rough = T.rough ? tx(T.rough, T, (x + ox) * tca - (y + oy) * tsa + tu0, (x + ox) * tsa + (y + oy) * tca + tv0) / 255 : 0.6;
+            const sp = Math.pow(Math.max(0, nx * HALF[0] + ny * HALF[1] + nz * HALF[2]), 46) * 0.14 * ao * (1.5 - rough);
+            const edg = clamp(wear * 2.4 - 0.3, 0, 1) * (0.1 + 0.9 * kd) * smooth(0.3, 0.6, ns(X * 0.21 + 200, Y * 0.21));
+            const ws = wash * (0.35 + 0.65 * ao) * (0.6 + 0.4 * l);
+            r = ar * lit * 1.03 + 2 * fill + 110 * edg + 235 * sp + 3 * ws + RIM * 0.86 * rimT;
+            gg = ag * lit + 9 * fill + 122 * edg + 245 * sp + 13 * ws + RIM * 0.97 * rimT;
+            bb = ab * lit * 1.0 + 4 * fill + 108 * edg + 235 * sp + 6 * ws + RIM * rimT;
+            // light that comes and goes: the hot core of the cracks, the crater's light from below
+            const c = core[i] * Math.min(1, g1 * 2.2 + 0.25);
+            const gw2 = GLW[i];
+            er = 240 * c * c + 10 * gw2 + 7 * fill + 11 * ws;
+            eg = 255 * c + 64 * gw2 + 38 * fill + 58 * ws;
+            eb = 200 * c * c + 24 * gw2 + 15 * fill + 22 * ws;
+            if (!second) {
+              // incandescent rock: a dark crust over most of the face; the heat shows pale in the narrow cracks and along the
+              // edges, and as a faint glow in the rock right beside them
+              const n1 = ns(X * 0.034 + 200, Y * 0.034 + 9), n2 = ns(X * 0.11 + 31, Y * 0.11 + 60);
+              const rimH = (1 - smooth(BW[i] * 0.4, BW[i] * 1.0 + 1.2, Dm[i])) * smooth(0.5, 0.66, n1 * 0.6 + ns(X * 0.07 + 5, Y * 0.07 + 80) * 0.4);
+              const near = Math.min(1, crW[i] * 3.2);
+              const hz = smooth(0.4, 0.6, ns(X * 0.3 + 77, Y * 0.3 + 5));              // where the stone is still hot through
+              const rd1 = 1 - Math.abs(2 * ns(X * 1.1 + 300, Y * 1.1 + 21) - 1), rd2 = 1 - Math.abs(2 * ns(X * 2.4 + 11, Y * 2.4 + 310) - 1);
+              const web = Math.max(smooth(0.88, 0.98, rd1), 0.5 * smooth(0.9, 0.985, rd2)) * hz;                 // the crust is broken into plates
+              const line = Math.min(1, thin[i] * 2.2 + smooth(0.25, 0.8, cr[i]) * 0.6 * hz + web);
+              const seep = Math.max(Math.pow(near, 1.5) * 0.5 * smooth(0.25, 0.65, n2), 0.24 * smooth(0.55, 0.95, rd1) * hz);
+              const e2 = Math.max(line, seep);                                  // the cracks
+              const e1 = Math.max(e2, rimH * (0.45 + 0.5 * n2));                 // ... and, in places, the edges
+              const cm = (0.4 + 0.2 * n1) * (0.75 + 0.25 * ao);                  // the crust: the stone, darker
+              for (let hI = 0; hI < 2; hI++) {
+                const e = hI ? e2 * 0.85 * smooth(0, size * 0.09, Dm[i]) : e1;
+                let hr, hg, hb2;
+                if (e < 0.35) { const u = e / 0.35; hr = 34 * u * u; hg = 92 * u; hb2 = 30 * u * u; }
+                else if (e < 0.7) { const u = (e - 0.35) / 0.35; hr = lerp(34, 186, u); hg = lerp(92, 222, u); hb2 = lerp(30, 84, u); }
+                else { const u = Math.min(1, (e - 0.7) / 0.3); hr = lerp(186, 255, u); hg = lerp(222, 255, u); hb2 = lerp(84, 206, u); }
+                const dst = hI ? hot2 : hot;
+                const km = hI ? Math.min(1, cm * 1.5) : cm;
+                dst[o] = r * km * (1 - 0.6 * e) + hr; dst[o + 1] = gg * km * (1 - 0.6 * e) + hg; dst[o + 2] = bb * km * (1 - 0.6 * e) + hb2;
+              }
+              EM[i] = e1 * e1 * a;
+              // what a light passing in front picks out: the chamfers turned to it, the worn edges, a sheen
+              const sw = Math.pow(Math.max(0, nx * SWL[0] + ny * SWL[1] + nz * SWL[2]), 26) * 0.16 * (0.4 + l) + edg * 1.5 + (1 - smooth(0, BW[i] + 1, Dm[i])) * 0.95 * (0.25 + kd) + kd * 0.03;
+              putLight(spec, o, 215 * sw * a, 255 * sw * a, 205 * sw * a);
+            }
+          }
+          let al = a;
+          if (a < 0.996 && sc > 0.004) {
+            const k = sc * (1 - a);
+            r = r * a + sideRGB[i * 3] * k; gg = gg * a + sideRGB[i * 3 + 1] * k; bb = bb * a + sideRGB[i * 3 + 2] * k;
+            al = a + k;
+            r /= al; gg /= al; bb /= al;
+            const u = SG[i] * k;
+            er = er * a + 9 * u; eg = eg * a + 62 * u; eb = eb * a + 22 * u;
+            if (!second) {
+              const hk = 0.3 * SD[i];
+              hot[o] = (hot[o] * a + (sideRGB[i * 3] + 30 * hk) * k) / al; hot[o + 1] = (hot[o + 1] * a + (sideRGB[i * 3 + 1] + 90 * hk) * k) / al; hot[o + 2] = (hot[o + 2] * a + (sideRGB[i * 3 + 2] + 30 * hk) * k) / al;
+              hot2[o] = (hot2[o] * a + sideRGB[i * 3] * k) / al; hot2[o + 1] = (hot2[o + 1] * a + sideRGB[i * 3 + 1] * k) / al; hot2[o + 2] = (hot2[o + 2] * a + sideRGB[i * 3 + 2] * k) / al;
+            }
+          } else {
+            er *= a; eg *= a; eb *= a;
+          }
+          if (!second) { hot[o + 3] = al * 255; hot2[o + 3] = al * 255; }
+          const at = al + shs * 0.3 * (1 - al);
+          px[o] = r; px[o + 1] = gg; px[o + 2] = bb; px[o + 3] = at * 255;
+          putLight(em, o, er, eg, eb);
+        }
+        if ((y & 7) === 7) yield;
+      }
+      if (second) { keep.px = px; keep.em = em; }
+      const st = cropped(px, gw, gh);
+      yield;
+      return { stone: st, light: cropped(em, gw, gh) };
+    }
+    const sa = yield* stone(false);
+    yield;
+    const sb = yield* stone(true);
+    yield;
+
+    /* ---- the glow of the incandescent letter: light spilled by what gives it off (the cracks, the edges), close to them ---- */
+    const b1 = yield* blurG(EM, gw, gh, Math.max(1, size * 0.011), 2);
+    yield;
+    const b2 = yield* blurG(EM, gw, gh, Math.max(2, size * 0.032), 2);
+    yield;
+    const bp = new Uint8ClampedArray(n * 4);
+    for (let i = 0; i < n; i++) { if ((i & 32767) === 32767) yield; const k1 = b1[i] * 1.5, k2 = b2[i] * 1.7; putLight(bp, i * 4, 70 * k1 + 16 * k2, 120 * k1 + 80 * k2, 40 * k1 + 26 * k2, 3); }
+    yield;
+
+    /**
+     * The pieces the letter breaks into (made when the end is near): each is a part of the cracked
+     * stone cut out along the cracks, with a wall of dark rock under every cut so that it is thick,
+     * and the light of its cracks apart (so that a piece can go cold).
+     */
+    function* pieces() {
+      const out = [];
+      const Ec = Math.max(3, Math.round(E * 0.85));
+      for (let k = 0; k < nLab; k++) {
+        const M0 = new Float32Array(n);
+        let cnt = 0, sx = 0, sy = 0, x0 = gw, y0 = gh, x1 = 0, y1 = 0;
+        for (let i = 0; i < n; i++) if (lab[i] === k) { M0[i] = 1; cnt++; const x = i % gw, y = (i / gw) | 0; sx += x; sy += y; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+        if (cnt < 30) continue;
+        x0 = Math.max(1, x0 - 3); y0 = Math.max(1, y0 - 3); x1 = Math.min(gw - 2, x1 + 3 + Math.ceil(Math.abs(ex) * Ec)); y1 = Math.min(gh - 2, y1 + Ec + 3);
+        const Ms = yield* blurG(M0, gw, gh, 1, 1);
+        yield;
+        const cw = x1 - x0 + 1, ch = y1 - y0 + 1;
+        const px = new Uint8ClampedArray(cw * ch * 4), lp = new Uint8ClampedArray(cw * ch * 4);
+        const src = keep.px, sem = keep.em;
+        for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+          const i = y * gw + x;
+          const o = ((y - y0) * cw + (x - x0)) * 4, so = i * 4;
+          // the face of the piece: the letter's own pixels (its outer walls go with it)
+          let m = clamp((Ms[i] - 0.5) * 2.4 + 0.5, 0, 1);
+          let fa = m * Math.min(1, A[i] + (M0[i] ? SC[i] : 0));
+          if (!fa && SC[i] > 0.004 && A[i] < 0.5) {                        // an outer wall belongs to the piece above it
+            for (let s = 1; s <= E; s++) { const j = Math.round(y - ey * s) * gw + Math.round(x - ex * s); if (j < 0) break; if (A[j] >= 0.5) { if (lab[j] === k) fa = Math.min(1, A[i] + SC[i]); break; } }
+          }
+          let r = src[so] * fa, gg = src[so + 1] * fa, bb = src[so + 2] * fa, al = fa;
+          if (fa > 0) { const ea = sem[so + 3] / 255 * fa; lp[o] = sem[so]; lp[o + 1] = sem[so + 1]; lp[o + 2] = sem[so + 2]; lp[o + 3] = ea * 255; }
+          if (fa < 0.996) {
+            // under a cut: the inside of the rock
+            let hit = 0, cov = 0;
+            for (let s = 1; s <= Ec; s++) {
+              const xs = Math.round(x - ex * s), ys = Math.round(y - ey * s);
+              if (xs < 1 || ys < 1) break;
+              const j = ys * gw + xs;
+              if (lab[j] === k && A[j] >= 0.5) { hit = s; cov = Math.min(1, Ms[j] * 2) * (s > Ec - 1.5 ? 0.5 : 1); break; }
+            }
+            if (hit) {
+              wallAt(x, y, hit, Ec, 0, 1, true);
+              const kk = cov * (1 - fa);
+              r += wall[0] * kk; gg += wall[1] * kk; bb += wall[2] * kk; al += kk;
+            }
+          }
+          if (al > 0.004) { px[o] = r / al; px[o + 1] = gg / al; px[o + 2] = bb / al; px[o + 3] = al * 255; }
+        }
+        yield;
+        out.push({ px: px, lp: lp, w: cw, h: ch, x: x0, y: y0, mx: sx / cnt - x0, my: sy / cnt - y0 });
+      }
+      keep.px = keep.em = null;
       return out;
     }
 
-    function addTo(path, pts) {
-      path.moveTo(pts[0], pts[1]);
-      for (let i = 2; i < pts.length; i += 2) path.lineTo(pts[i], pts[i + 1]);
-    }
-
-    /** The first fraction f of a polyline. */
-    function addPart(path, pts, f) {
-      const n = pts.length / 2 - 1;
-      const upto = clamp(f, 0, 1) * n;
-      const whole = Math.floor(upto);
-      path.moveTo(pts[0], pts[1]);
-      for (let i = 1; i <= whole; i++) path.lineTo(pts[i * 2], pts[i * 2 + 1]);
-      const r = upto - whole;
-      if (r > 0.01 && whole < n) path.lineTo(lerp(pts[whole * 2], pts[whole * 2 + 2], r), lerp(pts[whole * 2 + 1], pts[whole * 2 + 3], r));
-    }
-
-    const bolts = [];
-    /**
-     * Three versions of one arc (it jumps between them as it strikes again), each with branches; a
-     * fork (s.fork) is a second trunk splitting off two thirds of the way down; an arc that has to
-     * find its way first (s.lead) also gets its leader, the trunk growing from its start in stages.
-     */
-    function makeBolt(s) {
-      const len = Math.hypot(s.bx - s.ax, s.by - s.ay) || 1;
-      const v = [];
-      for (let k = 0; k < 3; k++) {
-        const main = polyline(s.ax, s.ay, s.bx, s.by, s.bow * R(0.75, 1.2), s.ux, s.uy, s.jit, s.levels);
-        const mp = new Path2D();
-        addTo(mp, main);
-        const n = main.length / 2 - 1;
-        let fork = null;
-        let fi = 0;
-        if (s.fork) {
-          fi = Math.round(n * R(0.58, 0.7));
-          const fx = main[fi * 2];
-          const fy = main[fi * 2 + 1];
-          const fl = Math.hypot(s.fork[0] - fx, s.fork[1] - fy);
-          fork = polyline(fx, fy, s.fork[0], s.fork[1], fl * R(-0.15, 0.15), 1, 0, s.jit * 1.2, Math.max(3, s.levels - 2));
-          addTo(mp, fork);
-        }
-        const nb = s.branches ? Math.max(1, Math.round(s.branches * R(0.5, 1))) : 0;
-        const bp = nb ? new Path2D() : null;
-        for (let b = 0; b < nb; b++) {
-          const i = 1 + Math.floor(R(0.08, 0.7) * n);
-          const j = Math.min(n, i + 3);
-          const px = main[i * 2];
-          const py = main[i * 2 + 1];
-          let dx = main[j * 2] - px;
-          let dy = main[j * 2 + 1] - py;
-          const dl = Math.hypot(dx, dy) || 1;
-          dx /= dl; dy /= dl;
-          // Fork off to one side, towards the side the arc prefers when it has one.
-          let turn = R(0.35, 0.95) * (rnd() < 0.5 ? -1 : 1);
-          if (s.bu && (dx * Math.cos(turn) - dy * Math.sin(turn)) * s.bu[0] + (dx * Math.sin(turn) + dy * Math.cos(turn)) * s.bu[1] < 0) turn = -turn;
-          const bl = len * R(0.1, 0.3);
-          const ex = px + (dx * Math.cos(turn) - dy * Math.sin(turn)) * bl;
-          const ey = py + (dx * Math.sin(turn) + dy * Math.cos(turn)) * bl;
-          const pts = polyline(px, py, ex, ey, bl * R(-0.12, 0.12), 0, -1, s.jit * 1.3, Math.max(2, s.levels - 2));
-          addTo(bp, pts);
-        }
-        let lead = null;
-        if (s.lead && k === 0) {
-          lead = [];
-          const f0 = fi / n;
-          for (let q = 1; q < LEAD_STEPS; q++) {
-            const f = q / LEAD_STEPS;
-            const p = new Path2D();
-            addPart(p, main, f);
-            if (fork && f > f0) addPart(p, fork, (f - f0) / (1 - f0));
-            lead.push(p);
-          }
-        }
-        v.push({ main: mp, br: bp, lead: lead });
-      }
-      return { v: v, ax: s.ax, ay: s.ay, bx: s.bx, by: s.by, fx: s.fork ? s.fork[0] : NaN, fy: s.fork ? s.fork[1] : NaN, len: len, w: s.w || 1, edge: s.edge == null ? -1 : s.edge };
-    }
-
-    // Where arcs can leap. Each gives the ends, how much it bows and which way, and how jagged it is.
-    const spec = {
-      // the thunderclap: from the impact along the ground out to the side of the picture
-      ground(side) {
-        const ay = gy + R(-0.01, 0.02) * H;
-        return { ax: gx + side * R(0.02, 0.07) * W, ay: ay, bx: side < 0 ? -30 : W + 30, by: Math.min(H + 10, ay + R(-0.12, 0.06) * H), bow: R(0.03, 0.07) * W, ux: 0, uy: -1, jit: 0.05, levels: 6, branches: 4, w: 1.25 };
-      },
-      // the thunderclap: from beside the impact up to the edge of the picture
-      rise(side) {
-        return { ax: gx + side * R(0.1, 0.2) * W, ay: gy - R(0, 0.04) * H, bx: side < 0 ? -20 : W + 20, by: R(0.14, 0.42) * H, bow: R(0.05, 0.11) * W, ux: side, uy: 1, jit: 0.055, levels: 6, branches: 5, w: 1.2 };
-      },
-      // the thunderclap: the sky cracking open across the top of the picture, forks hanging down
-      sky() {
-        const xa = R(0.03, 0.2) * W;
-        const xb = R(0.8, 0.97) * W;
-        return { ax: xa, ay: R(0.03, 0.12) * H, bx: xb, by: R(0.03, 0.14) * H, bow: R(0.07, 0.13) * H, ux: 0, uy: 1, jit: 0.045, levels: 6, branches: 7, bu: [0, 1], w: 1.35 };
-      },
-      // the thunderclap with no year: a bolt from the sky into the ground under the words
-      down() {
-        const len = gy + 20;
-        return { ax: gx + R(-0.12, 0.12) * W, ay: -20, bx: gx, by: gy, bow: R(-0.08, 0.08) * len, ux: 1, uy: 0, jit: 0.05, levels: 6, branches: 6, bu: [0, 1], w: 1.3 };
-      },
-      // down one side of the words, bowing out
-      side(side) {
-        const x0 = side < 0 ? tx0 - gap : tx1 + gap;
-        const x1 = side < 0 ? yx0 - gap : yx1 + gap;
-        const ya = lerp(ty0, ty1, R(0.15, 0.75));
-        const yb = year ? lerp(yy0, yy1, R(0.35, 0.95)) : ty1 + L.titleSize * R(0.6, 1);
-        return { ax: x0, ay: ya, bx: x1, by: yb, bow: R(0.25, 0.5) * Math.hypot(x1 - x0, yb - ya) + gap, ux: side, uy: 0, jit: 0.09, levels: 5, branches: 2, bu: [side, 0] };
-      },
-      // over the title, bowing up like an arc between two electrodes
-      crown() {
-        const w = tx1 - tx0;
-        const span = w * R(0.22, 0.5);
-        const xa = tx0 + rnd() * (w - span);
-        const y0 = ty0 - gap * R(0.6, 1.1);
-        return { ax: xa, ay: y0 + R(-0.3, 0.3) * gap, bx: xa + span, by: y0 + R(-0.3, 0.3) * gap, bow: span * R(0.14, 0.3), ux: 0, uy: -1, jit: 0.1, levels: 5, branches: 2, bu: [0, -1] };
-      },
-      // a discharge leaping up from the top of the title into the picture
-      spire() {
-        const x = lerp(tx0, tx1, R(0.04, 0.96));
-        const y = ty0 - gap * 0.3;
-        const len = R(0.12, 0.26) * H;
-        const ang = -Math.PI / 2 + R(-0.55, 0.55);
-        return { ax: x, ay: y, bx: x + Math.cos(ang) * len, by: y + Math.sin(ang) * len, bow: R(-0.15, 0.15) * len, ux: 1, uy: 0, jit: 0.1, levels: 5, branches: 3, bu: [0, -1] };
-      },
-      // a great arch over the whole title
-      arch() {
-        const ya = lerp(ty0, ty1, 0.4);
-        return { ax: tx0 - gap, ay: ya, bx: tx1 + gap, by: ya + R(-0.5, 0.5) * gap, bow: R(0.22, 0.34) * Math.min(W, H), ux: 0, uy: -1, jit: 0.065, levels: 6, branches: 5, bu: [0, -1], w: 1.2 };
-      },
-      // from the end of a line of words out to the side of the picture
-      flank(side) {
-        const top = !year || rnd() < 0.6;
-        const xa = side < 0 ? (top ? tx0 : yx0) - gap : (top ? tx1 : yx1) + gap;
-        const ya = top ? lerp(ty0, ty1, R(0.2, 0.8)) : lerp(yy0, yy1, R(0.2, 0.8));
-        const xb = side < 0 ? -25 : W + 25;
-        const yb = clamp(ya + R(-0.3, 0.2) * H, 0.08 * H, 0.98 * H);
-        return { ax: xa, ay: ya, bx: xb, by: yb, bow: R(-0.1, 0.1) * Math.abs(xb - xa), ux: 0, uy: -1, jit: 0.06, levels: 6, branches: 3, w: 1.15 };
-      },
-      // along an edge of the picture (0 left, 1 right, 2 top, 3 bottom), bowing a little inwards
-      edge(e) {
-        const m = R(4, 12) * S;
-        if (e < 2) {
-          const ya = R(0.03, 0.5) * H;
-          const x = e === 0 ? m : W - m;
-          return { ax: x, ay: ya, bx: x, by: Math.min(H - m, ya + R(0.25, 0.5) * H), bow: R(0.02, 0.05) * H, ux: e === 0 ? 1 : -1, uy: 0, jit: 0.04, levels: 6, branches: 3, bu: [e === 0 ? 1 : -1, 0], edge: e, w: 0.95 };
-        }
-        const xa = R(0.03, 0.55) * W;
-        const y = e === 2 ? m : H - m;
-        return { ax: xa, ay: y, bx: Math.min(W - m, xa + R(0.22, 0.42) * W), by: y, bow: R(0.012, 0.035) * W, ux: 0, uy: e === 2 ? 1 : -1, jit: 0.035, levels: 6, branches: 3, bu: [0, e === 2 ? 1 : -1], edge: e, w: 0.95 };
-      },
-      // under the lower line, sagging towards the ground
-      under() {
-        const w = yx1 - yx0;
-        const span = w * R(0.35, 0.75);
-        const xa = yx0 + rnd() * (w - span);
-        const y0 = yy1 + gap * R(0.4, 0.8);
-        return { ax: xa, ay: y0, bx: xa + span, by: y0, bow: span * R(0.1, 0.22), ux: 0, uy: 1, jit: 0.09, levels: 5, branches: 2, bu: [0, 1] };
-      }
-    };
-
-    // Every flash of every bolt: start (ms), duration, bolt, version, peak, kind (0 a strike that
-    // dies away, 1 one hop of a live arc that holds, 2 a leader growing down before its strike).
-    const fl = [];
-    const sparkAt = [];                                          // where strikes throw sparks: t, x, y, count
-    function strike(t0, s, peak, strokes) {
-      const b = bolts.length;
-      bolts.push(makeBolt(s));
-      const n = strokes || 1 + Math.floor(rnd() * 2.6);
-      let t = t0;
-      for (let j = 0; j < n; j++) {
-        const dur = j === n - 1 ? R(180, 320) : R(70, 120);
-        fl.push([t, dur, b, j % 3, peak * (1 - 0.12 * j), 0]);
-        t += dur + R(15, 60);                                    // dark for an instant, then again
-      }
-      sparkAt.push(t0, s.ax, s.ay, 3, t0 + 10, s.bx, s.by, 3);
-    }
-    function crawl(t0, s, peak, len) {
-      const b = bolts.length;
-      bolts.push(makeBolt(s));
-      const hop = R(45, 70);
-      let j = 0;
-      for (let t = t0; t < t0 + len; t += hop, j++) {
-        const k = Math.min(1, (t - t0) / 80, (t0 + len - t) / 160);
-        fl.push([t, hop + 8, b, j % 3, peak * Math.max(0.25, k), 1]);
-      }
-    }
-    /** A bolt from the sky that hits letter ks[0] (and, forked, ks[1]) at tc: it writes them. */
-    function letterStrike(tc, ks) {
-      const g = G[ks[0]];
-      const drop = Math.max(40, g.top);
-      const ax = clamp(g.cx + R(-0.32, 0.32) * drop, W * 0.02, W * 0.98);
-      const ay = -R(8, 30) * S;
-      const bx = g.cx + R(-0.12, 0.12) * (g.x1 - g.x0);
-      const by = g.top - g.size * 0.04;
-      const len = Math.hypot(bx - ax, by - ay);
-      const s = { ax: ax, ay: ay, bx: bx, by: by, bow: R(-0.1, 0.1) * len, ux: 1, uy: 0, jit: 0.06, levels: 6, branches: 4, bu: [0, 1], w: 1.35, lead: true };
-      if (ks.length > 1) { const h = G[ks[1]]; s.fork = [h.cx + R(-0.12, 0.12) * (h.x1 - h.x0), h.top - h.size * 0.04]; }
-      const b = bolts.length;
-      bolts.push(makeBolt(s));
-      fl.push([tc - LEAD, LEAD, b, 0, 0.62, 2]);
-      const n = 2;
-      let t = tc;
-      for (let j = 0; j < n; j++) {
-        const dur = j === n - 1 ? R(130, 210) : R(55, 85);
-        fl.push([t, dur, b, j % 3, (j === 0 ? 1.25 : 1) * (1 - 0.12 * j), 0]);
-        if (j > 0) for (const k of ks) { if (rsT[k * 2] < -1e8) rsT[k * 2] = t; else rsT[k * 2 + 1] = t; }
-        t += dur + R(15, 45);
-      }
-      sparkAt.push(tc, bx, by, 11);
-      if (s.fork) sparkAt.push(tc, s.fork[0], s.fork[1], 11);
-    }
-
-    // The thunderclap at midnight: the sky cracks open (or, with no year, a bolt hits the ground) ...
-    if (YG.length) {
-      strike(0, spec.sky(), 1.15, 3);
-      strike(25, spec.edge(2), 0.9, 2);
-    } else {
-      strike(0, spec.down(), 1, 3);
-    }
-    // ... and where the year smashes down, arcs race out along the ground and up to the edges.
-    strike(SMASH, spec.ground(-1), 1, 2);
-    strike(SMASH + 20, spec.ground(1), 1, 2);
-    strike(SMASH + 40, spec.rise(-1), 0.95, 1);
-    strike(SMASH + 70, spec.rise(1), 0.95, 1);
-    // Then the lightning writes the title, letter by letter.
-    for (let q = 0; q < groups.length; q++) letterStrike(born[groups[q][0]], groups[q]);
-    // From then on the words crackle: live arcs hug them one after another, now here, now there ...
-    const quiet = (t) => t > MID - 200 && t < MID + 520;                   // room for the surge
-    const after = titleDone + 150;
-    strike(after + 60, spec.edge(0), 0.8, 2);
-    strike(after + 120, spec.edge(1), 0.8, 2);
-    let lastSide = 1;
-    for (let tq = after; tq < STRIKES_END;) {
-      const late = smooth(STRIKES_END - 2800, STRIKES_END, tq);            // fewer and weaker at the end
-      if (!quiet(tq)) {
-        const r = rnd();
-        let s;
-        if (r < 0.3) s = spec.crown();
-        else if (r < 0.55) { lastSide = -lastSide; s = spec.side(lastSide); }
-        else if (r < 0.8) s = spec.spire();
-        else s = spec.under();
-        crawl(tq, s, lerp(0.95, 0.6, late) * R(0.8, 1), R(600, 1100) * (1 - late * 0.4));
-      }
-      tq += R(290, 540) * (1 + late * 1.2);
-    }
-    // ... and it strikes around them and along the edges of the picture.
-    let arches = 0;
-    for (let tq = after + 250; tq < STRIKES_END;) {
-      const late = smooth(STRIKES_END - 2800, STRIKES_END, tq);
-      if (!quiet(tq)) {
-        const r = rnd();
-        let s;
-        if (r < 0.06 && arches < 2 && late < 0.3) { s = spec.arch(); arches++; }
-        else if (r < 0.5) { const e = rnd(); s = spec.edge(e < 0.32 ? 0 : e < 0.64 ? 1 : e < 0.82 ? 2 : 3); }
-        else if (r < 0.8) s = spec.flank(rnd() < 0.5 ? -1 : 1);
-        else if (r < 0.9) s = spec.crown();
-        else s = spec.side(rnd() < 0.5 ? -1 : 1);
-        strike(tq, s, lerp(1, 0.6, late) * R(0.8, 1));
-      }
-      tq += R(360, 720) * (1 + late * 1.5);
-    }
-    // ... and half-way through it surges again.
-    strike(MID, spec.flank(-1), 1, 3);
-    strike(MID + 60, spec.flank(1), 1, 3);
-    strike(MID + 170, spec.arch(), 1, 3);
-    strike(MID + 300, spec.under(), 0.9, 2);
-    strike(MID + 420, spec.edge(2), 0.85, 2);
-
-    const NF = fl.length;
-    const fS = new Float32Array(NF), fD = new Float32Array(NF), fP = new Float32Array(NF);
-    const fB = new Uint16Array(NF), fV = new Uint8Array(NF), fK = new Uint8Array(NF);
-    for (let i = 0; i < NF; i++) { fS[i] = fl[i][0]; fD[i] = fl[i][1]; fB[i] = fl[i][2]; fV[i] = fl[i][3]; fP[i] = fl[i][4]; fK[i] = fl[i][5]; }
-    const actB = new Uint16Array(NF), actV = new Uint8Array(NF), actI = new Float32Array(NF), actP = new Uint8Array(NF);
-    const edgeBoost = new Float32Array(4);
-
-    /* -- the shockwave rings: start, duration, reach, width, strength, flatness -- */
-    const rings = [
-      [SMASH, 1200, 0.62 * W, 13, 1, 0.2, gx, gy],
-      [SMASH + 120, 1450, 0.76 * W, 8, 0.75, 0.22, gx, gy],
-      [SMASH, 900, 1.2 * Math.max(W, H), 3, 0.5, 1, gx, gy],          // the blast in the air, a full circle
-      [MID, 1100, 0.56 * W, 10, 0.85, 0.2, gx, gy],
-      [MID + 130, 1300, 0.68 * W, 6, 0.55, 0.22, gx, gy]
-    ];
-    // each digit slams a ring of its own out from under it as it lands
-    for (const k of YG) {
-      const g = G[k];
-      rings.push([born[k], 650, (g.x1 - g.x0) * 1.6, 7, 0.75, 0.24, g.cx, Math.min(H - 4 * S, g.bottom + g.size * 0.06)]);
-    }
-    // a ripple along the ground on every beat, at the top of each pulse
-    for (let tb = 1000 + BEAT / 4; tb < STRIKES_END - 600; tb += BEAT) {
-      if (Math.abs(tb - MID) > 700) rings.push([tb, 1400, 0.46 * W, 4, 0.32, 0.2, gx, gy]);
-    }
-
-    /* -- embers (glowing points) and shards (glassy splinters), all on fixed paths -- */
-    const NE = 1500;
-    const eT = new Float32Array(NE), eX = new Float32Array(NE), eY = new Float32Array(NE);
-    const eVX = new Float32Array(NE), eVY = new Float32Array(NE), eVT = new Float32Array(NE), eK = new Float32Array(NE);
-    const eL = new Float32Array(NE), eS = new Float32Array(NE), eWA = new Float32Array(NE), eWF = new Float32Array(NE), eWP = new Float32Array(NE);
-    const eC = new Uint8Array(NE), eFront = new Uint8Array(NE);
-    let ne = 0;
-    function ember(t0, x, y, vx, vy, vt, k, life, size, front, c) {
-      if (ne >= NE) return;
-      eT[ne] = t0; eX[ne] = x; eY[ne] = y; eVX[ne] = vx; eVY[ne] = vy; eVT[ne] = vt; eK[ne] = k;
-      eL[ne] = life; eS[ne] = size; eWA[ne] = R(4, 16) * S; eWF[ne] = R(1.5, 4.5); eWP[ne] = R(0, 6.283);
-      const p = rnd();
-      eC[ne] = c != null ? c : p < 0.5 ? 0 : p < 0.8 ? 1 : 2;
-      eFront[ne] = front;
-      ne++;
-    }
-    function burst(t0, count, speed, spread) {
-      for (let i = 0; i < count; i++) {
-        const a = -Math.PI / 2 + R(-1.25, 1.25);
-        const v = R(0.22, 1) * speed * S;
-        ember(t0 + R(0, 120), gx + R(-1, 1) * spread * W, gy + R(-0.01, 0.02) * H, Math.cos(a) * v * 1.25, Math.sin(a) * v,
-          R(30, 90) * S, R(1.6, 2.6), R(1.4, 3.2), R(5, 12) * S, rnd() < 0.25 ? 1 : 0);
-      }
-    }
-    burst(SMASH, 130, 1150, 0.07);
-    burst(MID, 80, 850, 0.05);
-    // each digit kicks up a spray of sparks along the ground where it lands
-    for (const k of YG) {
-      const g = G[k];
-      const w = g.x1 - g.x0;
-      for (let i = 0; i < 14; i++) {
-        const side = rnd() < 0.5 ? -1 : 1;
-        const a = side < 0 ? Math.PI + R(0.05, 0.75) : -R(0.05, 0.75);
-        const v = R(150, 560) * S;
-        ember(born[k] + R(0, 50), g.cx + side * R(0.1, 0.5) * w, g.bottom + R(-0.02, 0.03) * g.size, Math.cos(a) * v, Math.sin(a) * v,
-          R(20, 60) * S, 3.2, R(0.5, 1.2), R(3, 6.5) * S, 1);
-      }
-    }
-    // a steady rise from below the picture, and some already on their way up
-    for (let i = 0; i < 280; i++) {
-      const high = rnd() < 0.4;
-      ember(R(150, STRIKES_END + 300), R(0.02, 0.98) * W, high ? R(0.25, 1) * H : H + R(0, 0.05) * H, R(-20, 20) * S, -R(40, 140) * S,
-        R(40, 130) * S, 0.6, R(3.5, 6.5), R(4, 10) * S, 0);
-    }
-    // big soft embers, out of focus, drifting past in front
-    for (let i = 0; i < 14; i++) {
-      ember(R(300, STRIKES_END - 1500), R(0.05, 0.95) * W, R(0.55, 1.05) * H, R(-12, 12) * S, -R(20, 50) * S, R(25, 60) * S, 0.5, R(3.5, 6), R(26, 52) * S, 2, 3);
-    }
-    // sparks lifting off the letters (only once a letter is there)
-    for (let i = 0; i < 120 && NP; i++) {
-      const p = Math.floor(rnd() * NP);
-      const t0 = R(Math.max(800, pBorn[p] + 200), Math.max(pBorn[p] + 300, Math.min(DURATION - 2000, pLeave[p] - 300)));
-      ember(t0, P[p * 2], P[p * 2 + 1], R(-25, 25) * S, -R(20, 90) * S, R(30, 80) * S, 1, R(0.8, 2), R(3, 7) * S, 1);
-    }
-    // at the end each letter shorts out with a spray of sparks ...
-    for (let k = 0; k < NG; k++) {
-      const pts = gPts[k];
-      if (!pts.length) continue;
-      for (let m = 0; m < 7; m++) {
-        const p = pts[Math.floor(rnd() * pts.length)];
-        const a = -Math.PI / 2 + R(-1.6, 1.6);
-        const v = R(160, 520) * S;
-        ember(leave[k] + R(0, 40), P[p * 2], P[p * 2 + 1], Math.cos(a) * v, Math.sin(a) * v, R(10, 40) * S, 3.2, R(0.4, 0.9), R(3, 6) * S, 1);
-      }
-    }
-    // ... and the energy leaves it as sparks drifting up and away
-    for (let i = 0; i < 150 && NP; i++) {
-      const p = Math.floor(rnd() * NP);
-      ember(pLeave[p] + R(0, 280), P[p * 2], P[p * 2 + 1], R(-30, 30) * S, -R(40, 150) * S, R(50, 110) * S, 0.9, R(1.0, 1.8), R(3.5, 8) * S, 1);
-    }
-    // sparks thrown where an arc touches down (and where a bolt hits a letter, more of them)
-    for (let i = 0; i < sparkAt.length; i += 4) {
-      const x = sparkAt[i + 1];
-      const y = sparkAt[i + 2];
-      const c = sparkAt[i + 3];
-      if (x < 0 || x > W || y < 0 || y > H) continue;
-      for (let k = 0; k < c; k++) {
-        const a = c > 3 ? -Math.PI / 2 + R(-1.5, 1.5) : R(0, 6.283);
-        const v = R(c > 3 ? 140 : 80, c > 3 ? 560 : 380) * S;
-        ember(sparkAt[i] + R(0, 40), x, y, Math.cos(a) * v, Math.sin(a) * v - 60 * S, R(10, 40) * S, 3, R(0.5, 1.1), R(3, 6) * S, 1);
-      }
-    }
-
-    const NS = 112;
-    const sT = new Float32Array(NS), sX = new Float32Array(NS), sY = new Float32Array(NS), sVX = new Float32Array(NS), sVY = new Float32Array(NS);
-    const sVT = new Float32Array(NS), sK = new Float32Array(NS), sL = new Float32Array(NS), sSz = new Float32Array(NS);
-    const sA = new Float32Array(NS), sW = new Float32Array(NS), sP = new Float32Array(NS), sQ = new Float32Array(NS);
-    const sN = new Uint8Array(NS), sShape = new Float32Array(NS * 8), sC = new Uint8Array(NS);
-    let ns = 0;
-    function shard(t0, x, y, vx, vy, vt, k, life, size) {
-      if (ns >= NS) return;
-      sT[ns] = t0; sX[ns] = x; sY[ns] = y; sVX[ns] = vx; sVY[ns] = vy; sVT[ns] = vt; sK[ns] = k; sL[ns] = life; sSz[ns] = size;
-      sA[ns] = R(0, 6.283); sW[ns] = R(1.5, 5) * (rnd() < 0.5 ? -1 : 1);     // spin
-      sP[ns] = R(0, 6.283); sQ[ns] = R(2.5, 7) * (rnd() < 0.5 ? -1 : 1);     // tumble
-      // A long splinter: one sharp point, two or three short ones.
-      const nv = rnd() < 0.55 ? 3 : 4;
-      sN[ns] = nv;
-      let ang = R(-0.15, 0.15);
-      for (let v = 0; v < nv; v++) {
-        const rad = v === 0 ? 1 : R(0.25, 0.6);
-        sShape[ns * 8 + v * 2] = Math.cos(ang) * rad;
-        sShape[ns * 8 + v * 2 + 1] = Math.sin(ang) * rad * 0.42;
-        ang += (6.283 / nv) * R(0.75, 1.25);
-      }
-      sC[ns] = Math.floor(rnd() * 3);
-      ns++;
-    }
-    for (let i = 0; i < 36; i++) {
-      const a = -Math.PI / 2 + R(-1.1, 1.1);
-      const v = R(0.3, 1) * 1300 * S;
-      shard(SMASH + R(0, 80), gx + R(-0.08, 0.08) * W, gy + R(-0.01, 0.01) * H, Math.cos(a) * v * 1.2, Math.sin(a) * v, R(25, 70) * S, R(1.3, 2), R(2.4, 4.6), R(10, 24) * S);
-    }
-    for (const k of YG) {
-      const g = G[k];
-      for (let i = 0; i < 3; i++) {
-        const a = -Math.PI / 2 + R(-1.2, 1.2);
-        const v = R(0.3, 1) * 760 * S;
-        shard(born[k] + R(0, 40), g.cx + R(-0.4, 0.4) * (g.x1 - g.x0), g.bottom, Math.cos(a) * v * 1.2, Math.sin(a) * v, R(25, 70) * S, R(1.4, 2.2), R(1.6, 3), R(7, 15) * S);
-      }
-    }
-    for (let i = 0; i < 18; i++) {
-      const a = -Math.PI / 2 + R(-1, 1);
-      const v = R(0.3, 1) * 900 * S;
-      shard(MID + R(0, 80), gx + R(-0.06, 0.06) * W, gy, Math.cos(a) * v * 1.2, Math.sin(a) * v, R(25, 70) * S, R(1.3, 2), R(2, 3.8), R(8, 20) * S);
-    }
-    for (let i = 0; i < 28; i++) {
-      shard(R(400, STRIKES_END), R(0.04, 0.96) * W, H + R(0.01, 0.05) * H, R(-15, 15) * S, -R(50, 120) * S, R(40, 100) * S, 0.7, R(4, 6.5), R(7, 16) * S);
-    }
-
-    /* -- light on the letters -- */
-    const sweepC = new Float32Array(NP);       // the slanted line the shimmer sweeps along
-    const wDist = new Float32Array(NP);        // distance from the impact, for the surge waves
-    let cMin = Infinity, cMax = -Infinity;
-    for (let i = 0; i < NP; i++) {
-      const x = P[i * 2];
-      const y = P[i * 2 + 1];
-      const c = x + (y - L.titleY) * 0.45;
-      sweepC[i] = c;
-      if (c < cMin) cMin = c;
-      if (c > cMax) cMax = c;
-      wDist[i] = Math.hypot(x - gx, y - gy);
-    }
-    const SHIMMER_AT = titleDone + 700;        // the shimmer starts once the words are written
-    const NT = Math.min(200, NP);
-    const twI = new Uint16Array(NT), twF = new Float32Array(NT), twP = new Float32Array(NT);
-    for (let i = 0; i < NT; i++) { twI[i] = Math.floor(rnd() * NP); twF[i] = R(3.5, 8); twP[i] = R(0, 6.283); }
-
-    // Little arcs crawling over the letters, in crackling bursts: as a letter is hit or lands, while
-    // the words hold, and as each letter goes out.
-    const micro = [];
-    function microArc(t0, d, i) {
-      const dir = rnd() < 0.5 ? -1 : 1;
-      const k = 3 + Math.floor(rnd() * 9);
-      let j = i + dir * k;
-      if (j < 0 || j >= NP) j = i - dir * k;
-      if (j < 0 || j >= NP) return;
-      const ax = P[i * 2], ay = P[i * 2 + 1], bx = P[j * 2], by = P[j * 2 + 1];
-      const dd = Math.hypot(bx - ax, by - ay);
-      if (dd < step * 2 || dd > step * 16) return;     // the next row or across a gap: skip it
-      // only on letters that are there for the whole of it
-      if (t0 < Math.max(pBorn[i], pBorn[j]) || t0 + d > Math.min(pLeave[i], pLeave[j]) + LEAVE_DUR * 0.6) return;
-      const a = new Path2D();
-      const c = new Path2D();
-      addTo(a, polyline(ax, ay, bx, by, R(-0.3, 0.3) * dd, 0, -1, 0.22, 3));
-      addTo(c, polyline(ax, ay, bx, by, R(-0.3, 0.3) * dd, 0, -1, 0.22, 3));
-      micro.push({ t: t0, d: d, a: a, b: c });
-    }
-    for (let k = 0; k < NG; k++) {
-      const pts = gPts[k];
-      if (pts.length < 8) continue;
-      for (let m = 0; m < 3; m++) microArc(born[k] + R(10, 170), R(80, 170), pts[Math.floor(rnd() * pts.length)]);
-      for (let m = 0; m < 3; m++) microArc(leave[k] + R(0, 70), R(50, 100), pts[Math.floor(rnd() * pts.length)]);
-    }
-    for (let tc = Math.max(900, titleDone + 100); tc < LEAVE_AT && NP > 20; tc += R(80, 260)) {
-      const n = 2 + Math.floor(rnd() * 4);
-      for (let b = 0; b < n; b++) microArc(tc + R(-60, 120), R(70, 160), Math.floor(rnd() * NP));
-    }
-    micro.sort((a, b) => a.t - b.t);
-
-    // Waves of light running out through the letters from the impact: [start, speed px/ms, width, strength].
-    const waves = [[MID + 40, 1.7, 60, 1]];   // (the words arrive white hot: a wave would not show then)
-
-    /* -- each letter's state in the current frame -- */
-    const pV = new Float32Array(NG);          // how much of it is there (0 not yet / gone)
-    const pDy = new Float32Array(NG);         // moved down by
-    const pSx = new Float32Array(NG);         // stretched across ...
-    const pSy = new Float32Array(NG);         // ... and up and down (round its middle)
-    const pHot = new Float32Array(NG);        // white heat over it
-    const pBoost = new Float32Array(NG);      // extra light added on it
-    const pFall = new Float32Array(NG);       // a digit on its way down: how far (0..1), else -1
-    const tf = { dx: 0, dy: 0, sx: 1, sy: 1, op: 'source-over', crop: null };
-    const crop = [0, 0, 1, 1];
-    // The letter pictures' margins (their halos), as the engine makes them: for a crop at a given height.
-    const padOf = (halo) => ((halo ? Math.max(6, L.titleSize * 0.28) * 1.6 : 0) + L.titleSize * 0.04) / Math.min(1, env.dpr) + 2;
-    const PAD_HALO = padOf(true);
-    const PAD_NONE = padOf(false);
-    const wipeY = new Float32Array(NG);       // a letter being filled: down to here (else NaN)
-    let surge = 0;                            // the second surge's white heat over every letter
-
-    function poses(t) {
-      // the ground jolts each time a digit lands on it
-      let jolt = 0;
-      for (let j = 0; j < YG.length; j++) {
-        const u = t - born[YG[j]];
-        if (u > 0 && u < 360) jolt += (j === YG.length - 1 ? 1.2 : 0.55) * Math.exp(-u / 55) * Math.sin(u * 0.075);
-      }
-      surge = 0.6 * bump(t, MID + 90, 110);
-      for (let k = 0; k < NG; k++) {
-        const g = G[k];
-        let vis = 0, dy = 0, sx = 1, sy = 1, hot = 0, boost = 0, fall = -1;
-        const u = t - born[k];
-        if (g.line === 1 && u < 0 && u > -FALL) {
-          // plunging, faster and faster, stretched by the speed
-          const f = 1 + u / FALL;
-          dy = -fallD[k] * (1 - (0.3 * f + 0.7 * f * f));
-          const v = (0.3 + 1.4 * f) / 1.7;
-          sy = 1 + 0.16 * v;
-          sx = 1 - 0.06 * v;
-          vis = 1; hot = 1; fall = f;
-        } else if (u >= 0) {
-          vis = 1;
-          if (g.line === 1) {
-            // the smash: squashed flat, driven a little into the ground, then it springs back and settles
-            const e = Math.exp(-u / 70) * Math.cos(u * 0.037);
-            sy = 1 - 0.2 * e;
-            sx = 1 + 0.1 * e;
-            dy = (g.bottom - g.cy) * (1 - sy) + g.size * (0.045 * Math.exp(-u / 90) * Math.cos(u * 0.031) + 0.022 * jolt);
-            hot = Math.max(0, Math.exp(-u / 180) - 0.04);
-            boost = 0.9 * Math.exp(-u / 70);
-          } else {
-            // hit: knocked down a little, white-hot, cooling to lime (and flaring as its bolt strikes again)
-            dy = g.size * 0.05 * Math.exp(-u / 60) * Math.cos(u * 0.039);
-            sx = sy = 1 + 0.07 * Math.exp(-u / 55);
-            hot = Math.max(0, Math.exp(-u / 200) - 0.04);
-            boost = 0.95 * Math.exp(-u / 80);
-            for (let q = 0; q < 2; q++) {
-              const r = t - rsT[k * 2 + q];
-              if (r >= 0 && r < 420) { boost += 0.45 * Math.exp(-r / 70); hot = Math.max(hot, 0.7 * Math.exp(-r / 160)); }
-            }
-          }
-        }
-        // going out: it shorts out with a last white crackle, blinks like a failing tube and is gone
-        const w = t - leave[k];
-        if (vis && w > 0) {
-          boost += 0.9 * Math.exp(-w / 50);
-          if (w >= LEAVE_DUR) vis = 0;
-          else {
-            const h = hash01(Math.floor(t / 40) * 7 + k * 13);
-            vis = (1 - smooth(LEAVE_DUR * 0.35, LEAVE_DUR, w)) * (w < 50 ? 1 : h < 0.38 ? 0.06 : 0.6 + 0.4 * h);
-          }
-          dy -= g.size * 0.05 * smooth(0, LEAVE_DUR, w);
-        }
-        pV[k] = vis; pDy[k] = dy; pSx[k] = sx; pSy[k] = sy;
-        wipeY[k] = g.line === 0 && u >= 0 && u < WIPE ? lerp(g.top - g.size * 0.04, g.bottom + g.size * 0.3, smooth(0, WIPE, u * 1.12)) : NaN;
-        pHot[k] = Math.min(1, hot + surge); pBoost[k] = boost; pFall[k] = fall;
-      }
-    }
-
-    /**
-     * The transform for letter k in this frame (null when it simply stands where it belongs); while
-     * it is being filled, only the part above the front, in the picture with margin `pad`.
-     */
-    function pose(k, op, pad) {
-      const wy = wipeY[k];
-      const filling = wy === wy;
-      if (!op && !filling && Math.abs(pDy[k]) < 0.05 && Math.abs(pSx[k] - 1) < 0.002 && Math.abs(pSy[k] - 1) < 0.002) return null;
-      tf.dy = pDy[k]; tf.sx = pSx[k]; tf.sy = pSy[k]; tf.op = op || 'source-over';
-      if (filling) {
-        const g = G[k];
-        const half = g.size * 0.62 + pad;
-        crop[3] = clamp((wy - (g.cy - half)) / (2 * half), 0.01, 1);
-        tf.crop = crop;
-      } else tf.crop = null;
-      return tf;
-    }
-
-    /* ---------------------------------------------------------- draw --- */
-
-    /** Which bolts are lit at t, and how brightly. Returns how many. */
-    function activeBolts(t) {
-      let na = 0;
-      edgeBoost[0] = edgeBoost[1] = edgeBoost[2] = edgeBoost[3] = 0;
-      for (let i = 0; i < NF; i++) {
-        const tau = t - fS[i];
-        if (tau < 0 || tau >= fD[i]) continue;
-        let I;
-        let part = 255;
-        if (fK[i] === 2) {
-          part = Math.min(LEAD_STEPS - 2, Math.floor((tau / fD[i]) * (LEAD_STEPS - 1)));
-          I = fP[i] * (0.75 + 0.25 * hash01(Math.floor(t / 17) * 7 + i));
-        } else {
-          let on = 1;
-          if (fK[i] === 0 && tau > 25) on = Math.exp(-(tau - 25) / (fD[i] * 0.4));
-          I = fP[i] * on * (0.7 + 0.3 * hash01(Math.floor(t / 34) * 13 + i));
-        }
-        if (I < 0.03) continue;
-        actB[na] = fB[i];
-        actV[na] = fV[i];
-        actI[na] = I;
-        actP[na] = part;
-        na++;
-        const e = bolts[fB[i]].edge;
-        if (e >= 0) edgeBoost[e] += I;
-      }
-      return na;
-    }
-
-    function drawFlash(t) {
-      // a green thunderclap: the whole picture lights up for an instant, twice; and once more as the
-      // year smashes down
-      let a = 0;
-      if (YG.length) {
-        a = 0.14 * Math.exp(-t / 70) + 0.05 * bump(t, 120, 30);
-        const u = t - SMASH;
-        if (u >= 0) a += 0.13 * Math.exp(-u / 45);
-      } else {
-        a = 0.16 * Math.exp(-t / 60) + 0.07 * bump(t, 125, 35);
-      }
-      if (t > (YG.length ? SMASH + 150 : 240) || a < 0.006) return 0;
-      ctx.globalAlpha = Math.min(0.18, a);
-      ctx.fillStyle = 'rgb(70,255,150)';
-      ctx.fillRect(0, 0, W, H);
-      return 1;
-    }
-
-    // The beat: a short pulse every BEAT ms while the words hold.
-    function throb(t) {
-      if (t < 1000 || t > STRIKES_END) return 0;
-      const s = Math.sin(((t - 1000) / BEAT) * Math.PI * 2);
-      return s > 0 ? s * s * s * s * s * s : 0;
-    }
-
-    function drawRadiance(t, fade, boost) {
-      const beat = 0.42 + 0.3 * throb(t);
-      const common = 0.55 * bump(t, MID + 100, 260) + 0.15 * Math.min(1.5, boost);
-      let n = 0;
-      // each letter's own glow, there with it (a falling digit glows like a meteor); a line that simply
-      // stands there has its glow in one piece
-      const still0 = t >= lineStill[0][0] && t < lineStill[0][1];
-      const still1 = t >= lineStill[1][0] && t < lineStill[1][1];
-      for (let k = 0; k < NG; k++) {
-        const gl = pre.glows[k];
-        if (!gl || pV[k] <= 0.003 || (G[k].line ? still1 : still0)) continue;
-        const u = t - born[k];
-        const a = (u < 0 ? 0.8 : beat + 0.6 * Math.exp(-u / 300) + common) * pV[k] * fade;
-        if (a < 0.01) continue;
-        ctx.globalAlpha = Math.min(1, a);
-        ctx.drawImage(gl.canvas, gl.x, gl.y + pDy[k], gl.w, gl.h);
-        n++;
-      }
-      for (let line = 0; line < 2; line++) {
-        const gl = pre.lineGlows[line];
-        if (!gl || !(line ? still1 : still0)) continue;
-        ctx.globalAlpha = Math.min(1, (beat + common) * fade);
-        ctx.drawImage(gl.canvas, gl.x, gl.y, gl.w, gl.h);
-        n++;
-      }
-      // the pool of light on the ground, from the moment the year hits it
-      const u = t - SMASH;
-      if (u > 0) {
-        const a = (0.9 * beat + 0.7 * Math.exp(-u / 500) + common) * smooth(0, 90, u) * (1 - smooth(LEAVE_AT, LEAVE_AT + LEAVE_SPAN + LEAVE_DUR, t)) * fade;
-        if (a >= 0.01) {
-          const p = pre.pool;
-          ctx.globalAlpha = Math.min(1, a);
-          ctx.drawImage(p.canvas, p.x, p.y, p.w, p.h);
-          n++;
-        }
-      }
-      return n;
-    }
-
-    function drawEdges(fade) {
-      let n = 0;
-      // wherever an arc runs along an edge, the edge lights up
-      for (let e = 0; e < 4; e++) {
-        const a = Math.min(0.45, 0.3 * edgeBoost[e]) * fade;
-        if (a < 0.01) continue;
-        const s = pre.edges[e];
-        ctx.globalAlpha = a;
-        ctx.drawImage(s.canvas, s.x, s.y, s.w, s.h);
-        n++;
-      }
-      return n;
-    }
-
-    function drawRings(t, fade, lo) {
-      let n = 0;
-      for (let k = 0; k < rings.length; k++) {
-        const g = rings[k];
-        const u = (t - g[0]) / g[1];
-        if (u <= 0 || u >= 1) continue;
-        const r0 = Math.min(20 * S, g[2] * 0.2);
-        const r = r0 + (g[2] - r0) * easeOut(u);
-        const a = g[4] * Math.pow(1 - u, 1.7) * fade;
-        const w = (g[3] * (1 - u) + 1.2) * S;
-        ctx.beginPath();
-        ctx.ellipse(g[6], g[7], r, r * g[5], 0, 0, Math.PI * 2);
-        if (!lo && g[5] < 1 && g[2] > 0.3 * W) {
-          ctx.strokeStyle = RING_GLOW;
-          ctx.lineWidth = w * 3.4;
-          ctx.globalAlpha = Math.min(1, a * 0.26);
-          ctx.stroke();
-          n++;
-        }
-        ctx.strokeStyle = g[5] < 1 ? RING_CORE : RING_GLOW;
-        ctx.lineWidth = Math.max(hair, w * 0.45);
-        ctx.globalAlpha = Math.min(1, a * 0.9);
-        ctx.stroke();
-        n++;
-      }
-      return n;
-    }
-
-    function drawImpact(t, fade) {
-      let n = 0;
-      for (let k = 0; k < 2; k++) {
-        const t0 = k ? MID : SMASH;
-        const tau = t - t0;
-        if (tau < 0 || tau > 1000) continue;
-        const str = k ? 0.65 : 1;
-        const s = (k ? 240 : 330) * S * (0.55 + 0.45 * Math.exp(-tau / 160));
-        ctx.globalAlpha = 0.95 * str * Math.exp(-tau / 260) * fade;
-        ctx.drawImage(T.hot, gx - s / 2, gy - s / 2, s, s);
-        const sw = 1.6 * W * str * (0.6 + 0.4 * easeOut(Math.min(1, tau / 220)));
-        const sh = 34 * S * (1 - 0.5 * tau / 1000);
-        ctx.globalAlpha = 0.7 * str * Math.exp(-tau / 300) * fade;
-        ctx.drawImage(T.streak, gx - sw / 2, gy - sh / 2, sw, sh);
-        n += 2;
-      }
-      return n;
-    }
-
-    /** The falling digits: a green trail above each, and the smear of its light a moment ago. */
-    function drawTrails(fade) {
-      let n = 0;
-      for (const k of YG) {
-        const f = pFall[k];
-        if (f < 0) continue;
-        const g = G[k];
-        const v = (0.3 + 1.4 * f) / 1.7;
-        const w = (g.x1 - g.x0) * 0.95;
-        const len = g.size * (0.9 + 2.2 * v);
-        const yb = g.cy + pDy[k] + g.size * 0.2;
-        ctx.globalAlpha = Math.min(1, 0.75 * v * fade);
-        ctx.drawImage(T.trail, g.cx - w / 2, yb - len, w, len);
-        n++;
-        // the smear of its light: the digit stretched upward from where it is, as by its speed
-        const reach = (g.bottom - g.cy);
-        tf.crop = null; tf.op = 'lighter'; tf.sx = pSx[k] * 0.97;
-        const st = pSy[k] * (1 + 0.8 * v);
-        tf.sy = st;
-        tf.dy = pDy[k] + reach * (pSy[k] - st);
-        env.glyph(g, 0.36 * fade, FLASH, tf);
-        n++;
-      }
-      return n;
-    }
-
-    function drawBolts(fade, lo, na) {
-      let n = 0;
-      if (!lo) {
-        // the strongest flashes bloom
-        ctx.strokeStyle = BOLT_BLOOM;
-        let blooms = 0;
-        for (let k = 0; k < na && blooms < 2; k++) {
-          if (actI[k] < 0.65 || actP[k] !== 255) continue;
-          blooms++;
-          const b = bolts[actB[k]];
-          ctx.globalAlpha = Math.min(1, 0.1 * actI[k] * fade);
-          ctx.lineWidth = 20 * S * b.w;
-          ctx.stroke(b.v[actV[k]].main);
-          n++;
-        }
-      }
-      ctx.strokeStyle = BOLT_GLOW;
-      for (let k = 0; k < na; k++) {
-        const b = bolts[actB[k]];
-        const lead = actP[k] !== 255;
-        ctx.globalAlpha = Math.min(1, (lead ? 0.3 : 0.38) * actI[k] * fade);
-        ctx.lineWidth = (lead ? 5 : 8) * S * b.w;
-        ctx.stroke(lead ? b.v[actV[k]].lead[actP[k]] : b.v[actV[k]].main);
-        n++;
-      }
-      ctx.strokeStyle = BOLT_MID;
-      for (let k = 0; k < na; k++) {
-        if (actP[k] !== 255) continue;
-        const b = bolts[actB[k]];
-        ctx.globalAlpha = Math.min(1, 0.75 * actI[k] * fade);
-        ctx.lineWidth = 2.4 * S * b.w;
-        ctx.stroke(b.v[actV[k]].main);
-        n++;
-      }
-      ctx.lineWidth = hair;
-      for (let k = 0; k < na; k++) {
-        const v = bolts[actB[k]].v[actV[k]];
-        const lead = actP[k] !== 255;
-        ctx.strokeStyle = BOLT_CORE;
-        ctx.globalAlpha = Math.min(1, (lead ? 0.9 : 1.15) * actI[k] * fade);
-        ctx.stroke(lead ? v.lead[actP[k]] : v.main);
-        n++;
-        if (v.br && !lead) {
-          ctx.strokeStyle = BOLT_BRANCH;
-          ctx.globalAlpha = Math.min(1, 0.9 * actI[k] * fade);
-          ctx.stroke(v.br);
-          n++;
-        }
-      }
-      // white heat where each arc touches
-      for (let k = 0; k < na; k++) {
-        if (actP[k] !== 255) continue;
-        const b = bolts[actB[k]];
-        const I = actI[k] * fade;
-        const s = 34 * S * (0.6 + I) * b.w;
-        ctx.globalAlpha = Math.min(1, 0.6 * I);
-        if (b.ay > -s / 2) { ctx.drawImage(T.hot, b.ax - s / 2, b.ay - s / 2, s, s); n++; }
-        ctx.drawImage(T.hot, b.bx - s / 2, b.by - s / 2, s, s);
-        n++;
-        if (b.fx === b.fx) { ctx.drawImage(T.hot, b.fx - s / 2, b.fy - s / 2, s, s); n++; }
-      }
-      return n;
-    }
-
-    // At the end a breeze carries everything that floats off to the right.
-    const WIND_FROM = DURATION - 3200;
-    function windAt(t) {
-      const s = Math.max(0, (t - WIND_FROM) / 1000);
-      return 22 * S * s * s;
-    }
-
-    function drawShards(t, fade, lo) {
-      let n = 0;
-      const wind = windAt(t);
-      for (let c = 0; c < 3; c++) {
-        ctx.fillStyle = SHARD_COLORS[c];
-        for (let i = 0; i < ns; i++) {
-          if (sC[i] !== c || (lo && (i & 1))) continue;
-          const tau = (t - sT[i]) / 1000;
-          if (tau <= 0 || tau >= sL[i]) continue;
-          const k = sK[i];
-          const e = Math.exp(-k * tau);
-          const f = (1 - e) / k;
-          const x = sX[i] + sVX[i] * f + (wind - windAt(sT[i]));
-          const y = sY[i] + sVY[i] * f - sVT[i] * (tau - f);
-          const life = sL[i];
-          const a = Math.min(1, tau / 0.1) * (1 - smooth(life * 0.6, life, tau)) * fade;
-          if (a < 0.01) continue;
-          const th = sA[i] + sW[i] * tau;
-          const face = Math.cos(sP[i] + sQ[i] * tau);
-          const lit = Math.abs(face);
-          const ct = Math.cos(th);
-          const st = Math.sin(th);
-          const z = sSz[i];
-          const o = i * 8;
-          // its own glow (the bigger ones), then the splinter
-          if (z > 12 * S) {
-            const gs = z * 2.6;
-            ctx.globalAlpha = a * (0.18 + 0.3 * lit);
-            ctx.drawImage(T.ember[c], x - gs / 2, y - gs / 2, gs, gs);
-            n++;
-          }
-          ctx.beginPath();
-          for (let v = 0; v < sN[i]; v++) {
-            const ux = sShape[o + v * 2] * z;
-            const uy = sShape[o + v * 2 + 1] * z * face;
-            if (v === 0) ctx.moveTo(x + ux * ct - uy * st, y + ux * st + uy * ct);
-            else ctx.lineTo(x + ux * ct - uy * st, y + ux * st + uy * ct);
-          }
-          ctx.closePath();
-          ctx.globalAlpha = a * (0.4 + 0.6 * lit);
-          ctx.fill();
-          n++;
-          if (lit > 0.93) {
-            // catching the light
-            const g = z * 2.4;
-            ctx.globalAlpha = a * 0.7;
-            ctx.drawImage(T.hot, x - g / 2, y - g / 2, g, g);
-            n++;
-          }
-        }
-      }
-      return n;
-    }
-
-    function drawEmbers(t, fade, lo, front) {
-      let n = 0;
-      const wind = windAt(t);
-      for (let i = 0; i < ne; i++) {
-        if (eFront[i] !== front || (lo && (i & 1))) continue;
-        const tau = (t - eT[i]) / 1000;
-        if (tau <= 0 || tau >= eL[i]) continue;
-        const k = eK[i];
-        const e = Math.exp(-k * tau);
-        const f = (1 - e) / k;
-        const life = eL[i];
-        const wob = eWA[i] * Math.min(1, tau) * Math.sin(eWP[i] + eWF[i] * tau);
-        const x = eX[i] + eVX[i] * f + wob + (wind - windAt(eT[i]));
-        const y = eY[i] + eVY[i] * f - eVT[i] * (tau - f);
-        let a = Math.min(1, tau / 0.12) * (1 - smooth(life * 0.55, life, tau)) * (0.72 + 0.28 * Math.sin(eWP[i] * 3 + tau * 9)) * fade;
-        if (front === 2) a *= 0.22;                              // the big soft ones are only a haze
-        if (a < 0.01) continue;
-        const s = eS[i] * (1 - 0.45 * tau / life);
-        ctx.globalAlpha = Math.min(1, a);
-        ctx.drawImage(eC[i] === 3 ? T.glow : T.ember[eC[i]], x - s, y - s, s * 2, s * 2);
-        n++;
-      }
-      return n;
-    }
-
-    /** The letters themselves (source-over: each has its dark halo, so it reads on a bright scene). */
-    function drawLetters(t, fade) {
-      if (t >= settleAt && t < LEAVE_AT) {
-        // Every letter in place and cool: the words in one stamp (the very same picture). White heat
-        // again in the surge. Stamped at full strength whenever possible and never scaled: a
-        // stretched or faded stamp costs two to five times what a plain copy does.
-        const hot = Math.min(1, surge);
-        if (hot >= 0.995) { env.words(fade, HOT, 1); return 1; }
-        env.words(fade, FILL, 1);
-        if (hot > 0.01) { env.words(fade * hot, HOT, 1); return 2; }
-        return 1;
-      }
-      // One by one (each in its own state): the letter, its white heat added on in drawLetterLight().
-      let n = 0;
-      for (let k = 0; k < NG; k++) {
-        const a = pV[k] * fade;
-        if (a <= 0.003) continue;
-        env.glyph(G[k], a, FILL, pose(k, null, PAD_HALO));
-        n++;
-      }
-      return n;
-    }
-
-    /** Light on the letters: the flash as each is hit or lands, a white-hot burst there, the last crackle. */
-    function drawLetterLight(t, fade) {
-      let n = 0;
-      for (let k = 0; k < NG; k++) {
-        const g = G[k];
-        if (g.line === 0 && pV[k] <= 0.003) {
-          // the air where the letter will be charges up as the leader comes down to it
-          const c = t - born[k] + LEAD + 30;
-          if (c > 0 && c < LEAD + 30) {
-            const q = c / (LEAD + 30);
-            const bl = pre.bloom;
-            ctx.globalAlpha = 0.4 * q * q * fade;
-            ctx.drawImage(bl.canvas, g.cx - bl.s / 2, g.cy - bl.s / 2, bl.s, bl.s);
-            n++;
-          }
-          continue;
-        }
-        if (pV[k] <= 0.003) continue;
-        // its white heat and its flashes: pure light in its shape
-        const b = Math.min(1, pHot[k] * 0.92 + pBoost[k]) * pV[k] * fade;
-        if (b > 0.03 && !(t >= settleAt && t < LEAVE_AT)) { env.glyph(g, b, FLASH, pose(k, 'lighter', PAD_NONE)); n++; }
-        const u = t - born[k];
-        if (u >= 0 && u < (g.line === 1 ? 380 : 300)) {
-          if (g.line === 1) {
-            // the digit hits the ground: white heat at its foot, a flat flash along the ground
-            const w = g.x1 - g.x0;
-            const s = w * 1.5 * (0.7 + 0.3 * Math.exp(-u / 120));
-            ctx.globalAlpha = 0.8 * Math.exp(-u / 90) * fade;
-            ctx.drawImage(T.hot, g.cx - s / 2, g.bottom - s * 0.45, s, s);
-            const sw = w * (2 + 2.5 * easeOut(Math.min(1, u / 200)));
-            const sh = g.size * 0.22;
-            ctx.globalAlpha = 0.6 * Math.exp(-u / 140) * fade;
-            ctx.drawImage(T.streak, g.cx - sw / 2, g.bottom - sh / 2, sw, sh);
-            n += 2;
-          } else {
-            // the bolt hits the letter: a bloom of green light round it, white heat where it strikes,
-            // and the bright front of the charge pouring down through it
-            const bl = pre.bloom;
-            const ba = 0.85 * Math.exp(-u / 110) * fade;
-            if (ba > 0.02) {
-              ctx.globalAlpha = ba;
-              ctx.drawImage(bl.canvas, g.cx - bl.s / 2, g.cy + pDy[k] - bl.s / 2, bl.s, bl.s);
-              n++;
-            }
-            const ht = pre.heat;
-            const ha = 0.9 * Math.exp(-u / 70) * fade;
-            if (ha > 0.02) {
-              ctx.globalAlpha = ha;
-              ctx.drawImage(ht.canvas, g.cx - ht.s / 2, g.top - ht.s * 0.45, ht.s, ht.s);
-              n++;
-            }
-            const wy = wipeY[k];
-            const inside = wy === wy ? 1 - smooth(g.bottom - g.size * 0.08, g.bottom + g.size * 0.12, wy) : 0;
-            if (inside > 0.01) {
-              const fw = (g.x1 - g.x0) * 1.7;
-              const fh = g.size * 0.2;
-              ctx.globalAlpha = 0.9 * inside * fade;
-              ctx.drawImage(T.streak, g.cx - fw / 2, wy + pDy[k] - fh / 2, fw, fh);
-              n++;
-            }
-          }
-        }
-      }
-      return n;
-    }
-
-    function drawWordLight(t, fade, lo) {
-      if (!NP) return 0;
-      const wa = fade;
-      let n = 0;
-      const spr = T.ember[2];
-      const sz = step * 3;
-      const stride = lo ? 6 : 3;
-      // waves of light running out through the letters from the impact
-      for (let w = 0; w < waves.length; w++) {
-        const wv = waves[w];
-        const tau = t - wv[0];
-        if (tau <= 0 || tau > 900) continue;
-        const r = tau * wv[1] * S;
-        const width = wv[2] * S;
-        const str = wv[3] * (1 - tau / 900) * wa;
-        for (let i = 0; i < NP; i += stride + 2) {
-          const d = (wDist[i] - r) / width;
-          if (d < -1.5 || d > 1.5 || t < pBorn[i] || t > pLeave[i]) continue;
-          ctx.globalAlpha = Math.min(1, Math.exp(-d * d * 1.6) * str);
-          ctx.drawImage(spr, P[i * 2] - sz, P[i * 2 + 1] - sz, sz * 2, sz * 2);
-          n++;
-        }
-      }
-      // a shimmer sweeping across the words every few seconds
-      if (t > SHIMMER_AT && t < FADE_AT + 300) {
-        const p = ((t - SHIMMER_AT) % 2600) / 1200;
-        if (p <= 1) {
-          const band = Math.max(20, (cMax - cMin) * 0.07);
-          const at = cMin - band * 2 + p * (cMax - cMin + band * 4);
-          for (let i = 0; i < NP; i += stride) {
-            const d = (sweepC[i] - at) / band;
-            if (d < -1.6 || d > 1.6 || t > pLeave[i]) continue;
-            ctx.globalAlpha = Math.exp(-d * d * 2.2) * 0.5 * wa;
-            ctx.drawImage(spr, P[i * 2] - sz, P[i * 2 + 1] - sz, sz * 2, sz * 2);
-            n++;
-          }
-        }
-      }
-      // sparkles that come and go on the letters
-      for (let k = 0; k < NT; k += lo ? 2 : 1) {
-        const b = Math.sin(twP[k] + t * 0.001 * twF[k]);
-        if (b < 0.82) continue;
-        const i = twI[k];
-        if (t < pBorn[i] + 250 || t > pLeave[i]) continue;
-        const q = (b - 0.82) / 0.18;
-        const s = sz * (0.6 + 0.5 * q);
-        ctx.globalAlpha = q * 0.8 * wa;
-        ctx.drawImage(T.hot, P[i * 2] - s, P[i * 2 + 1] - s, s * 2, s * 2);
-        n++;
-      }
-      // electricity crawling over them
-      for (let m = 0; m < micro.length; m++) {
-        const mc = micro[m];
-        const tau = t - mc.t;
-        if (tau < 0) break;                         // (in order of time)
-        if (tau > mc.d) continue;
-        const a = (1 - tau / mc.d) * (0.6 + 0.4 * hash01(Math.floor(t / 30) + m)) * wa;
-        const path = Math.floor(tau / 40) & 1 ? mc.b : mc.a;
-        if (!lo) {
-          ctx.globalAlpha = a * 0.5;
-          ctx.lineWidth = 3.4 * S;
-          ctx.strokeStyle = BOLT_GLOW;
-          ctx.stroke(path);
-          n++;
-        }
-        ctx.globalAlpha = Math.min(1, a);
-        ctx.lineWidth = hair;
-        ctx.strokeStyle = BOLT_CORE;
-        ctx.stroke(path);
-        n++;
-      }
-      return n;
-    }
-
-    function draw(t) {
-      if (!(t >= 0) || t >= GONE_AT) return 0;
-      const fade = 1 - smooth(FADE_AT, GONE_AT, t);
-      const lo = env.low();
-      poses(t);
-      const na = activeBolts(t);
-      let boost = 0;
-      for (let k = 0; k < na; k++) boost += actI[k];
-      let n = 0;
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      n += drawFlash(t);
-      n += drawRadiance(t, fade, boost * 0.4);
-      n += drawEdges(fade);
-      n += drawRings(t, fade, lo);
-      n += drawImpact(t, fade);
-      n += drawTrails(fade);
-      n += drawBolts(fade, lo, na);
-      n += drawShards(t, fade, lo);
-      n += drawEmbers(t, fade, lo, 0);
-      ctx.restore();
-      n += drawLetters(t, fade);
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      n += drawLetterLight(t, fade);
-      n += drawWordLight(t, fade, lo);
-      n += drawEmbers(t, fade, lo, 1);
-      if (!lo) n += drawEmbers(t, fade, lo, 2);
-      ctx.restore();
-      return n;
-    }
-
-    // The sound (sfx-gamma.js): every moment of this animation is worked out above, so one plan carries
-    // them all (x is 0..1 across the frame, y 0..1 down it). Only reads: nothing here is drawn or drawn
-    // from the seed.
-    if (env.cue) {
-      env.cue('plan', {
-        digits: YG.map((k) => ({ x: G[k].cx / W, i: G[k].i, at: born[k] })),
-        smash: SMASH,
-        fall: FALL,
-        lead: LEAD,
-        letters: groups.map((ks) => ({ t: born[ks[0]], xs: ks.map((k) => G[k].cx / W), re: ks.map((k) => rsT[k * 2]) })),
-        titleDone: titleDone,
-        bolts: bolts.map((b) => ({ x0: b.ax / W, x1: b.bx / W, y0: b.ay / H, y1: b.by / H, edge: b.edge })),
-        flashes: fl.map((f) => ({ t: f[0], d: f[1], b: f[2], p: f[4], k: f[5] })),
-        leaves: G.map((g, k) => ({ x: g.cx / W, line: g.line, at: leave[k] })),
-        mid: MID, beat: BEAT, strikesEnd: STRIKES_END, leaveAt: LEAVE_AT, leaveDur: LEAVE_DUR, fadeAt: FADE_AT
-      }, 0);
-    }
-
+    // the fissures alone, white-hot (their tips as they run up the letter)
+    const tipPx = new Uint8ClampedArray(n * 4);
+    { const mg = yield* blurG(mcore, gw, gh, Math.max(1, Math.round(size * 0.008)), 2); for (let i = 0; i < n; i++) { if ((i & 32767) === 32767) yield; const c = Math.min(1, mcore[i] * 1.6), g2 = mg[i] * 2.2; if (c > 0.01 || g2 > 0.01) putLight(tipPx, i * 4, 255 * c + 40 * g2, 255 * c + 150 * g2, 215 * c + 60 * g2, 2); } }
+    yield;
+    const cTip = cropped(tipPx, gw, gh);
+    yield;
+    const cHot = cropped(hot, gw, gh);
+    yield;
+    const cHot2 = cropped(hot2, gw, gh);
+    yield;
+    const cSpec = cropped(spec, gw, gh);
+    yield;
     return {
-      step: function () { /* every frame is worked out from t alone */ },
-      draw: draw,
-      // Before midnight: the letters in every fill (one picture each) and the words in one piece are
-      // made ahead of time (the points on them and the glows are already made by create()), and a few
-      // moments are drawn once so that everything is warmed up: the first frame at midnight has
-      // nothing slow left to do. All of it is cleared again in the same task, so none of it is seen.
-      prime: function () {
-        ctx.save();
-        ctx.setTransform(env.dpr, 0, 0, env.dpr, 0, 0);
-        try {
-          env.warm(FILL);
-          env.warm(FLASH);
-          env.words(1, FILL, 1);
-          env.words(1, HOT, 1);
-          const moments = [40, 160, SMASH + 30, SMASH + 220, titleDone - 30, titleDone + 200, settleAt + 100, MID + 120, LEAVE_AT + 200];
-          for (const t of moments) draw(t);
-        } finally {
-          ctx.setTransform(1, 0, 0, 1, 0, 0);
-          ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-          ctx.restore();
-        }
-      }
+      g: g, line: g.line, ox: ox, oy: oy, w: gw, h: gh, size: size,
+      stoneA: sa.stone, lightA: sa.light, stoneB: sb.stone, lightB: sb.light,
+      hot: cHot, hot2: cHot2, tip: cTip, spec: cSpec, bloom: cropped(bp, gw, gh),
+      bx: tx0, by: ty0, bw: tx1 - tx0 + 1, bh: ty1 - ty0 + 1, feet: oy + fy1 + 1, pieces: pieces
     };
   }
 
-  FX.register('gamma', { name: 'Gamma', duration: DURATION, font: { family: 'AP Anton', weight: 400, tracking: 0.08, scale: 1.12 }, create: create });
+  /* ------------------------------------------------ rock, dust, sparks --- */
+
+  /** The shape of a piece of broken rock: an angular outline (5 to 8 straight breaks), the slope of each break, a top plane and a cleave or two across it. */
+  function rockShape(seed, flat) {
+    const R = mulberry(seed);
+    const m = 5 + ((R() * 4) | 0);
+    const asp = flat ? 0.42 + R() * 0.25 : 0.62 + R() * 0.38;
+    const E = [];
+    const a0 = R() * TAU;
+    for (let k = 0; k < m; k++) {
+      const a = a0 + (k + (R() - 0.5) * 0.85) / m * TAU;
+      E.push([Math.cos(a), Math.sin(a) / asp, 0.56 + R() * 0.42, 0.7 + Math.pow(R(), 2) * 2.6]);
+    }
+    const nc = 1 + ((R() * 2) | 0);
+    for (let k = 0; k < nc; k++) { const a = R() * TAU; E.push([Math.cos(a), Math.sin(a), 0.05 + R() * 0.4, 0.25 + R() * 0.5, 1]); }
+    return { E: E, top: 0.42 + R() * 0.25, tx: (R() - 0.5) * 0.3, ty: (R() - 0.5) * 0.3, ox: R() * 700, oy: R() * 700, tone: 0.62 + R() * 0.75 };
+  }
+
+  /**
+   * A piece of rock, sz x sz, turned by `ang`: its outline and facets from its shape, its surface
+   * from the photograph (Rock030: colour as a grey, relief, occlusion), lit by the same lights as
+   * the letters. o: tone (how light the rock is), green (how much of the crater's light it takes
+   * from below: an underlight that only the facets turned down or edge-on catch, multiplied by the
+   * rock's own colour and occlusion, so that it stays dark, opaque basalt), dark (its base in
+   * shadow), light (also give the part of that light that pulses). The edge is anti-aliased.
+   */
+  function* rockPixels(sz, sh, ang, o) {
+    const TB = TEX.B;
+    const ca = Math.cos(ang), sa = Math.sin(ang);
+    const rad = sz * 0.5 - 1.5;
+    const ystep = Math.max(2, Math.round(5000 / sz));           // (a large rock is made in thin slices)
+    const E = sh.E, ne = E.length;
+    const tone = (o.tone || 1) * sh.tone, green = o.green || 0, dark = o.dark === undefined ? 0.5 : o.dark;
+    const tk = (o.tk || 1) * TB.n / 512;
+    const h = new Float32Array(sz * sz), al = new Float32Array(sz * sz);
+    for (let y = 0; y < sz; y++) {
+      for (let x = 0; x < sz; x++) {
+        const u0 = (x + 0.5 - sz / 2) / rad, v0 = (y + 0.5 - sz / 2) / rad;
+        const u = u0 * ca + v0 * sa, v = -u0 * sa + v0 * ca;
+        if (u * u + v * v > 2.4) continue;
+        const ch = (ns(u * 2.6 + sh.ox, v * 2.6 + sh.oy) - 0.5) * 0.16 + (ns(u * 9 + sh.ox, v * 9 + sh.oy) - 0.5) * 0.07;
+        let dm = 1e9, hh = sh.top + sh.tx * u + sh.ty * v;
+        for (let k = 0; k < ne; k++) {
+          const e = E[k];
+          const d = e[2] - (u * e[0] + v * e[1]) + ch;
+          if (e[4]) { const hk = (d + 0.5) * e[3] + 0.12; if (hk < hh) hh = hk; continue; }
+          if (d < dm) dm = d;
+          const hk = d * e[3];
+          if (hk < hh) hh = hk;
+        }
+        const i = y * sz + x;
+        al[i] = clamp(dm * rad + 0.5, 0, 1);
+        h[i] = Math.max(0, hh) + (tx(TB.disp, TB, (u * rad) * tk + sh.ox, (v * rad) * tk + sh.oy) / 255 - 0.5) * 0.3;
+      }
+      if (y % ystep === ystep - 1) yield;
+    }
+    const px = new Uint8ClampedArray(sz * sz * 4);
+    const lp = o.light ? new Float32Array(sz * sz * 3) : null;
+    for (let y = 1; y < sz - 1; y++) {
+      for (let x = 1; x < sz - 1; x++) {
+        const i = y * sz + x;
+        const a = al[i];
+        if (a <= 0.003) continue;
+        const u0 = (x + 0.5 - sz / 2) / rad, v0 = (y + 0.5 - sz / 2) / rad;
+        const u = u0 * ca + v0 * sa, v = -u0 * sa + v0 * ca;
+        const tu = (u * rad) * tk + sh.ox, tv = (v * rad) * tk + sh.oy;
+        const tnx = (tx(TB.nx, TB, tu, tv) - 128) / 127, tny = (tx(TB.ny, TB, tu, tv) - 128) / 127;
+        let nx = -(h[i + 1] - h[i - 1]) * 0.5 * rad + (tnx * ca - tny * sa) * 1.3;
+        let ny = -(h[i + sz] - h[i - sz]) * 0.5 * rad + (tnx * sa + tny * ca) * 1.3;
+        const il = 1 / Math.sqrt(nx * nx + ny * ny + 1);
+        nx *= il; ny *= il;
+        const kd = Math.max(0, nx * KEY[0] + ny * KEY[1] + il * KEY[2]);
+        const l = tx(TB.lum, TB, tu, tv) / 255, ao = tx(TB.ao, TB, tu, tv) / 255;
+        const v2 = (0.05 + 0.5 * clamp((l - 0.16) * 2.2, 0, 1)) * tone;
+        const base = 1 - dark * smooth(-0.1, 0.75, v0);                          // its underside is in its own shadow
+        const lit = (0.2 + 1.5 * kd) * (0.35 + 0.65 * ao) * base;
+        // the crater's light, from below: on what faces down (and a little on what is edge-on), times the rock itself
+        const dn = Math.max(0, ny * 1.15 - 0.08);
+        const fill = (dn * dn * 0.75 + 0.25 * dn) * green * (0.3 + 0.7 * ao) * 255 * (v2 + 0.03) * (0.4 + 0.6 * smooth(-0.6, 0.6, v0));
+        const p = i * 4;
+        px[p] = 255 * v2 * lit * 1.0 + 0.2 * fill;
+        px[p + 1] = 255 * v2 * lit * 1.02 + 1.1 * fill;
+        px[p + 2] = 255 * v2 * lit * 0.92 + 0.4 * fill;
+        px[p + 3] = a * 255;
+        if (lp) { const e = fill * a; lp[i * 3] = 0.22 * e; lp[i * 3 + 1] = 1.25 * e; lp[i * 3 + 2] = 0.45 * e; }
+      }
+      if (y % ystep === ystep - 1) yield;
+    }
+    return { px: px, lp: lp };
+  }
+
+  /**
+   * Dust as it lies and runs along the ground: a wide, low, streaky sheet. Dense and dark at its
+   * base, torn into wisps at the top, long tapering ends; lit from the upper left and shadowed by
+   * itself, green from below near the crater. (Never a round billow: nothing here hangs in the air.)
+   */
+  function* sheetPixels(w, h, seed, green) {
+    const R = mulberry(seed);
+    const ox = R() * 300, oy = R() * 300;
+    const den = new Float32Array(w * h);
+    const f = 100 / h;
+    for (let y = 0; y < h; y++) {
+      const v = (y + 0.5) / h;                                // 0 at the top, 1 at the ground
+      for (let x = 0; x < w; x++) {
+        const u = (x + 0.5) / w * 2 - 1;
+        const fx = x * f * 0.26 + ox, fy = y * f + oy;       // the noise is drawn out along the ground: streaks
+        const wy = (ns(fx * 0.4 + 50, fy * 0.3) - 0.5) * 34, wx = (ns(fx * 0.4, fy * 0.4 + 90) - 0.5) * 16;
+        const n = ns(fx + wx, fy + wy) * 0.62 + ns(fx * 2.6 + 31, (fy + wy) * 3.1 + 17) * 0.38;
+        const top = 0.02 + 0.6 * ns(fx * 0.3 + 9, oy + 3) + 0.42 * u * u;          // where the sheet starts: lower toward its ends
+        const body = smooth(top, top + 0.55, v);
+        const wisp = Math.pow(ns(fx * 1.4 + 77 + wx, fy * 4.5 + wy * 2), 2.4) * smooth(top - 0.3, top + 0.25, v) * (1 - 0.6 * body);
+        const d = body * clamp((n - 0.36 + 0.12 * body) * 4.2, 0, 1.15) + wisp * 0.7 * clamp((n - 0.3) * 4, 0, 1);
+        den[y * w + x] = clamp(d, 0, 1) * smooth(1, 0.82, v) * smooth(1, 0.25, Math.abs(u));
+      }
+      if ((y & 7) === 7) yield;
+    }
+    const px = new Uint8ClampedArray(w * h * 4);
+    const st = Math.max(1, Math.round(h / 26));
+    for (let y = 0; y < h; y++) {
+      const v = (y + 0.5) / h;
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        const d = den[i];
+        if (d <= 0.004) continue;
+        let sh = 0;
+        for (let k = 1; k <= 5; k++) {
+          const xs = x - k * st * 2, ys = y - k * st;
+          if (xs >= 0 && ys >= 0) sh += den[ys * w + xs];
+        }
+        const lit = Math.exp(-sh * 0.5) * (1 - 0.4 * v);                 // dark where it is dense, at the ground
+        const under = green ? smooth(0.3, 1, v) * (1 - Math.abs((x + 0.5) / w * 2 - 1) * 0.7) : 0;
+        const o = i * 4;
+        px[o] = 50 + 128 * lit - 8 * under;
+        px[o + 1] = 46 + 121 * lit + 22 * under;
+        px[o + 2] = 40 + 104 * lit - 3 * under;
+        px[o + 3] = Math.min(0.8, Math.pow(d, 0.9) * 1.2) * 255;
+      }
+      if ((y & 7) === 7) yield;
+    }
+    return { px: px, w: w, h: h };
+  }
+
+  /**
+   * Dust and grit thrown up out of the pit by a blow: a narrow fan of streaks from a point (the
+   * bottom middle of the picture), thinning toward its tips. Drawn turned and drawn out by its flight.
+   */
+  function* jetPixels(w, h, seed) {
+    const R = mulberry(seed);
+    const ox = R() * 300, oy = R() * 300;
+    const px = new Uint8ClampedArray(w * h * 4);
+    for (let y = 0; y < h; y++) {
+      const v = 1 - (y + 0.5) / h;                            // 0 at the pit, 1 at the tips
+      const hw = 0.08 + 0.92 * Math.pow(v, 0.8);
+      for (let x = 0; x < w; x++) {
+        const uu = ((x + 0.5) / w * 2 - 1) / hw;
+        if (uu <= -1 || uu >= 1) continue;
+        const st = ns(uu * 46 + ox, v * 14 + oy) * 0.6 + ns(uu * 120 + ox, v * 30 + oy + 40) * 0.4;       // streaks along the throw
+        const gr = ns(x * 2.2 + ox, y * 0.5 + oy);
+        const d = clamp((st - 0.36 - 0.14 * v) * 5, 0, 1) * Math.pow(1 - uu * uu, 0.6) * smooth(1, 0.55, v) * smooth(0, 0.04, v) * (0.55 + 0.7 * gr);
+        if (d <= 0.004) continue;
+        const lit = 0.3 + 0.7 * ns(uu * 70 + ox + 9, v * 40 + oy);
+        const under = Math.pow(1 - v, 2.2);                    // the pit lights it from below: shafts of lit dust
+        const o = (y * w + x) * 4;
+        px[o] = 40 + 96 * lit - 8 * under;
+        px[o + 1] = 38 + 92 * lit + 78 * under;
+        px[o + 2] = 33 + 78 * lit + 12 * under;
+        px[o + 3] = Math.min(0.9, d * 1.3) * 255;
+      }
+      if ((y & 7) === 7) yield;
+    }
+    return { px: px, w: w, h: h };
+  }
+
+  /** A canvas scaled to w x h (high quality), made once. */
+  function sized(src, w, h) {
+    const c = mk(Math.max(1, Math.round(w)), Math.max(1, Math.round(h)));
+    const q = c.getContext('2d');
+    q.imageSmoothingQuality = 'high';
+    q.drawImage(src, 0, 0, c.width, c.height);
+    return c;
+  }
+
+  /** The sprites every size shares the recipe of: rock at 16 angles, dust, sparks, embers, a streak. */
+  function* makeSprites(S) {
+    const out = {};
+    // rock: 6 pieces x 16 angles, lit per pixel; and each one blurred by its own flight, for when it is fast
+    const rs = Math.max(20, Math.round(46 * S));
+    out.rs = rs;
+    out.rocks = [];
+    out.rockBlur = [];
+    for (let k = 0; k < 6; k++) {
+      const set = [];
+      let first = null;
+      const sh = rockShape(9100 + k * 77, k % 3 === 1);
+      for (let a = 0; a < 16; a++) { const px = (yield* rockPixels(rs, sh, a / 16 * TAU, { green: 1.3, tone: 1.1, tk: 1 / S, dark: 0.35 })).px; if (!a) first = px; set.push(toCanvas(px, rs, rs)); yield; }
+      out.rocks.push(set);
+      out.rockBlur.push([yield* smearPx(first, rs, rs, 0, rs * 0.5, 0), yield* smearPx(first, rs, rs, 0, rs * 1.2, 0)]);
+    }
+    yield;
+    out.bs = 1;
+    out.boulders = [];                                 // (no rock crosses the lens in this cut)
+    // dust: 3 sheets along the ground in two lights (plain, and green from the crater), and 2 jets
+    const dh = Math.max(40, Math.round(150 * S)), dw = Math.round(dh * 5.2);
+    out.sheets = [];
+    for (let k = 0; k < 3; k++) {
+      const pair = [];
+      for (let gI = 0; gI < 2; gI++) {
+        const p = yield* sheetPixels(dw, dh, 700 + k * 53, gI === 1);
+        pair.push(toCanvas(p.px, p.w, p.h));
+        yield;
+      }
+      out.sheets.push(pair);
+    }
+    out.jets = [];
+    out.jw = Math.max(30, Math.round(110 * S)); out.jh = Math.max(80, Math.round(300 * S));
+    for (let k = 0; k < 2; k++) {
+      const p = yield* jetPixels(out.jw, out.jh, 1500 + k * 91);
+      out.jets.push(toCanvas(p.px, p.w, p.h));
+      yield;
+    }
+    // a spark: a thin streak, sharp at the front, tapering away behind (drawn along its flight); no head
+    {
+      const w = 96, h = 8;
+      const px = new Uint8ClampedArray(w * h * 4);
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const u = x / (w - 1);
+          const v = (y + 0.5 - h / 2) / (h / 2);
+          const half = 0.12 + 0.5 * Math.pow(u, 2.2) * smooth(1, 0.9, u);
+          const body = clamp(1 - Math.abs(v) / half, 0, 1);
+          const c = body * Math.pow(u, 1.8) * smooth(1, 0.93, u) * 1.5;
+          putLight(px, (y * w + x) * 4, 250 * c * (0.3 + 0.7 * u * u), 265 * c, 150 * c * (0.2 + 0.8 * u * u * u));
+        }
+      }
+      out.spark = toCanvas(px, w, h);
+    }
+    // an ember / a soft dot of light
+    {
+      const w = 32;
+      const px = new Uint8ClampedArray(w * w * 4);
+      for (let y = 0; y < w; y++) for (let x = 0; x < w; x++) {
+        const d = Math.hypot(x + 0.5 - w / 2, y + 0.5 - w / 2) / (w / 2);
+        const c = Math.pow(Math.max(0, 1 - d), 2.2);
+        putLight(px, (y * w + x) * 4, 255 * c * c * 1.5 + 60 * c, 300 * c, 150 * c * c + 70 * c);
+      }
+      out.ember = toCanvas(px, w, w);
+    }
+    // a chip of cold rock for the grit (a few shapes)
+    out.chips = [];
+    for (let k = 0; k < 4; k++) out.chips.push(toCanvas((yield* rockPixels(14, rockShape(300 + k * 19, k === 2), k, { tk: 3 / S, dark: 0.3 })).px, 14, 14));
+    yield;
+    return out;
+  }
+  /* ------------------------------------------------------- the rubble --- */
+
+  /** Puts a rock (RGBA bytes, sz x sz) over a picture at (x0, y0); its light replaces what it hides. */
+  function blitRock(dst, lt, pw, ph, rk, sz, x0, y0) {
+    const px = rk.px, lp = rk.lp;
+    for (let y = 0; y < sz; y++) {
+      const Y = y + y0;
+      if (Y < 0 || Y >= ph) continue;
+      for (let x = 0; x < sz; x++) {
+        const X = x + x0;
+        if (X < 0 || X >= pw) continue;
+        const s = (y * sz + x) * 4;
+        const a = px[s + 3] / 255;
+        if (a <= 0) continue;
+        const d = (Y * pw + X) * 4;
+        const da = dst[d + 3] / 255;
+        const oa = a + da * (1 - a);
+        dst[d] = (px[s] * a + dst[d] * da * (1 - a)) / oa;
+        dst[d + 1] = (px[s + 1] * a + dst[d + 1] * da * (1 - a)) / oa;
+        dst[d + 2] = (px[s + 2] * a + dst[d + 2] * da * (1 - a)) / oa;
+        dst[d + 3] = oa * 255;
+        if (lt) {
+          const l = (Y * pw + X) * 3, q = (y * sz + x) * 3;
+          lt[l] = lt[l] * (1 - a) + (lp ? lp[q] : 0); lt[l + 1] = lt[l + 1] * (1 - a) + (lp ? lp[q + 1] : 0); lt[l + 2] = lt[l + 2] * (1 - a) + (lp ? lp[q + 2] : 0);
+        }
+      }
+    }
+  }
+
+  /**
+   * The berm, once: broken rock piled at the feet of the letters. Every piece is its own rock (an
+   * angular outline, the photograph of basalt for its surface, lit by the letters' lights; the
+   * crater's light only as an underlight on its down-turned facets), drawn from the back to the
+   * front. Under the letters (and a quarter of a letter's height to either side) the pile is low:
+   * nothing stands above their feet, so nothing can read as a point between two digits. Beyond, at
+   * the shoulders, it is heaped up with a few large chunks, and thins out to single stones that lie
+   * on the ground. Between the pieces lies a dark bed of dust, and there the crater's light leaks up
+   * (that light is a picture of its own: it pulses). Gives the part behind the letters and the part
+   * in front of their feet (which hides where a digit comes up through it), the light of each, the
+   * bed alone, and every rock as its own picture (they are thrown up one by one, and go one by one).
+   */
+  function* makeBerm(W, H, cx, gy, S, R, x0h, x1h, em) {
+    const TB = TEX.B;
+    const span = x1h - x0h;
+    const ext = Math.max(30 * S, Math.min(W * 0.17, Math.max(120 * S, span * 0.3), (0.95 * W - span) / 2));
+    const mid = (x0h + x1h) / 2;
+    const X0 = Math.max(0, Math.floor(x0h - ext - 50 * S)), X1 = Math.min(W, Math.ceil(x1h + ext + 50 * S));
+    const Yt = Math.max(0, Math.floor(gy - 130 * S)), Yb = Math.min(H, Math.ceil(gy + 90 * S));
+    const pw = Math.max(1, X1 - X0), ph = Math.max(1, Yb - Yt);
+    const keep = span / 2 + em * 0.27;                    // inside this, nothing rises above the feet
+    const rocks = [];
+    const add = (x, y, rad, front, out) => rocks.push({ x: x, y: y, rad: Math.max(5 * S, rad), front: front, out: out,
+      seed: (R() * 1e6) | 0, ang: R() * TAU, flat: R() < 0.45, dn: clamp(Math.abs(x - mid) / (span / 2 + ext), 0, 1), j: R() });
+    // the front: rows of rubble before the feet (their tops level with the feet under the letters)
+    const row = (yc, ys, r0, r1, thin) => {
+      for (let x = x0h - ext; x < x1h + ext;) {
+        const out = clamp((Math.abs(x - mid) - span / 2) / ext, 0, 1);            // 0 under the letters, 1 where the last stone lies
+        const rad = lerp(r0, r1, Math.pow(R(), 1.6)) * (1 - 0.6 * out) * S;
+        const p = (1 - smooth(0.4, 1, out)) * (1 - smooth(0.4, 1, out)) * thin + (out > 0 ? 0.05 : 0);
+        if (R() < p) {
+          let y = yc * S + gy + (R() - 0.5) * ys * S;
+          if (Math.abs(x - mid) < keep + rad) y = Math.max(y, gy - 5 * S + rad * 0.8);
+          add(x + (R() - 0.5) * rad, y, rad, true, out);
+        }
+        x += rad * (0.8 + R() * 0.6) * (1 + 1.6 * smooth(0.35, 1, out));
+      }
+    };
+    // behind the letters: low rubble in the pit; heaped at the shoulders (large chunks below, smaller ones on them)
+    for (const side of [-1, 1]) {
+      for (let d = 0; d < span / 2 + ext;) {
+        const x = mid + side * d;
+        const o2 = d - keep;                              // how far out on the shoulder
+        const out = clamp((d - span / 2) / ext, 0, 1);
+        if (o2 < 0) {
+          const rad = (14 + 22 * R()) * S;
+          add(x, gy - 5 * S + rad * (0.8 + 0.3 * R()), rad, false, out);
+          d += rad * (0.9 + R() * 0.7);
+        } else {
+          const hill = smooth(0, 26 * S, o2) * (1 - smooth(0.4, 1, out));           // the heap
+          const rad = (16 + 58 * hill * (0.45 + 0.55 * R())) * (1 - 0.45 * out) * S;
+          if (R() < 0.45 + 0.55 * hill) {
+            add(x + side * rad * 0.5, gy - rad * (0.12 + 0.3 * R()), rad, false, out);
+            if (hill > 0.45 && R() < 0.7) { const r2 = rad * (0.4 + 0.3 * R()); add(x + side * rad * (0.2 + 0.6 * R()), gy - rad * 0.75 - r2 * (0.3 + 0.3 * R()), r2, false, out); }
+          }
+          d += rad * (0.6 + R() * 0.6) * (1 + 1.2 * smooth(0.5, 1, out));
+        }
+      }
+    }
+    row(11, 7, 7, 20, 0.9);
+    row(24, 6, 22, 50, 1);
+    row(36, 14, 12, 40, 0.85);
+    row(50, 24, 5, 18, 0.3);
+    rocks.sort((a, b) => (a.front - b.front) || (a.y - b.y));
+    yield;
+
+    // every rock, lit: the key from the upper left, and the crater's light from below on its down-turned facets
+    const pics = [];
+    const cov = new Float32Array(pw * ph);
+    for (const r of rocks) {
+      const sz = Math.ceil(r.rad * 2) + 4;
+      const near = Math.exp(-Math.pow((r.x - mid) / (span * 0.6), 2));
+      const rk = yield* rockPixels(sz, rockShape(r.seed, r.flat), r.ang, r.front
+        ? { tone: 0.86 + 0.25 * r.out, green: 0.7 * near, dark: 0.6, tk: 1 / S, light: true }
+        : { tone: 0.8 + 0.3 * r.out, green: 1.5 * near, dark: 0.5, tk: 1 / S, light: true });
+      r.sz = sz; r.px0 = Math.round(r.x - X0 - sz / 2); r.py0 = Math.round(r.y - Yt - sz / 2);
+      pics.push(rk);
+      for (let y = 0; y < sz; y++) { const Y = y + r.py0; if (Y < 0 || Y >= ph) continue; for (let x = 0; x < sz; x++) { const X = x + r.px0; if (X < 0 || X >= pw) continue; const a = rk.px[(y * sz + x) * 4 + 3] / 255; if (a > cov[Y * pw + X]) cov[Y * pw + X] = a; } }
+      yield;
+    }
+    const cb = yield* blurG(cov, pw, ph, Math.max(2, Math.round(7 * S)), 2);
+    yield;
+
+    // the bed between the rocks, where they lie close: dark dust, and the crater's light coming up through it
+    const sB = new Uint8ClampedArray(pw * ph * 4), sF = new Uint8ClampedArray(pw * ph * 4);
+    const lB = new Float32Array(pw * ph * 3), lF = new Float32Array(pw * ph * 3);
+    for (let y = 0; y < ph; y++) {
+      for (let x = 0; x < pw; x++) {
+        const i = y * pw + x;
+        const wx = x + X0, wy = y + Yt;
+        const inner = 1 - smooth(span * 0.46, span * 0.5 + 30 * S, Math.abs(wx - mid));
+        const edge = (ns(wx * 0.06 / S + 9, 3) - 0.5) * 14 * S;
+        // in front of the feet the bed is whole under the letters (a digit comes up from behind it)
+        const forced = inner * smooth(gy + 3 * S + edge * 0.6, gy + 9 * S + edge * 0.6, wy) * (1 - smooth(gy + 34 * S + edge, gy + 46 * S + edge, wy));
+        const a = Math.max(smooth(0.6, 0.78, cb[i]) * (1 - smooth(gy + 36 * S, gy + 52 * S, wy)) * smooth(gy - 14 * S + edge, gy - 4 * S + edge, wy), forced * smooth(0.3, 0.55, cb[i]));
+        const shade = a <= 0.004 ? smooth(0.2, 0.7, cb[i]) * 0.42 * smooth(gy - 4 * S, gy + 8 * S, wy) * (1 - smooth(gy + 30 * S, gy + 50 * S, wy)) : 0;      // the pile stands on its own shadow
+        if (shade > 0.01) { const o = i * 4; sF[o] = 7; sF[o + 1] = 8; sF[o + 2] = 8; sF[o + 3] = shade * 255; continue; }
+        if (a <= 0.004) continue;
+        const l = tx(TB.lum, TB, wx * 2.2 / S, wy * 2.2 / S) / 255;
+        const dust = 0.5 + 0.9 * ns(wx * 0.11 / S + 40, wy * 0.3 / S);
+        const glow = Math.exp(-Math.pow((wx - mid) / (span * 0.55), 2)) * Math.exp(-Math.pow((wy - gy - 4 * S) / (30 * S), 2));
+        const dst = wy < gy ? sB : sF, lt = wy < gy ? lB : lF;
+        const o = i * 4;
+        const v = (10 + 40 * l) * (0.55 + 0.45 * dust) * (1 - 0.5 * glow);
+        dst[o] = v * 1.02 + 2 * glow; dst[o + 1] = v + 9 * glow; dst[o + 2] = v * 0.9 + 4 * glow; dst[o + 3] = a * 255;
+        // the light comes up in veins between the rocks, never as a sheet or a pool
+        const fis = smooth(0.52, 0.8, glow * (0.3 + 1.3 * ns(wx * 0.9 / S + 70, wy * 2.4 / S + 5)));
+        const fk = a * 0.55;
+        lt[i * 3] = (6 * glow + 70 * fis * fis) * fk; lt[i * 3 + 1] = (26 * glow + 190 * fis) * fk; lt[i * 3 + 2] = (10 * glow + 64 * fis * fis) * fk;
+      }
+      if ((y & 3) === 3) yield;
+    }
+    const bedB = { c: toCanvas(sB, pw, ph), x: 0, y: 0 };
+    yield;
+    const bedF = { c: toCanvas(sF, pw, ph), x: 0, y: 0 };
+    yield;
+    // the rocks over it, from the back to the front (each also kept as a picture of its own)
+    const list = [];
+    for (let k = 0; k < rocks.length; k++) {
+      const r = rocks[k];
+      blitRock(r.front ? sF : sB, r.front ? lF : lB, pw, ph, pics[k], r.sz, r.px0, r.py0);
+      list.push({ c: toCanvas(pics[k].px, r.sz, r.sz), x: r.px0, y: r.py0, sz: r.sz, front: r.front, dn: r.dn, j: r.j, j2: hash2(r.seed, 3, 9), j3: hash2(r.seed, 5, 11) });
+      pics[k] = null;
+      if ((k & 1) === 1) yield;
+    }
+    const light = (lt) => { const px = new Uint8ClampedArray(pw * ph * 4); for (let i = 0; i < pw * ph; i++) putLight(px, i * 4, lt[i * 3], lt[i * 3 + 1], lt[i * 3 + 2], 3); return cropped(px, pw, ph); };
+    const back = toCanvas(sB, pw, ph);
+    const fr = cropped(sF, pw, ph);
+    yield;
+    const lb = light(lB);
+    yield;
+    const lf = light(lF);
+    return { x: X0, y: Yt, w: pw, h: ph, back: back, front: fr, lightB: lb, lightF: lf, bedB: bedB, bedF: bedF, rocks: list, keep: keep, mid: mid };
+  }
+
+  /** Light in the air, made once: the glow of the pit with rays fanning up from it (one picture), and a lens streak. */
+  function* makeLights(W, H, Rc, S) {
+    const out = {};
+    const w = Math.ceil(Math.min(Rc * 2.3, W)), h = Math.ceil(Math.min(Rc * 1.2, H * 0.6));
+    const px = new Uint8ClampedArray(w * h * 4);
+    yield;
+    const by = h * 0.86;                                 // the pit is this far down the picture
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const dx = (x + 0.5 - w / 2) / (w / 2), dy = (by - y - 0.5) / by;
+        const rr = Math.hypot(dx * 1.15, dy);
+        // a wide, low glow that hangs in the dust over the crater (wide: it is as strong in every gap between the
+        // letters, never a pool in one of them), torn by the dust it lights; no rays
+        const px2 = Math.sign(dx) * Math.max(0, Math.abs(dx) - 0.42) / 0.58;      // level across the middle
+        const d = Math.hypot(px2, dy * (dy < 0 ? 5.5 : 2.1));
+        const dustN = 0.62 + 0.76 * ns(x * 0.55 / S + 40, y * 2.2 / S + 9);
+        const c = Math.pow(Math.max(0, 1 - d), 2.3) * dustN;
+        const hot = Math.pow(Math.max(0, 1 - Math.hypot(px2 * 1.25, dy * (dy < 0 ? 9 : 4.2))), 2.4) * dustN;
+        void rr;
+        putLight(px, (y * w + x) * 4, 24 * c + 40 * hot, 135 * c + 88 * hot, 52 * c + 38 * hot, 2.5);
+      }
+      if ((y & 1) === 1) yield;
+    }
+    yield;
+    out.air = toCanvas(px, w, h);
+    yield;
+    out.airY = by;
+    {
+      const w2 = Math.ceil(W * 0.5), h2 = Math.max(8, Math.ceil(34 * S));
+      const p2 = new Uint8ClampedArray(w2 * h2 * 4);
+      for (let y = 0; y < h2; y++) for (let x = 0; x < w2; x++) {
+        const u = (x + 0.5) / w2 * 2 - 1, v = (y + 0.5) / h2 * 2 - 1;
+        const c = Math.pow(Math.max(0, 1 - Math.abs(u)), 2.6) * Math.exp(-v * v * 9) + Math.pow(Math.max(0, 1 - Math.abs(u) * 3), 2) * Math.exp(-v * v * 2.5) * 0.5;
+        putLight(p2, (y * w2 + x) * 4, 150 * c, 255 * c, 190 * c);
+      }
+      out.streak = toCanvas(p2, w2, h2);
+    }
+    return out;
+  }
+
+
+  /* ------------------------------------------------- the scene: what happens when --- */
+
+  const pulse = (tau, decay) => (tau < 0 ? 0 : tau < 20 ? tau / 20 : Math.exp(-(tau - 20) / decay));
+
+  /** Everything that is known without drawing a pixel: where things stand, the timeline, every particle. */
+  function makeSim(env, sig) {
+    const D = env.dpr || 1;
+    const W = Math.max(8, Math.round(env.W * D));
+    const H = Math.max(8, Math.round(env.H * D));
+    const S = env.scale * D;
+    const U = H / 1080;
+    const L = env.layout;
+    const R = mulberry(((sig * 4294967296) >>> 0) ^ 0x0B5E55ED);
+    const cx = L.cx * D;
+    let desc = 0.36;
+    try {
+      const c = env.ctx;
+      c.save();
+      c.font = font(200);
+      c.textBaseline = 'middle';
+      const m = c.measureText(L.year || L.title || 'H');
+      if (m.actualBoundingBoxDescent > 20) desc = m.actualBoundingBoxDescent / 200;
+      c.restore();
+    } catch (e) { /* the usual share */ }
+
+    /* ---- the letters: where they stand. The year is the hero: where the layout caps it, it is
+       set a little larger (it grows upward from its feet and the title moves up with it). ---- */
+    const G0 = env.glyphs().map((g) => ({ line: g.line, i: g.i, n: g.n, ch: g.ch, size: g.size * D, x0: g.x0 * D, x1: g.x1 * D, cx: g.cx * D, cy: g.cy * D }));
+    const d0 = G0.filter((g) => g.line === 1);
+    const hasYear = d0.length > 0;
+    let yk = 1;
+    let up = 0;
+    if (hasYear) {
+      const yw = d0[d0.length - 1].x1 - d0[0].x0;
+      yk = clamp(Math.min(1.3, 0.8 * W / Math.max(1, yw), 2.7 * L.titleSize * D / Math.max(1, L.yearSize * D)), 1, 1.3);
+      up = 2 * desc * L.yearSize * D * (yk - 1);
+    }
+    const yb = L.yearY * D + desc * L.yearSize * D;
+    const G = G0.map((g) => (g.line === 1
+      ? { line: 1, i: g.i, n: g.n, ch: g.ch, size: g.size * yk, x0: cx + (g.x0 - cx) * yk, x1: cx + (g.x1 - cx) * yk, cx: cx + (g.cx - cx) * yk, cy: yb - desc * g.size * yk }
+      : { line: 0, i: g.i, n: g.n, ch: g.ch, size: g.size, x0: g.x0, x1: g.x1, cx: g.cx, cy: g.cy - up }));
+    {
+      // The title never runs wider than 86 % of the frame, and the whole lockup is raised: the middle
+      // of the block (the top of the title to the feet of the hero line) sits at 0.6 of the height.
+      const tl = G.filter((g) => g.line === 0);
+      if (tl.length) {
+        const k = Math.min(hasYear ? 1 : 1.3, 0.86 * W / Math.max(1, tl[tl.length - 1].x1 - tl[0].x0 + EXT * tl[0].size));
+        if (k !== 1) for (const g of tl) { g.size *= k; g.x0 = cx + (g.x0 - cx) * k; g.x1 = cx + (g.x1 - cx) * k; g.cx = cx + (g.cx - cx) * k; }
+      }
+      const top = tl.length ? tl[0].cy - tl[0].size * 0.37 : G.length ? G[0].cy - G[0].size * 0.37 : 0;
+      const last = G[G.length - 1];
+      const bot = last ? last.cy + last.size * (desc + EXT) : 0;
+      const dy = Math.round(clamp(0.6 * H - (top + bot) / 2, -0.2 * H, 0));
+      for (const g of G) g.cy += dy;
+    }
+    const digits = G.filter((g) => g.line === 1);
+    const letters = G.filter((g) => g.line === 0);
+    const hero = hasYear ? digits : letters;
+    const heroSize = hero.length ? hero[0].size : L.titleSize * D;
+    const heroCy = hero.length ? hero[0].cy : L.titleY * D;
+    const titleCy = letters.length ? letters[0].cy : L.titleY * D;
+    const titleSize = letters.length ? letters[0].size : L.titleSize * D;
+    const gy = Math.round(Math.min(H * 0.97, heroCy + heroSize * (desc + EXT * 0.5)));
+    const hx0 = hero.length ? hero[0].x0 : cx - 100 * S;
+    const hx1 = hero.length ? hero[hero.length - 1].x1 : cx + 100 * S;
+    const Rc = clamp((hx1 - hx0) * (hasYear ? 0.58 : 0.4), 90 * S, W * 0.33);
+    const GRAV = 3300 * U;
+
+    /* ---- the timeline ---- */
+    const words = [];
+    {
+      let cur = null;
+      let gi = 0;
+      for (const ch of Array.from(L.title)) {
+        if (!ch.trim()) { cur = null; continue; }
+        if (gi >= letters.length) break;
+        if (!cur) { cur = { g: [] }; words.push(cur); }
+        cur.g.push(letters[gi++]);
+      }
+    }
+    const nd = digits.length;
+    const DI = nd > 1 ? Math.min(200, 640 / (nd - 1)) : 0;
+    const riseAt = digits.map((g, i) => D0 + i * DI);
+    const landAt = riseAt.map((a) => a + RISE + HANG + FALL);
+    const lastLand = hasYear ? landAt[nd - 1] : 0;
+    const nw = words.length;
+    const WI = nw > 1 ? Math.min(300, 760 / (nw - 1)) : 0;
+    const W0 = hasYear ? lastLand + 320 : 560;
+    words.forEach((w, i) => {
+      w.at = W0 + i * WI;
+      w.x0 = w.g[0].x0;
+      w.x1 = w.g[w.g.length - 1].x1;
+      w.cx = (w.x0 + w.x1) / 2;
+      w.hero = i === nw - 1;
+    });
+    const titleDone = nw ? W0 + (nw - 1) * WI : W0;
+
+    const hits = [];        // { t, a, d, s, k }: the camera is knocked (px, decay ms, seed, how much of it is the first shove down)
+    const flashes = [];     // [t, strength, frames]: the frame is overexposed (whole frame: the impact, the smash, the pound)
+    const blooms = [];      // [t, strength, x, y]: a bloom of light at a place
+    const thumps = [];      // [t, strength]: the light of the pit and of the cracks flares
+    const pulses = [];      // [t, amount]: the whole lockup swells for a moment (a heartbeat)
+    const tremors = [];     // [t, px]: the berm shudders
+    const streaks = [];     // { t, dur, x, y, w, a }
+    const puffs = [];       // dust: sheets along the ground
+    const jets = [];        // dust and grit thrown up out of the pit
+    const rocks = [];       // thrown rock
+    const sparks = [];      // hot grit
+    const chips = [];       // cold grit falling off the stone
+    const boulders = [];    // (none: no rock crosses the lens in this cut)
+    const breach = [];      // rubble heaved aside by a digit
+    const lands = [];       // rock hitting the ground, for the sound
+    const dustCues = [];
+    const shocks = [];
+
+    const hk = clamp(heroSize / (300 * S), 0.42, 1);    // (the berm is made to this scale; what lies on it follows)
+    const hit = (t, px, decay, k, n) => hits.push({ t: t, a: px * S, d: decay, s: (R() * 1000) | 0, k: k == null ? 0.75 : k, n: n == null ? 1 : n });
+
+    /** One sheet of dust: thrown `dx` along the ground from x (fast, then it rolls on at `drift` px/s), thinning away. */
+    function sheet(t, x, dx, o) {
+      puffs.push({
+        t: t, life: o.life, x: x, y: o.y, dx: dx, tau: o.tau, drift: o.drift || 0, lift: o.lift || 0, a: o.a, sp: (R() * 3) | 0,
+        z: o.z, green: !!o.green, front: !!o.front
+      });
+    }
+    /** Dust kicked up at a place on the ground: a few low sheets that run out to both sides. */
+    function dustBurst(t, x, y, power, n, spread, life, green) {
+      for (let i = 0; i < n; i++) {
+        const dir = i % 2 ? 1 : -1;
+        const k = (i + 0.5 + (R() - 0.5) * 0.6) / n;
+        const front = i % 3 === 1;
+        sheet(t + R() * 40, x + dir * R() * spread * 0.1, dir * spread * (0.2 + 0.8 * k), {
+          life: life * (0.6 + R() * 0.5), y: front ? y + (34 + R() * 26) * S * hk : y + (2 + R() * 10) * S, tau: 130 + R() * 150, drift: dir * (30 + R() * 50) * S, lift: (4 + R() * 10) * S,
+          a: (front ? 0.42 : 0.62) * (0.7 + R() * 0.3) * Math.min(1, 0.5 + 0.5 * power), z: (power > 0.9 && !front ? 1 : 2) + (hk < 0.75 ? 1 : 0), green: green && k < 0.6, front: front
+        });
+      }
+      dustCues.push({ t: Math.round(t), x: +(x / W).toFixed(3), power: +power.toFixed(2) });
+    }
+    /** The shock along the ground: low dust thrown out fast to both sides, as far as `reach` (the frame's edges at the impact). */
+    function dustFront(t, reach, n, power) {
+      for (let i = 0; i < n; i++) {
+        const dir = i % 2 ? 1 : -1;
+        const k = (Math.floor(i / 2) + 1) / Math.ceil(n / 2);
+        const front = (i >> 1) % 2 === 1;
+        sheet(t + R() * 16, cx + dir * Rc * 0.1, dir * reach * (0.16 + 0.84 * k), {
+          life: (1200 + R() * 900) * (0.7 + 0.3 * power), y: front ? gy + (50 + R() * 60) * S * hk : gy + (4 + R() * 12) * S, tau: 55 + 40 * k + R() * 16, drift: dir * (60 + R() * 70 + (front ? 60 : 0)) * S, lift: (6 + R() * 12) * S,
+          a: (front ? 0.5 : 0.7) * power * (0.8 + R() * 0.2), z: (front ? 0 : (i >> 1) % 3 === 0 ? 0 : 1) + (hk < 0.75 ? 1 : 0), green: k < 0.45, front: front
+        });
+      }
+      shocks.push({ t: t, dur: 260 });
+    }
+    /** Dust and grit thrown up out of the pit: fans of streaks that shoot up, hang for an instant and fall back. */
+    function dustJets(t, n, power) {
+      for (let i = 0; i < n; i++) {
+        const a = ((i + 0.5) / n - 0.5) * 2.1 + (R() - 0.5) * 0.25;
+        jets.push({
+          t: t + R() * 30, life: 420 + R() * 300, x: cx + Math.sin(a) * Rc * 0.5 + (R() - 0.5) * Rc * 0.3, y: gy + 6 * S, ang: a,
+          len: H * (0.26 + 0.26 * R()) * power * (1 - 0.3 * Math.abs(a)), wd: (110 + R() * 90) * S * power, a: 0.85 + R() * 0.15, sp: i % 2
+        });
+      }
+    }
+    function rock(t0, x, y, vx, vy, size, front, near) {
+      // Rock thrown up behind the letters comes down behind the rubble in front of them (it is not seen again); rock
+      // thrown toward the lens either lands on the rubble (and lies there) or leaves the frame. At the end nothing
+      // is thrown toward the lens.
+      if (t0 >= EXIT) front = false;
+      const stays = !near && t0 < EXIT - 500 && front && R() < 0.4;
+      const yg = gy + (12 + R() * 44) * S * hk;
+      let t1 = 1e9, t2 = 0, vy2 = 0;
+      if (stays && yg < H - 6 * S) {
+        const disc = vy * vy + 2 * GRAV * Math.max(0, yg - y);
+        t1 = (-vy + Math.sqrt(disc)) / GRAV;
+        vy2 = -(vy + GRAV * t1) * (0.18 + R() * 0.2);
+        t2 = 2 * -vy2 / GRAV;
+        const lx = x + vx * t1;
+        if (lx > 0 && lx < W && size > 9 * S) lands.push({ t: Math.round(t0 + t1 * 1000), x: +(lx / W).toFixed(3), size: +(size / (30 * S)).toFixed(2) });
+      }
+      rocks.push({ t: t0, x: x, y: y, vx: vx, vy: vy, t1: t1, t2: t2, yg: yg, cut: front ? 1e9 : gy + (14 + R() * 10) * S * hk, vx2: vx * 0.4, vy2: vy2, size: size, sp: (R() * 5) | 0, rot: R() * TAU, rv: (R() - 0.5) * (near ? 5 : 16), front: front, fade: 500 + R() * 700, sh: near ? 1 / 80 : 1 / 120, near: !!near });
+    }
+    function rockBurst(t, x, y, n, power, spread) {
+      for (let i = 0; i < n; i++) {
+        const a = (R() - 0.5) * spread;
+        const sp = (560 + R() * 1050) * power * U;
+        const sz = (9 + Math.pow(R(), 2) * 40) * S * (0.7 + 0.3 * power);
+        rock(t + R() * 40, x + (R() - 0.5) * Rc * 0.9, y - R() * 10 * S, Math.sin(a) * sp * 1.15, -Math.cos(a) * sp, sz, R() < 0.5);
+      }
+    }
+    /** Rock thrown low and wide, close to the lens: it crosses the lower third and leaves the frame. */
+    function debris(t, n, power) {
+      for (let i = 0; i < n; i++) {
+        const dir = i % 2 ? 1 : -1;
+        const sz = (26 + R() * 34) * S * (0.75 + 0.25 * power);
+        rock(t + 20 + R() * 90, cx + dir * (0.1 + R() * 0.5) * Rc, gy + (10 + R() * 50) * S, dir * (900 + R() * 1700) * U * power, -(300 + R() * 900) * U * power, sz, true, true);
+      }
+    }
+    function sparkBurst(t, x, y, n, power, spreadX, up) {
+      n = Math.ceil(n * 0.5);                             // few, thin
+      for (let i = 0; i < n; i++) {
+        const a = (R() - 0.5) * (up ? 1.4 : 2.8);
+        const sp = (300 + R() * 1250) * power * U;
+        sparks.push({ t: t + R() * 50, life: 300 + R() * 700, x: x + (R() - 0.5) * spreadX, y: y - R() * 6 * S, vx: Math.sin(a) * sp * 1.2, vy: -Math.cos(a) * sp, g: GRAV * 0.5, w: (1.3 + Math.pow(R(), 2.5) * 2.6) * S });
+      }
+    }
+    function chipBurst(t, x0, x1, y, n, fall) {
+      for (let i = 0; i < n; i++) {
+        chips.push({ t: t + R() * 160, x: lerp(x0, x1, R()), y: y + R() * 4 * S, vx: (R() - 0.5) * 90 * S, vy: -R() * 120 * U, life: fall * (0.6 + R() * 0.6), s: (3 + R() * 6) * S, sp: (R() * 4) | 0, rot: R() * TAU, rv: (R() - 0.5) * 20 });
+      }
+    }
+
+    const BURST0 = EXIT + BLAZE;
+    /* ---- what happens when ---- */
+    // The impact: the frame is white for two frames; the knock lands as it clears (frames 3 to 8).
+    hit(KNOCK, 46, 150, 0.85);
+    flashes.push([0, 1, 2]);
+    thumps.push([0, 1.6]);
+    streaks.push({ t: 0, dur: 300, x: cx, y: gy, w: W * 1.2, a: 0.6 });
+    dustFront(0, W * 0.5 + 60 * S, 14, 1);
+    dustBurst(60, cx, gy, 1.5, 8, W * 0.3, 3200, true);
+    dustJets(0, 8, 1);
+    rockBurst(0, cx, gy, 30, 1, 2.3);
+    rockBurst(0, cx, gy, 12, 1.5, 1.5);
+    debris(0, 16, 1);
+    // the foot of the berm comes up out of dust
+    for (let i = 0; i < 4; i++) sheet(10 + i * 30, cx + (i - 1.5) * Rc * 0.5, (i - 1.5) * Rc * 0.2, { life: 700 + R() * 300, y: gy + (62 + R() * 16) * S * hk, tau: 120, drift: (i - 1.5) * 40 * S, lift: 6 * S, a: 0.8, z: hk < 0.75 ? 2 : 1, green: true, front: true });
+    sparkBurst(0, cx, gy, 34, 1, Rc * 1.2, false);
+    // near the lens: a few large pieces of rock, sharp and dark, come up through the bottom corners and are gone
+    const lens = [];
+    [[-1, 0.2, 40, 400, 0], [1, 0.16, 75, 330, 1], [-1, 0.33, 120, 210, 2], [1, 0.31, 150, 180, 3]].forEach((q, i) => {
+      const sz = q[3] * U;
+      lens.push({ t: q[2], sp: q[4], size: sz, x: cx + q[0] * (W * 0.5 - W * q[1]), y: H + sz * 0.42, vx: q[0] * (520 + R() * 380) * U, vy: -(1050 + R() * 330) * U, g: GRAV * 1.25, rot: 0, rv: 0 });
+    });
+    // The digits.
+    digits.forEach((g, i) => {
+      const t = landAt[i];
+      const wd = g.x1 - g.x0;
+      hit(t, 11, 110, 0.8);                                 // the camera drops ~9 px as it lands
+      thumps.push([riseAt[i], 0.5]);
+      thumps.push([t, 0.7]);
+      dustBurst(riseAt[i] + 40, g.cx, gy, 0.3, 2, wd * 0.7, 1100, true);
+      dustBurst(t, g.cx, gy, 0.7, 4, wd * 1.5, 1300, true);  // the ring of dust it lands in
+      for (let k = 0; k < 6; k++) rock(riseAt[i] + R() * RISE * 0.8, g.cx + (R() - 0.5) * wd, gy - 4 * S, (R() - 0.5) * 620 * S, -(380 + R() * 620) * U, (7 + R() * 13) * S, R() < 0.6);
+      for (let k = 0; k < 7; k++) { const dir = k % 2 ? 1 : -1; rock(t + R() * 20, g.cx + dir * wd * (0.3 + R() * 0.3), gy + 2 * S, dir * (120 + R() * 520) * S, -(300 + R() * 520) * U, (7 + R() * 14) * S, R() < 0.7); }
+      sparkBurst(riseAt[i], g.cx, gy, 7, 0.75, wd * 0.8, true);
+      // the breach: rubble in front of the digit is heaved up and aside as it comes through; grit pours off its shoulders
+      for (let k = 0; k < 4; k++) {
+        const dir = k % 2 ? 1 : -1;
+        // (they lie before the middle of the digit, below its feet: never at its corners or between two digits)
+        breach.push({ t: riseAt[i] + R() * 60, land: t, x: g.cx + dir * wd * (0.06 + 0.12 * R()), y: gy + (30 + R() * 12) * S * hk, size: (30 + R() * 20) * S * hk, sp: (R() * 6) | 0, rot: R() * TAU,
+          dir: dir, tilt: dir * (0.5 + R() * 0.7), slide: dir * wd * (0.04 + R() * 0.1), lift: (14 + R() * 22) * S * hk, rest: 0.35 + R() * 0.3, kick: (5 + R() * 9) * S, j: R() });
+      }
+      chipBurst(riseAt[i] + RISE * 0.3, g.x0, g.x1, gy - g.size * 0.3, 10, 480);
+      chipBurst(riseAt[i] + RISE * 0.62, g.x0, g.x1, gy - g.size * 0.55, 12, 520);
+      chipBurst(riseAt[i] + RISE * 0.95, g.x0, g.x1, gy - g.size * 0.72, 12, 560);
+      rockBurst(riseAt[i] + 30, g.cx, gy + 6 * S, 4, 0.5, 1.6);
+      sparkBurst(t, g.cx, gy, 6, 0.55, wd, false);
+    });
+    // The title.
+    words.forEach((w) => {
+      const wb = titleCy + titleSize * (desc + EXT);
+      const ww = w.x1 - w.x0;
+      if (w.hero) {
+        hit(w.at, 24, 130, 0.75);
+        blooms.push([w.at, 0.5, w.cx, titleCy + titleSize * 0.3, ww]);
+        thumps.push([w.at, 1.2]);
+        dustFront(w.at, W * 0.3, 6, 0.6);
+        rockBurst(w.at, cx, gy, 10, 0.7, 2.0);
+        sparkBurst(w.at, cx, gy, 14, 0.75, Rc, false);
+        sparkBurst(w.at, w.cx, wb, 8, 0.5, ww, false);
+        chipBurst(w.at, w.x0, w.x1, wb, 16, 620);
+      } else {
+        hit(w.at, 12, 110, 0.7);
+        thumps.push([w.at, 0.5]);
+        sparkBurst(w.at, w.cx, wb, 6, 0.45, ww, false);
+        chipBurst(w.at, w.x0, w.x1, wb, 9, 520);
+      }
+    });
+    // The heartbeat: harder each time; the last is more than twice the first.
+    const beatK = BEATS.map((b, i) => 1 + 1.15 * i / Math.max(1, BEATS.length - 1));
+    BEATS.forEach((b, i) => {
+      const k = beatK[i];
+      const e = (k - 1) / 1.15;                              // 0 at the first, 1 at the last
+      thumps.push([b, 0.62 * k]);
+      thumps.push([b + DUB, 0.4 * k]);
+      hit(b, lerp(8, 14, e) / 0.8, 80, 0.8, 0);              // the camera drops 8 px at the first, 14 at the last (little shake: a thump)
+      hit(b + DUB, lerp(4, 7.5, e) / 0.8, 70, 0.8, 0);
+      pulses.push([b, 0.009 * k]);
+      pulses.push([b + DUB, 0.0052 * k]);
+      for (let q = 0; q < 3 + 2 * i; q++) rock(b + R() * 30, cx + (R() - 0.5) * Rc * 2.2, gy + R() * 20 * S, (R() - 0.5) * 110 * S, -(190 + R() * 260 + i * 40) * U, (5 + R() * 7) * S, true);
+      sparkBurst(b, cx, gy, 3 + 2 * i, 0.4 + i * 0.05, Rc * 1.6, true);
+      if (i >= 2) {                                         // from the third beat the berm shudders and breathes dust
+        tremors.push([b, 1.6 + 2.6 * e]);
+        tremors.push([b + DUB, 1 + 1.4 * e]);
+        dustBurst(b, cx, gy, 0.3 + 0.5 * e, 2 + (i >> 1), Rc * (1.2 + e), 1500, true);
+        chipBurst(b, hx0, hx1, gy + 4 * S, 4 + 2 * i, 420);
+      }
+    });
+    // The second smash: the whole block is thrown up as one mass, and comes down cracked.
+    hit(SMASH + 17, 28, 150, 0.75);
+    flashes.push([SMASH, 0.95, 0]);
+    thumps.push([SMASH, 1.6]);
+    streaks.push({ t: SMASH, dur: 260, x: cx, y: gy, w: W * 1.3, a: 0.5 });
+    dustFront(SMASH, W * 0.5, 10, 0.85);
+    dustJets(SMASH, 4, 0.75);
+    rockBurst(SMASH, cx, gy, 20, 0.95, 2.2);
+    debris(SMASH, 8, 0.8);
+    sparkBurst(SMASH, cx, gy, 26, 0.95, Rc * 1.3, false);
+    hit(SMASH + HOP, 24, 130, 0.8);                         // ... and it crashes back
+    thumps.push([SMASH + HOP, 1.3]);
+    tremors.push([SMASH + HOP, 5]);
+    dustFront(SMASH + HOP, W * 0.34, 8, 0.7);
+    rockBurst(SMASH + HOP, cx, gy + 4 * S, 14, 0.6, 2.4);
+    sparkBurst(SMASH + HOP, cx, gy, 12, 0.6, Rc * 1.2, false);
+    if (hero.length) chipBurst(SMASH + HOP, hx0, hx1, gy - heroSize * 0.3, 22, 700);
+    if (hasYear && words.length) chipBurst(SMASH + HOP, words[0].x0, words[nw - 1].x1, titleCy + titleSize * desc, 18, 700);
+    // The final pound: one flash; the cracks blaze; the letters burst (no second flash).
+    hit(EXIT + 17, 30, 160, 0.75);
+    flashes.push([EXIT, 1, 0]);
+    thumps.push([EXIT, 1.8]);
+    streaks.push({ t: EXIT, dur: 260, x: cx, y: gy, w: W * 1.3, a: 0.5 });
+    hit(EXIT + BLAZE, 12, 110, 0.5);
+    dustFront(EXIT, W * 0.5, 8, 0.9);
+    dustJets(EXIT, 4, 0.8);
+    dustBurst(EXIT + BLAZE, cx, gy, 1, 4, W * 0.3, 1100, true);
+    rockBurst(EXIT, cx, gy, 12, 0.9, 2.2);
+    sparkBurst(EXIT, cx, gy, 28, 1, Rc * 1.4, false);
+    sparkBurst(EXIT + BLAZE, cx, gy - heroSize * 0.4, 22, 0.9, Rc * 1.6, false);
+    // the pieces come down on the rubble (two rumbles), the heap gives way from its ends inward in dust, and the
+    // last of it settles with a low thud: the light dies with it
+    hit(BURST0 + 330, 7, 80, 0.8, 0.4);
+    hit(BURST0 + 520, 9, 80, 0.8, 0.4);
+    tremors.push([BURST0 + 330, 3]);
+    tremors.push([BURST0 + 520, 4]);
+    dustBurst(BURST0 + 300, cx - (hx1 - hx0) * 0.22, gy, 0.7, 4, (hx1 - hx0) * 0.5, 800, false);
+    dustBurst(BURST0 + 470, cx + (hx1 - hx0) * 0.2, gy, 0.8, 4, (hx1 - hx0) * 0.6, 800, false);
+    for (let i = 0; i < 5; i++) {
+      const d = 1 - i / 4;                                // from the ends inward
+      for (const dir of [-1, 1]) dustBurst(CRUMBLE + (1 - d) * SINK[0] - 30 + R() * 30, cx + dir * d * ((hx1 - hx0) * 0.5 + 80 * S), gy, 0.6, 2, 190 * S, 520, false);
+    }
+    dustBurst(LAST - 20, cx, gy, 1, 6, (hx1 - hx0) * 0.6, 420, false);
+    hit(LAST, 15, 80, 0.85, 0.3);
+    thumps.push([LAST, 0.9]);
+
+    /* ---- what never stops while the words hold ---- */
+    // dust rolling outward along the ground, in layers (the near ones faster): each sheet crosses its stretch and thins away
+    const amb = [];
+    for (let i = 0; i < 12; i++) {
+      const front = i % 3 === 2;
+      const dir = i % 2 ? 1 : -1;
+      amb.push({
+        dir: dir, x0: (0.1 + R() * 0.5) * Rc, span: (front ? 1.7 : 1.1) * Rc * (0.8 + R() * 0.4), per: (front ? 3000 : 4200) * (0.8 + R() * 0.4), ph: (i * 0.29 + R() * 0.1) % 1,
+        y: front ? gy + (48 + R() * 30) * S * hk : gy + (4 + R() * 16) * S * hk, a: front ? 0.5 + R() * 0.15 : 0.7 + R() * 0.25, sp: i % 3, z: (front ? 2 : (i % 4 === 0 ? 0 : 1)) + (hk < 0.75 ? 1 : 0), green: !front && i % 2 === 0, front: front
+      });
+    }
+    const embers = [];
+    for (let i = 0; i < 56; i++) {
+      embers.push({ x: cx + (R() - 0.5) * Rc * 2.3, per: 1500 + R() * 2200, ph: R(), rise: (170 + R() * 480) * U, wob: (10 + R() * 30) * S, wp: R() * TAU, w: (4.5 + R() * 8) * S, fl: 0.006 + R() * 0.012 });
+    }
+
+    rocks.sort((a, b) => a.t - b.t);
+    lands.sort((a, b) => a.t - b.t);
+    const X = (v) => +(clamp(v / W, 0, 1)).toFixed(3);
+    const burst = EXIT + BLAZE;
+    const plan = {
+      impact: { t: 0, x: X(cx), knock: KNOCK },
+      digits: digits.map((g, i) => ({ x: X(g.cx), i: i, rise: riseAt[i], hang: riseAt[i] + RISE, land: landAt[i] })),
+      words: words.map((w) => ({ x: X(w.cx), land: w.at, punch: PUNCH, letters: w.g.map((g) => X(g.cx)) })),
+      titleDone: titleDone,
+      accent: { t: titleDone, x: X(cx) },
+      beats: BEATS.map((b, i) => ({ t: b, dub: b + DUB, strength: +beatK[i].toFixed(2) })),
+      sweeps: SWEEPS.map((t) => ({ t: t, dur: SWEEP })),
+      smash: { t: SMASH, x: X(cx), knock: SMASH + 17, hopLand: SMASH + HOP, titleLand: SMASH + HOP + LAG, cracks: G.map((g) => ({ t: SMASH + HOP + (g.line === 0 && hasYear ? LAG : 0), dur: CRACK, x: X(g.cx), line: g.line })) },
+      exit: { t: EXIT, x: X(cx), knock: EXIT + 17, blaze: BLAZE, burst: burst, shatters: G.map((g) => ({ t: EXIT, breaks: burst, x: X(g.cx), line: g.line })), pieceLands: [burst + 330, burst + 520], crumble: CRUMBLE, crumbleEnd: LAST, thud: LAST, dark: LAST + FADE },
+      rockLands: lands,
+      rubbleLands: [],
+      flybys: [],
+      debris: rocks.filter((r) => r.near).map((r) => ({ t: Math.round(r.t), x: X(r.x), dir: r.vx > 0 ? 1 : -1 })),
+      lens: lens.map((l) => ({ t: l.t, x: X(l.x), dir: l.vx > 0 ? 1 : -1 })),
+      jets: [0, SMASH, EXIT],
+      tremble: { t: TREMBLE, until: EXIT },
+      dust: dustCues,
+      shockwaves: shocks,
+      fissures: { t: 0, dur: REVEAL },
+      cool: burst + 180, lastPulse: LAST, gone: GONE, duration: DURATION
+    };
+
+    return {
+      W: W, H: H, D: D, S: S, U: U, cx: cx, gy: gy, Rc: Rc, GRAV: GRAV, hasYear: hasYear, desc: desc,
+      G: G, digits: digits, letters: letters, words: words, riseAt: riseAt, landAt: landAt, titleDone: titleDone,
+      heroCy: heroCy, heroSize: heroSize, titleCy: titleCy, titleSize: titleSize, hx0: hx0, hx1: hx1,
+      hits: hits, flashes: flashes, blooms: blooms, thumps: thumps, pulses: pulses, tremors: tremors, streaks: streaks, puffs: puffs, jets: jets, rocks: rocks, sparks: sparks, chips: chips,
+      boulders: boulders, breach: breach, lens: lens, hk: hk, embers: embers, amb: amb, plan: plan, seed: ((sig * 4294967296) >>> 0)
+    };
+  }
+
+  /** Splits a polygon by the line through (mx, my) with normal (nx, ny): [the side behind it, the side ahead]. */
+  function splitPoly(poly, mx, my, nx, ny) {
+    const a = [], b = [];
+    for (let k = 0; k < poly.length; k++) {
+      const A = poly[k], B = poly[(k + 1) % poly.length];
+      const da = (A[0] - mx) * nx + (A[1] - my) * ny, db = (B[0] - mx) * nx + (B[1] - my) * ny;
+      (da <= 0 ? a : b).push(A);
+      if ((da <= 0) !== (db <= 0)) { const u = da / (da - db); const p = [A[0] + (B[0] - A[0]) * u, A[1] + (B[1] - A[1]) * u]; a.push(p); b.push(p); }
+    }
+    return [a, b];
+  }
+  const polyArea = (p) => { let s = 0; for (let k = 0; k < p.length; k++) { const A = p[k], B = p[(k + 1) % p.length]; s += A[0] * B[1] - B[0] * A[1]; } return Math.abs(s) / 2; };
+
+  /**
+   * Every picture of the scene, made once per size, text and seed. A generator: it yields every
+   * millisecond or two of work, so that prime() can spread it over the seconds before midnight in
+   * thin slices, and create() can simply run it to the end when the animation is asked for at once.
+   * Either way the pictures are the same.
+   */
+  function* makePics(sim, P) {
+    const S = sim.S, U = sim.U, W = sim.W, H = sim.H, cx = sim.cx, gy = sim.gy;
+    const t = mk(2, 2).getContext('2d');
+    const touch = (c) => { if (c && c.width) t.drawImage(c, 0, 0, 2, 2); };              // a picture is used once here, never first at midnight
+    while (!TEX.done && sim.wait && now() < sim.wait) yield 'wait';                       // the photographs are still being read
+    yield;
+    texNow();
+    P.real = TEX.real;
+    yield;
+    P.lights = yield* makeLights(W, H, sim.Rc, S);
+    [P.lights.air, P.lights.streak].forEach(touch);
+    P.sp = yield* makeSprites(S);
+    // dust sheets at three sizes (always drawn exactly as a picture is, never scaled), and the jets
+    P.sheet = [];
+    for (const pair of P.sp.sheets) {
+      const two = [];
+      for (const d of pair) {
+        const list = [d];
+        for (const z of [0.7, 0.48, 0.32]) { list.push(sized(d, d.width * z, d.height * z)); yield; }
+        list.forEach(touch);
+        two.push(list);
+      }
+      P.sheet.push(two);
+    }
+    P.sp.jets.forEach(touch);
+    yield;
+    // near the lens: three large, sharp pieces of dark rock (seen from their shadow side: the crater is behind them)
+    P.lens = [];
+    for (let k = 0; k < 4; k++) {
+      const sz = Math.max(24, Math.round([400, 330, 210, 180][k] * U));
+      const px = (yield* rockPixels(sz, rockShape(4400 + k * 131, k === 1), k * 1.9, { tone: 0.5, green: 0.9, dark: 0.8, tk: 0.45 / S })).px;
+      const c = toCanvas(px, sz, sz);
+      touch(c);
+      P.lens.push({ c: c, sz: sz });
+      yield;
+    }
+    // the burst of light at a great blow: green-white, falling off from the crater; the dust it shines through tears
+    // it into layers and shafts, so it is never a clean oval (half size, drawn doubled; dithered, so it never bands)
+    {
+      const bw = Math.ceil(W / 2), bh = Math.ceil(H * 0.84 / 2);
+      const px = new Uint8ClampedArray(bw * bh * 4);
+      const f = 2 / S;
+      for (let y = 0; y < bh; y++) {
+        for (let x = 0; x < bw; x++) {
+          const dx = (x + 0.5 - bw / 2) / (bw / 2), dy = (y + 0.5 - bh * 0.8) / (bh * 0.8);
+          const ang = Math.atan2(dx, -dy + 0.02);
+          const reach = 0.56 + 0.36 * ns(ang * 110 + 40, 7) + 0.14 * ns(ang * 420 + 9, 77);                  // it reaches further here, less there
+          const c0 = Math.max(0, 1 - Math.hypot(dx * 1.02, dy * (dy > 0 ? 4.6 : 1.04)) / reach);
+          const lay = 0.5 + 0.8 * Math.pow(ns(x * f * 0.14 + 300, y * f * 1.5 + 50) * 0.65 + ns(x * f * 0.5 + 20, y * f * 3.4 + 9) * 0.35, 1.3);   // layers of dust across it
+          const shaft = 0.8 + 0.4 * ns(ang * 260 + 5, 30 + c0 * 14);
+          const core = Math.pow(c0, 3.2);
+          const win = smooth(0, 0.12, x / bw) * smooth(0, 0.12, 1 - x / bw) * smooth(0, 0.14, y / bh) * smooth(0, 0.05, 1 - y / bh);                 // (it ends inside its picture)
+          const c = Math.pow(c0, 1.45) * lerp(lay * shaft, 1, core) * win + (hash2(x, y, 5) - 0.5) * 0.006;
+          if (c <= 0) continue;
+          putLight(px, (y * bw + x) * 4, 236 * Math.pow(c, 1.35) + 90 * core, 318 * c + 40 * core, 246 * Math.pow(c, 1.22) + 80 * core, 1.2);
+        }
+        if ((y & 3) === 3) yield;
+      }
+      P.bloom = toCanvas(px, bw, bh);
+      touch(P.bloom);
+    }
+    // ... and a smaller, greener one around the word that lands hardest
+    {
+      const bw = Math.ceil(Math.min(W, 1100 * S) / 2), bh = Math.ceil(Math.min(H, 560 * S) / 2);
+      const px = new Uint8ClampedArray(bw * bh * 4);
+      for (let y = 0; y < bh; y++) {
+        for (let x = 0; x < bw; x++) {
+          const c = Math.pow(Math.max(0, 1 - Math.hypot((x + 0.5 - bw / 2) / (bw / 2), (y + 0.5 - bh / 2) / (bh / 2))), 2);
+          putLight(px, (y * bw + x) * 4, 190 * c * c + 30 * c, 250 * c, 150 * c * c + 50 * c, 1.5);
+        }
+        if ((y & 7) === 7) yield;
+      }
+      P.bloomW = toCanvas(px, bw, bh);
+      touch(P.bloomW);
+    }
+    yield;
+    P.ground = yield* makeBerm(W, H, cx, gy, S * clamp(sim.heroSize / (300 * S), 0.42, 1), mulberry(sim.seed ^ 0x6A0D), sim.hx0, sim.hx1, sim.heroSize);
+    [P.ground.back, P.ground.front.c, P.ground.lightB.c, P.ground.lightF.c, P.ground.bedB.c, P.ground.bedF.c].forEach(touch);
+    for (const r of P.ground.rocks) touch(r.c);
+    yield;
+    // the shadow the block of letters casts on the berm while it is in the air (behind it, and on the rubble in front)
+    {
+      const g = P.ground;
+      const sw = Math.round(Math.min(g.w, sim.hx1 - sim.hx0 + 150 * S)), sh = Math.round(150 * S);
+      const sx = Math.round((sim.hx0 + sim.hx1) / 2 - sw / 2), sy = Math.round(gy - 50 * S);
+      const make = (pic, px, py) => {
+        const c = mk(sw, sh), q = c.getContext('2d');
+        q.drawImage(pic, px - sx, py - sy);
+        q.globalCompositeOperation = 'source-in';
+        let gr = q.createLinearGradient(0, 0, sw, 0);
+        gr.addColorStop(0, 'rgba(3,5,4,0)'); gr.addColorStop(0.12, 'rgba(3,5,4,1)'); gr.addColorStop(0.88, 'rgba(3,5,4,1)'); gr.addColorStop(1, 'rgba(3,5,4,0)');
+        q.fillStyle = gr; q.fillRect(0, 0, sw, sh);
+        q.globalCompositeOperation = 'destination-in';
+        gr = q.createLinearGradient(0, 0, 0, sh);
+        gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(0.3, 'rgba(0,0,0,1)'); gr.addColorStop(0.62, 'rgba(0,0,0,0.8)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+        q.fillStyle = gr; q.fillRect(0, 0, sw, sh);
+        touch(c);
+        return c;
+      };
+      P.shadow = { x: sx, y: sy, back: make(g.back, g.x, g.y), front: make(g.front.c, g.x + g.front.x, g.y + g.front.y) };
+    }
+    yield;
+    P.stage = 1;                                        // all that the impact needs is there
+
+    /* ---- the letters: the digits first (they come first), then the title ---- */
+    P.GL = [];
+    const order = sim.G.map((g, k) => k).sort((a, b) => (sim.G[b].line - sim.G[a].line) || (a - b));
+    for (const k of order) {
+      const g = sim.G[k];
+      const o = yield* makeGlyph(g, S, clamp((g.cx - cx) / W, -0.5, 0.5) * 0.32, mulberry(sim.seed ^ (0x9E3779B1 * (k + 1))));
+      o.k = k;
+      P.GL[k] = o;
+      [o.stoneA, o.stoneB, o.lightA, o.lightB, o.hot, o.hot2, o.tip, o.spec, o.bloom].forEach((c) => touch(c.c));
+      if (g.line === 1) P.digits = (P.digits || 0) + 1;
+      yield;
+    }
+    for (const w of sim.words) for (const g of w.g) P.GL[sim.G.indexOf(g)].word = w;
+    P.stage = 2;
+    // ... and each word of the title as it comes at the camera: blurred by its own approach
+    for (const w of sim.words) {
+      const os = w.g.map((g) => P.GL[sim.G.indexOf(g)]);
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (const o of os) { x0 = Math.min(x0, o.ox); y0 = Math.min(y0, o.oy); x1 = Math.max(x1, o.ox + o.w); y1 = Math.max(y1, o.oy + o.h); }
+      const wp = mk(x1 - x0, y1 - y0);
+      const q = wp.getContext('2d');
+      for (const o of os) {
+        q.globalCompositeOperation = 'source-over';
+        q.globalAlpha = 1;
+        q.drawImage(o.stoneA.c, o.ox + o.stoneA.x - x0, o.oy + o.stoneA.y - y0);
+        q.globalAlpha = 1;
+        q.drawImage(o.hot.c, o.ox + o.hot.x - x0, o.oy + o.hot.y - y0);
+        q.globalCompositeOperation = 'lighter';
+        q.globalAlpha = 1;
+        q.drawImage(o.bloom.c, o.ox + o.bloom.x - x0, o.oy + o.bloom.y - y0);
+      }
+      // It comes at the camera about a point chosen so that, however large, it never reaches over the
+      // word before it (nor out of the frame); and from above: its feet stay where they will stand.
+      const ww = w.x1 - w.x0, mg = 24 * S;
+      const wi = sim.words.indexOf(w);
+      const Lx = wi > 0 ? sim.words[wi - 1].x1 + (w.x0 - sim.words[wi - 1].x1) * 0.35 : mg, Rx = W - mg;
+      const bx0 = Math.min(x0, w.x0), bx1 = Math.max(x1, w.x1);
+      const Z0 = 0.2;
+      const se = clamp((Rx - Lx) / Math.max(1, bx1 - bx0), 1.12, 2.3 * (1 + Z0 / 2));      // the widest it may be, blur and all
+      w.s0 = se / (1 + Z0 / 2);
+      const lo = (bx1 * se - Rx) / (se - 1), hi = (bx0 * se - Lx) / (se - 1);
+      w.px = lo > hi ? (lo + hi) / 2 : clamp(w.cx, lo, hi);
+      w.py = y1;
+      // the word at half size, as numbers; then a true zoom blur about that point: 28 samples per pixel (in floats: no banding)
+      const hw = Math.ceil((x1 - x0) / 2), hh = Math.ceil((y1 - y0) / 2);
+      const hc = mk(hw, hh), hq = hc.getContext('2d');
+      hq.imageSmoothingQuality = 'high';
+      hq.drawImage(wp, 0, 0, hw, hh);
+      const sd = hq.getImageData(0, 0, hw, hh).data;
+      const sf = new Float32Array(hw * hh * 4);
+      for (let i = 0; i < hw * hh * 4; i += 4) { const al = sd[i + 3] / 255; sf[i] = sd[i] * al; sf[i + 1] = sd[i + 1] * al; sf[i + 2] = sd[i + 2] * al; sf[i + 3] = sd[i + 3]; }
+      yield;
+      const ppx = (w.px - x0) / 2, ppy = (w.py - y0) / 2;       // the point, in the half-size picture
+      w.stages = [];
+      for (const zk of [Z0, 0.12, 0.05]) {
+        const e = 1 + zk / 2;
+        const sx0 = Math.floor(ppx + (0 - ppx) * e) - 1, sy0 = Math.floor(ppy + (0 - ppy) * e) - 1;
+        const sx1 = Math.ceil(ppx + (hw - ppx) * e) + 1, sy1 = Math.ceil(ppy + (hh - ppy) * e) + 1;
+        const cw = sx1 - sx0, chh = sy1 - sy0;
+        const out = new Uint8ClampedArray(cw * chh * 4);
+        const N = 28;
+        const inv = new Float32Array(N);
+        for (let j = 0; j < N; j++) inv[j] = 1 / (1 + zk * ((j + 0.5) / N - 0.5));
+        for (let y = 0; y < chh; y++) {
+          const ry = y + sy0 + 0.5 - ppy;
+          for (let x = 0; x < cw; x++) {
+            const rx = x + sx0 + 0.5 - ppx;
+            let r = 0, g2 = 0, b2 = 0, al = 0;
+            for (let j = 0; j < N; j++) {
+              const ix = (ppx + rx * inv[j]) | 0, iy = (ppy + ry * inv[j]) | 0;
+              if (ix < 0 || iy < 0 || ix >= hw || iy >= hh) continue;
+              const q2 = (iy * hw + ix) * 4;
+              r += sf[q2]; g2 += sf[q2 + 1]; b2 += sf[q2 + 2]; al += sf[q2 + 3];
+            }
+            if (al < 0.5 * N) continue;
+            const o = (y * cw + x) * 4, k2 = 255 / al;
+            out[o] = r * k2; out[o + 1] = g2 * k2; out[o + 2] = b2 * k2; out[o + 3] = al / N;
+          }
+          if ((y & 1) === 1) yield;
+        }
+        const c = toCanvas(out, cw, chh);
+        w.stages.push({ c: c, x: x0 + sx0 * 2, y: y0 + sy0 * 2, w: cw * 2, h: chh * 2 });
+        touch(c);
+        yield;
+      }
+    }
+    P.stage = 3;
+
+    /* ---- the light sweep: per line, a work picture and a soft leaning band to show the glints through ---- */
+    P.lines = [];
+    for (const line of [0, 1]) {
+      const os = P.GL.filter((o) => o.line === line);
+      if (!os.length) continue;
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (const o of os) { x0 = Math.min(x0, o.ox + o.bx); y0 = Math.min(y0, o.oy + o.by); x1 = Math.max(x1, o.ox + o.bx + o.bw); y1 = Math.max(y1, o.oy + o.by + o.bh); }
+      const lh = y1 - y0, bw = Math.round(lh * 0.5 + 300 * S);
+      const px = new Uint8ClampedArray(bw * lh * 4);
+      const half = 105 * S;
+      for (let y = 0; y < lh; y++) for (let x = 0; x < bw; x++) {
+        const d = (x - bw / 2 - (lh / 2 - y) * 0.42) / half;
+        const o = (y * bw + x) * 4;
+        px[o] = px[o + 1] = px[o + 2] = 255;
+        px[o + 3] = 255 * Math.min(1, Math.exp(-d * d * 3) * 0.2 + Math.exp(-d * d * 26) * 0.9);        // a narrow, hard glint with a faint skirt
+        if (x === bw - 1 && (y & 31) === 31) yield;
+      }
+      P.lines.push({ line: line, os: os, x: x0, y: y0, w: x1 - x0, h: lh, work: mk(x1 - x0, lh), band: toCanvas(px, bw, lh), bw: bw });
+      yield;
+    }
+    P.stage = 4;
+
+
+    /* ---- what each letter breaks into at the end: pieces cut along its cracks, thick, their light apart; sharp and blurred by their fall ---- */
+    const RF = mulberry(sim.seed ^ 0x51F15EED);
+    P.chunks = [];
+    for (const o of P.GL) {
+      const ps = yield* o.pieces();
+      o.pieces = null;
+      for (const pc of ps) {
+        const c = toCanvas(pc.px, pc.w, pc.h);
+        const wx = o.ox + pc.x + pc.mx, wy = o.oy + pc.y + pc.my;
+        let dx = wx - cx, dy = wy - (gy + 60 * S);
+        const dl = Math.hypot(dx, dy) || 1;
+        dx /= dl; dy /= dl;
+        // Thrown low: heavy. It comes down on the rubble at the feet of the letters (its foot behind the row of rock
+        // in front), bounces once, lies for a moment and topples flat behind that row. A big piece does not turn in
+        // the air. Its blur is short and along the way it is really going when it is fast.
+        const sp = (240 + RF() * 420) * U;
+        const vx = dx * sp * 0.85 + (RF() - 0.5) * 150 * U, vy = dy * sp * 0.3 - (40 + RF() * 130) * U;
+        const om = pc.w * pc.h > 0.05 * sim.heroSize * sim.heroSize ? 0 : (RF() - 0.5) * 1.3;
+        const G2 = sim.GRAV * 1.3;
+        const delay = RF() * 60;
+        const foot = pc.h - pc.my;
+        const yRest = gy + (10 + RF() * 16) * S * sim.hk - foot * 0.9;
+        const t1 = (-vy + Math.sqrt(vy * vy + 2 * G2 * Math.max(0, yRest - wy))) / G2;
+        const vy2 = -(vy + G2 * t1) * (0.15 + RF() * 0.1), t2 = 2 * -vy2 / G2;
+        const tip = Math.min(delay + (t1 + t2) * 1000 + 30 + RF() * 70, LAST - EXIT - BLAZE - 175 - RF() * 50);
+        const ts = Math.max(0, (11 * 120 * U - Math.abs(vy)) / G2), l = Math.hypot(vx, vy + G2 * ts) || 1, an = om * ts;
+        const co = Math.cos(an), si = Math.sin(an);
+        const d1 = [(vx * co + (vy + G2 * ts) * si) / l, (-vx * si + (vy + G2 * ts) * co) / l];
+        const b1 = yield* smearPx(pc.px, pc.w, pc.h, d1[0] * 5 * U, d1[1] * 5 * U, 0);
+        P.chunks.push({
+          k: o.k, c: c, l: toCanvas(pc.lp, pc.w, pc.h), b1: b1, w: pc.w, h: pc.h, mx: pc.mx, my: pc.my, x: wx, y: wy,
+          vx: vx, vy: vy, om: om, delay: delay, yRest: yRest, t1: t1, t2: t2, vy2: vy2, tip: tip, lean: (RF() - 0.5) * 0.5
+        });
+        yield;
+      }
+    }
+    P.chunks.sort((a, b) => a.y - b.y);                 // the low ones last: on top, so that the cuts open as they part
+    for (const c of P.chunks) [c.c, c.l, c.b1.c].forEach(touch);
+    P.done = true;
+    return P;
+  }
+
+  /* ----------------------------------------- scenes kept between runs --- */
+
+  const SCENES = [];
+
+  /**
+   * Runs a scene's picture-making for at most `ms` (without a limit when ms is 0), or until `enough`
+   * says what is needed is there. True once that is so (or all is made).
+   */
+  function pump(sc, ms, enough) {
+    const t0 = now();
+    for (;;) {
+      if (!sc.it || (enough && enough(sc.P))) return true;
+      const r = sc.it.next();
+      if (r.done) { sc.it = null; return true; }
+      if (r.value === 'wait') { if (ms) return false; sc.sim.wait = 0; continue; }
+      if (ms && now() - t0 >= ms) return false;
+    }
+  }
+  /** The rest of the work in thin slices, between the frames of whatever is on screen. */
+  function trickle(sc) {
+    if (!sc.it || sc.timer) return;
+    const tick = () => {
+      sc.timer = 0;
+      if (!pump(sc, 5.5)) sc.timer = root.setTimeout(tick, 2);
+    };
+    sc.timer = root.setTimeout(tick, 2);
+  }
+
+  /* ---------------------------------------------------------- create --- */
+
+  function create(env) {
+    const sig = env.rnd();
+    const L = env.layout;
+    let fontOk = true;
+    try { fontOk = !document.fonts || document.fonts.check(font(40)); } catch (e) { /* as it is */ }
+    if (!env.priming) texNow();                         // asked to play now: the photographs as they are (read at once if they are loaded)
+    // (From prime() the pictures wait for the photographs, so that scene counts as made with them even if they are
+    // still being read; one that had to be made without them is dropped as soon as they are there.)
+    const text = [L.title, L.year, sig, fontOk, env.priming || TEX.real || !TEX.imgs].join('|');
+    const key = [env.W, env.H, env.dpr, L.titleSize, L.yearSize, L.cx, L.titleY, text].join('|');
+    let sc = null;
+    for (const s of SCENES) if (s.key === key) sc = s;
+    if (sc && sc.P.real === false && TEX.real) { if (sc.timer) root.clearTimeout(sc.timer); SCENES.splice(SCENES.indexOf(sc), 1); sc = null; }
+    if (!sc) {
+      const sim = makeSim(env, sig);
+      sim.wait = now() + 3000;
+      sc = { key: key, text: text, sim: sim, P: {}, it: null, timer: 0 };
+      sc.it = makePics(sim, sc.P);
+      SCENES.push(sc);
+      if (SCENES.length > 3) { const old = SCENES.shift(); if (old.timer) root.clearTimeout(old.timer); }
+    }
+    // The sound's plan.
+    env.cue('plan', JSON.parse(JSON.stringify(sc.sim.plan)), 0);
+    // From prime() the pictures are made in slices (prime() below starts them). Asked to play at once,
+    // they are made in the order they are needed: each when it is first drawn, the rest in slices
+    // between the frames. If the same words are already there at another size (the window was
+    // resized while it plays), those pictures are drawn scaled until the new ones are made.
+    let alt = null;
+    if (!env.priming && sc.it) {
+      for (const s of SCENES) if (s !== sc && s.text === sc.text && !s.it) alt = s;
+      if (alt) trickle(sc);
+      else if (sc.timer) { root.clearTimeout(sc.timer); sc.timer = 0; }
+    }
+    const own = drawer(sc, env);
+    const other = alt ? drawer(alt, env) : null;
+    return {
+      step: function () { /* a frame depends only on the seed and t */ },
+      draw: function (t) {
+        if (other && sc.it) {
+          const k = sc.sim.S / alt.sim.S;
+          return other(t, k, sc.sim.cx - alt.sim.cx * k, sc.sim.gy - alt.sim.gy * k);
+        }
+        const t0 = now();
+        const r = own(t, 1, 0, 0);
+        // what is not made yet is made in the time a frame leaves over (at most 4 ms a frame)
+        if (sc.it && !sc.timer) { const used = now() - t0; if (used < 7) pump(sc, Math.min(4, 8.5 - used)); }
+        return r;
+      },
+      prime: function () { if (!pump(sc, 5)) trickle(sc); }
+    };
+  }
+
+  /** What draws a scene: draw(t, k, bx, by) (scaled by k and moved by (bx, by) when it stands in for another size). */
+  function drawer(sc, env) {
+    const ctx = env.ctx;
+    const sim = sc.sim;
+    const W = sim.W, H = sim.H, D = sim.D, S = sim.S, U = sim.U;
+    const cx = sim.cx, gy = sim.gy, Rc = sim.Rc, GRAV = sim.GRAV;
+    const BURST = EXIT + BLAZE;
+    const P = sc.P;
+    let ox = 0, oy = 0;                                 // the camera: knocked about (whole pixels; everything moves by the same amount)
+    let gty = 0;                                        // the berm shuddering
+    let bk = 1, bx = 0, by0 = 0;                        // the scene as a whole, scaled and moved (a stand-in for another size)
+    const ST = (a, b, c, d, e, f) => ctx.setTransform(a * bk, b * bk, c * bk, d * bk, e * bk + bx, f * bk + by0);
+    const need = (enough) => { if (sc.it && !enough(P)) pump(sc, 0, enough); };
+    const bump = (tau, T) => (tau <= 0 ? 0 : (tau / T) * Math.exp(1 - tau / T));          // up fast, back more slowly: 1 at tau = T
+
+    function sumPulse(list, t, decay) {
+      let v = 0;
+      for (let i = 0; i < list.length; i++) {
+        const tau = t - list[i][0];
+        if (tau >= 0 && tau < decay * 7) v += list[i][1] * pulse(tau, decay);
+      }
+      return v;
+    }
+
+    /**
+     * The camera. Every blow shoves it down (it is back within a few frames) and shakes it with smooth
+     * noise that dies away; before the final pound the ground trembles, more and more. There is no
+     * zoom: everything moves by the same whole pixels, so the lockup always moves as one.
+     */
+    function setCamera(t) {
+      let sx = 0, sy = 0;
+      for (let i = 0; i < sim.hits.length; i++) {
+        const h = sim.hits[i];
+        const tau = t - h.t;
+        if (tau < 0 || tau > h.d * 6) continue;
+        const e = Math.exp(-tau / h.d) * Math.min(1, tau / 12);
+        sx += h.a * h.n * e * vn(tau * 0.017 + 0.5, h.s) * 0.8;
+        sy += h.a * h.n * e * vn(tau * 0.019 + 0.5, h.s + 77) * 0.6 + h.a * h.k * bump(tau, 22);
+      }
+      if (t > TREMBLE && t < EXIT + 60) {
+        const a = 6.5 * S * Math.pow((Math.min(t, EXIT) - TREMBLE) / (EXIT - TREMBLE), 1.5);
+        sx += a * vn(t * 0.043, 901);
+        sy += a * vn(t * 0.049, 902);
+      }
+      ox = Math.round(sx); oy = Math.round(sy);
+      let g = 0;
+      for (let i = 0; i < sim.tremors.length; i++) {
+        const tau = t - sim.tremors[i][0];
+        if (tau >= 0 && tau < 420) g += sim.tremors[i][1] * S * Math.exp(-tau / 80) * vn(tau * 0.07, 400 + i);
+      }
+      gty = Math.round(g);
+    }
+    /** The whole lockup swells a little on a heartbeat (1 when it does not). */
+    function lockScale(t) {
+      let v = 0;
+      for (let i = 0; i < sim.pulses.length; i++) {
+        const tau = t - sim.pulses[i][0];
+        if (tau > 0 && tau < 260) v += sim.pulses[i][1] * bump(tau, 32);
+      }
+      return v < 0.001 ? 1 : 1 + v;
+    }
+
+    /** How far a rock of the berm is on its way up out of the pit (<= 0 not yet, >= 1 landed); dn: 0 in the middle .. 1 at the ends. */
+    const riseU = (dn, j, j2, t) => (t - 14 - dn * 105 - j * 28) / (105 + 55 * j2);
+    /** How far gone it is at the end (<= 0 it stands, >= 1 gone): the heap gives way from its ends inward. */
+    const sinkQ = (dn, j, j2, t) => (t - CRUMBLE - (1 - dn) * SINK[0] - j * 30) / (SINK[1] + 40 * j2);
+    const dnAt = (x) => clamp(Math.abs(x - P.ground.mid) / (P.ground.w / 2), 0, 1);
+    /**
+     * The berm, behind the letters or in front of their feet. While it stands it is one picture. At the
+     * impact every rock is thrown up out of the pit on its own arc (opaque from its first frame: it
+     * grows and turns as it comes, it never fades in) over a bed of dust that gathers under it; at the
+     * end every rock tumbles forward and settles flat into the dust, from the ends of the heap inward.
+     */
+    function drawBerm(t, pit, front) {
+      const g = P.ground;
+      const X = g.x + ox, Y = g.y + oy + gty;
+      if (t >= LAST + 20) return;
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+      if (t >= REVEAL && t < CRUMBLE) {
+        if (front) ctx.drawImage(g.front.c, X + g.front.x, Y + g.front.y); else ctx.drawImage(g.back, X, Y);
+      } else {
+        const rising = t < REVEAL;
+        const bed = front ? g.bedF : g.bedB;
+        const ba = rising ? smooth(20, 190, t) : 1 - smooth(CRUMBLE + SINK[0] * 0.35, LAST - 30, t);
+        if (ba > 0.02) { ctx.globalAlpha = ba; ctx.drawImage(bed.c, X + bed.x, Y + bed.y); ctx.globalAlpha = 1; }
+        const mxl = g.mid - g.x, pyl = gy - g.y + 10 * S * sim.hk, hs = S * sim.hk;
+        for (let i = 0; i < g.rocks.length; i++) {
+          const r = g.rocks[i];
+          if (r.front !== front) continue;
+          const h2 = r.sz / 2;
+          if (rising) {
+            const u = riseU(r.dn, r.j, r.j2, t);
+            if (u <= 0) continue;
+            if (u >= 1) { ctx.drawImage(r.c, X + r.x, Y + r.y); continue; }
+            const cxr = r.x + h2, cyr = r.y + h2;
+            const e = 1 - (1 - u) * (1 - u);
+            const x = lerp(lerp(mxl, cxr, 0.55), cxr, e), y = lerp(pyl, cyr, u) - (26 + 84 * r.j3) * hs * (1 - 0.5 * r.dn) * 4 * u * (1 - u);
+            if (r.sz < 58 * hs) { ctx.drawImage(r.c, Math.round(X + x - h2), Math.round(Y + y - h2)); continue; }      // (a small one: a plain copy)
+            const k = 0.42 + 0.58 * smooth(0, 0.75, u);
+            const an = (r.j - 0.5) * 2.6 * (1 - u);
+            const c = Math.cos(an) * k, sn = Math.sin(an) * k;
+            ctx.imageSmoothingEnabled = false;
+            ST(c, sn, -sn, c, X + x, Y + y);
+            ctx.drawImage(r.c, -h2, -h2);
+            ST(1, 0, 0, 1, 0, 0);
+          } else {
+            const q = sinkQ(r.dn, r.j, r.j2, t);
+            if (q >= 1) continue;
+            if (q <= 0) { ctx.drawImage(r.c, X + r.x, Y + r.y); continue; }
+            const an = (r.j - 0.5) * 1.7 * q, ky = 1 - Math.pow(q, 1.4), kx = 1 - 0.25 * q;
+            const c = Math.cos(an), sn = Math.sin(an);
+            ctx.imageSmoothingEnabled = false;
+            ST(c * kx, sn * kx, -sn * ky, c * ky, X + r.x + h2 + (r.j3 - 0.5) * 14 * hs * q, Y + r.y + r.sz * 0.8 + (5 * hs + 0.16 * r.sz) * q * q);
+            ctx.drawImage(r.c, -h2, -r.sz * 0.8);
+            ST(1, 0, 0, 1, 0, 0);
+          }
+        }
+        ctx.imageSmoothingEnabled = true;
+      }
+      // the crater's light coming up between the rocks (it pulses), and what little of it their undersides catch
+      const lt = front ? g.lightF : g.lightB;
+      const la = Math.min(1, pit) * (t < REVEAL ? smooth(0.62, 1, t / REVEAL) : 1 - smooth(CRUMBLE - 160, CRUMBLE + 40, t));
+      if (la > 0.02) {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = la;
+        ctx.drawImage(lt.c, X + lt.x, Y + lt.y);
+      }
+    }
+    /** The shadow of the block on the berm while it is in the air. */
+    function drawShadow(a, front) {
+      if (a < 0.03 || !P.shadow) return;
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = Math.min(1, a);
+      ctx.drawImage(front ? P.shadow.front : P.shadow.back, P.shadow.x + ox, P.shadow.y + oy + gty);
+    }
+
+    /** Dust: sheets thrown out along the ground by the blows, and the ones that never stop rolling outward. */
+    function drawSheets(t, DE, lo, front) {
+      ctx.globalCompositeOperation = 'source-over';
+      const par = front ? 1.3 : 0.8;
+      const px = Math.round(ox * par), py = Math.round(oy * par);
+      const env2 = smooth(300, 1400, t) * DE;
+      if (env2 > 0.02) {
+        for (let i = 0; i < sim.amb.length; i++) {
+          const b = sim.amb[i];
+          if (b.front !== front || (lo && i > 4)) continue;
+          const u = ((t / b.per + b.ph) % 1 + 1) % 1;
+          const a = b.a * smooth(0, 0.2, u) * (1 - smooth(0.5, 1, u)) * env2;
+          if (a < 0.012) continue;
+          const pic = P.sheet[b.sp][b.green ? 1 : 0][b.z];
+          ctx.globalAlpha = a;
+          ctx.drawImage(pic, Math.round(cx + b.dir * (b.x0 + b.span * u) - pic.width / 2) + px, Math.round(b.y - pic.height) + py);
+        }
+      }
+      for (let i = 0; i < sim.puffs.length; i++) {
+        const p = sim.puffs[i];
+        if (p.front !== front || (lo && (i & 3) === 3)) continue;
+        const tau = t - p.t;
+        if (tau < 0 || tau >= p.life) continue;
+        const u = tau / p.life;
+        const a = Math.min(1, p.a) * Math.min(1, tau / 34) * Math.pow(1 - u, 1.4) * DE;
+        if (a < 0.012) continue;
+        const pic = P.sheet[p.sp][p.green ? 1 : 0][p.z];
+        ctx.globalAlpha = a;
+        ctx.drawImage(pic, Math.round(p.x + p.dx * (1 - Math.exp(-tau / p.tau)) + p.drift * tau * 0.001 - pic.width / 2) + px, Math.round(p.y - p.lift * u - pic.height) + py);
+      }
+    }
+    /** Dust and grit thrown up out of the pit: each fan shoots out, is drawn out by its flight, sags and thins. */
+    function drawJets(t, DE) {
+      ctx.globalCompositeOperation = 'source-over';
+      const jw = P.sp.jw, jh = P.sp.jh;
+      for (let i = 0; i < sim.jets.length; i++) {
+        const j = sim.jets[i];
+        const tau = t - j.t;
+        if (tau < 0 || tau >= j.life) continue;
+        const u = tau / j.life, ts = tau / 1000;
+        const grow = 1 - Math.exp(-tau / 75);
+        const a = j.a * Math.min(1, tau / 25) * Math.pow(1 - u, 1.3) * DE;
+        if (a < 0.015) continue;
+        const kx = j.wd * (0.45 + 0.4 * grow + 0.5 * u) / jw, ky = j.len * (0.2 + 0.8 * grow) / jh;
+        const c = Math.cos(j.ang), s = Math.sin(j.ang);
+        ctx.globalAlpha = a;
+        ST(c * kx, s * kx, -s * ky, c * ky, j.x + ox, j.y + 0.5 * GRAV * 0.3 * ts * ts + oy);
+        ctx.drawImage(P.sp.jets[j.sp], -jw / 2, -jh);
+      }
+      ST(1, 0, 0, 1, 0, 0);
+    }
+
+    function drawRocks(t, front) {
+      ctx.globalCompositeOperation = 'source-over';
+      const sp = P.sp;
+      for (let i = 0; i < sim.rocks.length; i++) {
+        const r = sim.rocks[i];
+        if (r.t > t) break;
+        if (r.front !== front) continue;
+        const tau = (t - r.t) / 1000;
+        let x, y, vx = r.vx, vy, rot, a = 1;
+        let kf = 1;
+        if (tau < r.t1) { x = r.x + r.vx * tau; vy = r.vy + GRAV * tau; y = r.y + r.vy * tau + 0.5 * GRAV * tau * tau; rot = r.rot + r.rv * tau; if (y > H + 140 * S || x < -160 * S || x > W + 160 * S || (y > r.cut && vy > 0)) continue; }
+        else {
+          const t2 = tau - r.t1;
+          if (t2 < r.t2) { vx = r.vx2; x = r.x + r.vx * r.t1 + r.vx2 * t2; vy = r.vy2 + GRAV * t2; y = r.yg + r.vy2 * t2 + 0.5 * GRAV * t2 * t2; rot = r.rot + r.rv * r.t1 + r.rv * 0.4 * t2; }
+          else {
+            const t3 = (t2 - r.t2) * 1000;
+            if (t3 > r.fade) continue;
+            vx = 0; vy = 0; x = r.x + r.vx * r.t1 + r.vx2 * r.t2; y = r.yg; rot = r.rot + r.rv * r.t1 + r.rv * 0.4 * r.t2;
+            kf = Math.sqrt(1 - t3 / r.fade);                                                   // it settles into the rubble (never a fade)
+            y += r.size * 0.35 * (1 - kf);
+            if (t >= CRUMBLE) { const q = sinkQ(dnAt(x), 0.5, 0.5, t); if (q >= 1) continue; if (q > 0) kf *= 1 - q; }
+          }
+        }
+        const speed = Math.hypot(vx, vy);
+        const bl = speed * r.sh / r.size;                      // how long the blur of the exposure is, in rocks
+        const k = r.size / sp.rs * kf;
+        ctx.globalAlpha = a;
+        ctx.imageSmoothingEnabled = k > 1.4 || (bl <= 0.55 && r.size > 16 * S);
+        if (bl > 0.55) {
+          const b = sp.rockBlur[r.sp][bl > 1.1 ? 1 : 0];
+          const an = Math.atan2(vy, vx) - Math.PI / 2;
+          const c = Math.cos(an) * k, s = Math.sin(an) * k;
+          ST(c, s, -s, c, x + ox, y + oy);
+          ctx.drawImage(b.c, -b.c.width / 2, -b.c.height / 2);
+        } else {
+          const turn = ((rot % TAU) + TAU) % TAU;
+          const ai = Math.round(turn / TAU * 16);
+          const res = turn - ai / 16 * TAU;
+          const c = Math.cos(res) * k, s = Math.sin(res) * k;
+          ST(c, s, -s, c, x + ox, y + oy);
+          ctx.drawImage(sp.rocks[r.sp][ai & 15], -sp.rs / 2, -sp.rs / 2);
+        }
+      }
+      ctx.imageSmoothingEnabled = true;
+      ST(1, 0, 0, 1, 0, 0);
+    }
+    function drawChips(t, lo) {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.imageSmoothingEnabled = false;
+      for (let i = 0; i < sim.chips.length; i++) {
+        const c = sim.chips[i];
+        const tau = t - c.t;
+        if (tau < 0 || tau > c.life || (lo && (i & 1))) continue;
+        const ts = tau / 1000;
+        const k = c.s / 14;
+        const an = c.rot + c.rv * ts;
+        const co = Math.cos(an) * k, si = Math.sin(an) * k;
+        ctx.globalAlpha = Math.min(1, (1 - tau / c.life) * 3);
+        ST(co, si, -si, co, c.x + c.vx * ts + ox, c.y + c.vy * ts + 0.5 * GRAV * 0.8 * ts * ts + oy);
+        ctx.drawImage(P.sp.chips[c.sp], -7, -7);
+      }
+      ctx.imageSmoothingEnabled = true;
+      ST(1, 0, 0, 1, 0, 0);
+    }
+    function drawSparks(t, lo, pit) {
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < sim.sparks.length; i++) {
+        const p = sim.sparks[i];
+        const tau = t - p.t;
+        if (tau < 0 || tau > p.life || (lo && (i & 1))) continue;
+        const ts = tau / 1000;
+        const vy = p.vy + p.g * ts;
+        const sp = Math.hypot(p.vx, vy);
+        const len = clamp(sp * 0.036, p.w * 5, 130 * S) / 96, wd = p.w / 8 * 1.6;
+        const c = p.vx / sp, s = vy / sp;
+        ctx.globalAlpha = Math.min(1, (1 - tau / p.life) * 2.2) ;
+        ST(c * len, s * len, -s * wd, c * wd, p.x + p.vx * ts + ox, p.y + p.vy * ts + 0.5 * p.g * ts * ts + oy);
+        ctx.drawImage(P.sp.spark, -90, -4);
+      }
+      ST(1, 0, 0, 1, 0, 0);
+      // embers climbing out of the pit, flickering
+      const env2 = smooth(700, 2200, t) * (1 - smooth(EXIT, EXIT + 500, t)) ;
+      if (env2 < 0.02) return;
+      for (let i = 0; i < sim.embers.length; i++) {
+        const e = sim.embers[i];
+        if (lo && (i & 1)) continue;
+        const u = ((t / e.per + e.ph) % 1 + 1) % 1;
+        const fl = 0.55 + 0.45 * Math.sin(t * e.fl + e.wp * 5) * Math.sin(t * e.fl * 0.37 + e.wp);
+        const a = Math.min(1, u * 5) * (1 - u) * fl * env2 * Math.min(1.7, 0.8 + pit * 0.7) * 1.4;
+        if (a < 0.03) continue;
+        const w = e.w * (1 - 0.5 * u);
+        ctx.globalAlpha = Math.min(1, a);
+        ctx.drawImage(P.sp.ember, e.x + Math.sin(u * 7 + e.wp) * e.wob + ox - w / 2, gy - 6 * S - u * e.rise + oy - w / 2, w, w);
+      }
+    }
+
+    /** The heat of a letter over its stone: first the edges go cold, then the cracks inside (two pictures), and the glow they give off. */
+    function putHeat(o, X, Y, heat) {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = Math.min(1, heat * 2.2);
+      ctx.drawImage(o.hot2.c, X + o.hot2.x, Y + o.hot2.y);
+      const a1 = clamp((heat - 0.4) / 0.5, 0, 1);
+      if (a1 > 0.02) { ctx.globalAlpha = a1; ctx.drawImage(o.hot.c, X + o.hot.x, Y + o.hot.y); }
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = Math.min(1, heat);
+      ctx.drawImage(o.bloom.c, X + o.bloom.x, Y + o.bloom.y);
+    }
+    /**
+     * One letter standing (at LX, LY from its place, lifted by dy): its stone, its heat, the light in
+     * its cracks. `grow` (0..1) is how far the fissures have run up it from its foot after the block
+     * crashed back: below that line it is the cracked stone, above it still whole, and where the
+     * fissures have just got to they are at their hottest.
+     */
+    function putGlyph(o, LX, LY, dy, B, heat, veins, grow) {
+      const X = o.ox + LX, Y = o.oy + LY + dy;
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+      const part = B && grow < 1;
+      const cutY = part ? Math.round(lerp(o.feet - o.oy + 2, o.by - 2, Math.pow(Math.max(0, grow), 0.85))) : 0;
+      if (!part) { const st = B ? o.stoneB : o.stoneA; ctx.drawImage(st.c, X + st.x, Y + st.y); }
+      else {
+        const a = o.stoneA, b = o.stoneB;
+        ctx.drawImage(a.c, X + a.x, Y + a.y);
+        const sy = clamp(cutY - b.y, 0, b.h);
+        if (sy < b.h) ctx.drawImage(b.c, 0, sy, b.w, b.h - sy, X + b.x, Y + b.y + sy, b.w, b.h - sy);
+      }
+      if (heat > 0.02) putHeat(o, X, Y, heat);
+      if (veins > 0.03) {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = Math.min(1, veins);
+        if (!part) {
+          const li = B ? o.lightB : o.lightA;
+          ctx.drawImage(li.c, X + li.x, Y + li.y);
+          if (veins > 1) { ctx.globalAlpha = Math.min(1, veins - 1); ctx.drawImage(li.c, X + li.x, Y + li.y); }
+        } else {
+          const la = o.lightA, lb = o.lightB;
+          const ha = clamp(cutY - la.y, 0, la.h);
+          if (ha > 0) ctx.drawImage(la.c, 0, 0, la.w, ha, X + la.x, Y + la.y, la.w, ha);
+          const sy = clamp(cutY - lb.y, 0, lb.h);
+          if (sy < lb.h) ctx.drawImage(lb.c, 0, sy, lb.w, lb.h - sy, X + lb.x, Y + lb.y + sy, lb.w, lb.h - sy);
+          // the tips of the fissures, where they have just got to: white-hot
+          const tp = o.tip, s2 = clamp(cutY - tp.y, 0, tp.h), th = Math.min(tp.h - s2, Math.max(5, Math.round(o.size * 0.1)));
+          if (th > 0) { ctx.globalAlpha = 1; ctx.drawImage(tp.c, 0, s2, tp.w, th, X + tp.x, Y + tp.y + s2, tp.w, th); }
+        }
+      }
+    }
+    /** How far up a digit is (0..1) at u of its rise: it grinds up in three surges, stalling between them (rock is in the way). */
+    function grind(u) {
+      if (u < 0.2) return 0.4 * smooth(0, 0.2, u);
+      if (u < 0.36) return 0.4 + 0.035 * (u - 0.2) / 0.16;
+      if (u < 0.54) return 0.435 + 0.335 * smooth(0.36, 0.54, u);
+      if (u < 0.7) return 0.77 + 0.03 * (u - 0.54) / 0.16;
+      return 0.8 + 0.2 * (1 - Math.pow(1 - (u - 0.7) / 0.3, 2));
+    }
+    /** A digit on its way up through the rock, hanging, dropping, landing: incandescent, cut off at the ground. */
+    function putDigit(o, tau, veins) {
+      const size = o.size;
+      const top = o.oy + o.by;
+      const over = size * 0.12;
+      let dy, jx = 0, sq = 0;
+      if (tau < RISE) {
+        const u = tau / RISE;
+        dy = lerp(gy - top + 4 * S, -over, grind(u));
+        const stall = (u > 0.2 && u < 0.36) || (u > 0.54 && u < 0.7) ? 1 : 0.35;
+        jx = Math.round(2.6 * S * vn(tau * 0.09, o.k) * stall);       // it shudders against the rock
+      } else if (tau < RISE + HANG) {
+        dy = -over - size * 0.012 * Math.sin((tau - RISE) / HANG * Math.PI);
+      } else if (tau < RISE + HANG + FALL) {
+        const w = (tau - RISE - HANG) / FALL;
+        dy = -over * (1 - w * w);
+      } else {
+        const tl = tau - RISE - HANG - FALL;
+        sq = Math.exp(-tl / 24);                                      // it lands: for two or three frames the stone gives
+        const heat = Math.exp(-tl / 240);
+        if (sq < 0.05) { putGlyph(o, ox, oy, 0, false, heat, veins, 1); return; }
+        ST(1 + 0.05 * sq, 0, 0, 1 - 0.1 * sq, o.g.cx + ox, o.feet + oy + 2 * S * sq);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+        const bx2 = o.ox - o.g.cx, by2 = o.oy - o.feet;
+        ctx.drawImage(o.stoneA.c, bx2 + o.stoneA.x, by2 + o.stoneA.y);
+        putHeat(o, bx2, by2, heat);
+        ST(1, 0, 0, 1, 0, 0);
+        return;
+      }
+      const X = o.ox + ox + jx, Y = Math.round(o.oy + oy + dy);
+      const hh = Math.min(o.h, Math.round(gy + 17 * S + oy) - Y);                  // behind the rubble in front of it
+      if (hh < 2) return;
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+      const h1 = Math.min(o.hot.h, hh - o.hot.y);
+      if (h1 > 0) ctx.drawImage(o.hot.c, 0, 0, o.hot.w, h1, X + o.hot.x, Y + o.hot.y, o.hot.w, h1);
+      ctx.globalCompositeOperation = 'lighter';
+      const h2 = Math.min(o.bloom.h, hh - o.bloom.y);
+      if (h2 > 0) ctx.drawImage(o.bloom.c, 0, 0, o.bloom.w, h2, X + o.bloom.x, Y + o.bloom.y, o.bloom.w, h2);
+    }
+
+    /** How high a letter is (px, up is negative) `tt` ms after the second smash threw it up: it crashes back and gives once more. */
+    function hopOf(tt) {
+      if (tt < 0 || tt >= HOP + 100) return 0;
+      const u = tt / HOP;
+      if (u < 1) return -H * 0.075 * 4 * u * (1 - u);
+      const w = (tt - HOP) / 100;
+      return -H * 0.006 * 4 * w * (1 - w);
+    }
+    const hopAt = (t) => Math.round(hopOf(t - SMASH));
+    function drawLetters(t, pit) {
+      const GL = P.GL;
+      const nd = sim.digits.length, ng = sim.G.length;
+      if (sim.hasYear && t < sim.riseAt[nd - 1] + 40) { let c = 0; for (let i = 0; i < nd; i++) if (t >= sim.riseAt[i]) c++; need((p) => (p.digits || 0) >= c); }
+      else need((p) => p.stage >= 3);
+      // on a heartbeat the whole lockup swells from its feet: one transform for every letter, so it moves as one
+      const ls = lockScale(t);
+      let LX = ox, LY = oy;
+      if (ls !== 1) { ST(ls, 0, 0, ls, cx * (1 - ls) + ox, gy * (1 - ls) + oy); LX = 0; LY = 0; }
+      const base = 0.34 + 0.6 * Math.max(0, pit - 0.5);
+      const blaze = t >= EXIT ? smooth(0, BLAZE, t - EXIT) : 0;
+      const hopping = t >= SMASH && t < SMASH + HOP + 160;
+      for (let k = 0; k < ng; k++) {
+        const o = GL[k];
+        if (!o) continue;
+        // The second smash throws the block up, but not as one rigid slab: every letter goes a little higher or
+        // lower than its neighbour, drifts and turns a degree or so in the air, and the title comes down a frame
+        // or two after the year. Each cracks from its foot as it lands.
+        let by = 0, rot = 0, dxk = 0, B = t >= SMASH + HOP, grow = 1, cf = 0;
+        if (t >= SMASH) {
+          const h1 = hash2(k, 11, 1), h2 = hash2(k, 12, 2), h3 = hash2(k, 13, 3);
+          const lag = (o.line === 0 && sim.hasYear ? LAG : 0) + h1 * 12;
+          const tt = t - SMASH - lag;
+          if (hopping && tt > 0) {
+            by = Math.round(hopOf(tt) * (0.93 + 0.14 * h2));
+            if (tt < HOP) { const a = Math.sin(tt / HOP * Math.PI); rot = o.line === 1 || Math.abs(h3 - 0.5) < 0.2 ? 0 : (h3 - 0.5) * 0.06 * a; dxk = Math.round((h2 - 0.5) * 7 * S * a); }
+          }
+          B = tt >= HOP;
+          if (B) { grow = (tt - HOP) / CRACK; cf = 0.55 * Math.exp(-(tt - HOP) / 380); }
+        }
+        const veins = base * (0.8 + 0.5 * vn(t * 0.011, 31 + (k >> 1))) + cf + blaze * 1.7;
+        let heat;
+        if (o.line === 1) {
+          const tau = t - sim.riseAt[o.g.i];
+          if (tau < 0) continue;
+          if (tau < RISE + HANG + FALL + 200) { putDigit(o, tau, veins); continue; }
+          heat = Math.exp(-(tau - RISE - HANG - FALL) / 240) + blaze * 0.6;
+        } else {
+          const w = o.word;
+          if (!w || t < w.at) continue;
+          heat = Math.exp(-(t - w.at) / 105) + blaze * 0.6;
+        }
+        if (rot !== 0 && ls === 1) {
+          const c = Math.cos(rot), sn = Math.sin(rot);
+          ST(c, sn, -sn, c, o.g.cx + ox + dxk, o.feet + oy + by);
+          putGlyph(o, -o.g.cx, -o.feet, 0, B, heat, veins, grow);
+          ST(1, 0, 0, 1, 0, 0);
+        } else putGlyph(o, LX + dxk, LY, by, B, heat, veins, grow);
+      }
+      if (t >= SWEEPS[0]) { need((p) => p.stage >= 4); drawSweep(t, LX, LY + hopAt(t)); }
+      if (ls !== 1) ST(1, 0, 0, 1, 0, 0);
+      // a word of the title on its way to the camera: one picture, blurred by its approach, shrinking
+      // onto its place about a point from which it never reaches over the word before it
+      for (const w of sim.words) {
+        const u = (t - (w.at - PUNCH)) / PUNCH;
+        if (u < 0 || u >= 1 || !w.stages) continue;
+        const s = 1 + (w.s0 - 1) * Math.pow(1 - u, 1.5);
+        const st = w.stages[u < 0.4 ? 0 : u < 0.75 ? 1 : 2];
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = u < 0.1 ? 0.6 : 1;
+        ctx.drawImage(st.c, w.px + (st.x - w.px) * s + ox, w.py + (st.y - w.py) * s + oy, st.w * s, st.h * s);
+      }
+    }
+
+    /**
+     * The pieces of the letters after the pound: thrown low, they come down on the rubble where the
+     * letters stood (each with its foot behind the row of rock in front), bounce once, lie for a
+     * moment and topple flat behind that row. Sharp; a short blur along its flight when a piece is fast.
+     */
+    function drawChunks(t) {
+      const G2 = GRAV * 1.3;                                            // heavy: thrown low, they drop fast
+      for (let i = 0; i < P.chunks.length; i++) {
+        const c = P.chunks[i];
+        const tb = t - BURST - c.delay;
+        const ts = Math.max(0, tb) / 1000;
+        const q = (t - BURST - c.tip) / 170;                            // toppling
+        if (q >= 1) continue;
+        let x, y, vy = 0, an;
+        if (ts < c.t1) { x = c.x + c.vx * ts; vy = c.vy + G2 * ts; y = c.y + c.vy * ts + 0.5 * G2 * ts * ts; an = c.om * ts; }
+        else {
+          const t2 = Math.min(ts - c.t1, c.t2);
+          x = c.x + c.vx * c.t1 + c.vx * 0.3 * t2; y = c.yRest + c.vy2 * t2 + 0.5 * G2 * t2 * t2; an = c.om * (c.t1 + 0.3 * t2);
+          if (ts - c.t1 < c.t2) vy = c.vy2 + G2 * t2;
+        }
+        const sp = ts < c.t1 ? Math.hypot(c.vx, vy) / 120 : 0;          // the blur of a 1/120 s exposure, px
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+        if (q > 0) {
+          // it goes over onto its back: seen from the front it gets lower and lower about its foot
+          const ky = 1 - Math.pow(q, 1.6), foot = c.h - c.my;
+          const co = Math.cos(an), si = Math.sin(an);
+          ctx.imageSmoothingEnabled = true;
+          ST(co, si * ky, -si + c.lean * q, co * ky, x + ox, y + foot * 0.9 + oy + gty);
+          ctx.drawImage(c.c, -c.mx, -c.my - foot * 0.9);
+          continue;
+        }
+        // a big piece does not turn: it is put on whole pixels (a plain copy); a small one turns
+        let px = -c.mx, py = -c.my;
+        if (c.om) { const co = Math.cos(an), si = Math.sin(an); ST(co, si, -si, co, x + ox, y + oy); }
+        else { ST(1, 0, 0, 1, 0, 0); px = Math.round(x - c.mx) + ox; py = Math.round(y - c.my) + oy; }
+        ctx.imageSmoothingEnabled = tb > 0;
+        if (sp < 13 * U) ctx.drawImage(c.c, px, py);
+        else ctx.drawImage(c.b1.c, px - c.b1.px, py - c.b1.py);          // a short blur along its flight
+        const glow = 1 - smooth(20, 170, tb);                           // the light in its cracks dies: it is cold rock that falls
+        if (glow > 0.03) {
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.globalAlpha = glow;
+          ctx.drawImage(c.l, px, py);
+        }
+      }
+      ctx.imageSmoothingEnabled = true;
+      ST(1, 0, 0, 1, 0, 0);
+    }
+
+    /** Near the lens: large pieces of rock, sharp and dark, thrown up through the bottom corners of the frame at the impact. */
+    function drawLens(t) {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+      for (let i = 0; i < sim.lens.length; i++) {
+        const l = sim.lens[i];
+        const tau = (t - l.t) / 1000;
+        if (tau < 0 || tau > 1.4) continue;
+        const x = l.x + l.vx * tau, y = l.y + l.vy * tau + 0.5 * l.g * tau * tau;
+        if (y - l.size * 0.6 > H || x + l.size * 0.6 < 0 || x - l.size * 0.6 > W) continue;
+        const p = P.lens[l.sp];
+        ctx.drawImage(p.c, Math.round(x - p.sz / 2 + ox * 1.5), Math.round(y - p.sz / 2 + oy * 1.5));      // (a plain copy on whole pixels: sharp)
+      }
+      ST(1, 0, 0, 1, 0, 0);
+    }
+
+    /** Rubble in front of a digit: it comes up with the berm, is heaved up and aside as the digit comes through, jumps as it lands, and goes down with the berm. */
+    function drawBreach(t) {
+      const sp = P.sp;
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+      for (let i = 0; i < sim.breach.length; i++) {
+        const b = sim.breach[i];
+        const dn = dnAt(b.x);
+        let kb = 1, off = 0;
+        if (t < REVEAL) { const u = riseU(dn, b.j, 0.5, t); if (u <= 0) continue; if (u < 1) { kb = 0.42 + 0.58 * smooth(0, 0.75, u); off = (1 - u) * 22 * S - 30 * S * 4 * u * (1 - u); } }
+        else if (t >= CRUMBLE) { const q = sinkQ(dn, b.j, 0.5, t); if (q >= 1) continue; if (q > 0) { kb = 1 - q; off = b.size * 0.3 * q; } }
+        const tau = t - b.t;
+        let p = 0, hop = 0;
+        if (tau > 0) {
+          const u = Math.min(1, tau / (RISE * 0.8));
+          const e = 1 - (1 - u) * (1 - u);
+          p = e * (1 - (1 - b.rest) * smooth(RISE, RISE + HANG + FALL + 140, tau));
+          hop = Math.sin(Math.min(1, tau / (RISE + HANG + FALL)) * Math.PI) * 0.8 + b.kick / b.lift * bump(t - b.land, 45);
+        }
+        const rot = b.rot + b.tilt * p;
+        const turn = ((rot % TAU) + TAU) % TAU;
+        const ai = Math.round(turn / TAU * 16);
+        const res = turn - ai / 16 * TAU;
+        const k = b.size / sp.rs * kb;
+        const c = Math.cos(res) * k, s = Math.sin(res) * k;
+        ST(c, s, -s, c, b.x + b.slide * p + ox, b.y - b.lift * hop - b.lift * 0.2 * p + off + oy + gty);
+        ctx.drawImage(sp.rocks[b.sp][ai & 15], -sp.rs / 2, -sp.rs / 2);
+      }
+      ST(1, 0, 0, 1, 0, 0);
+    }
+
+    /** A glint crossing the stone: what a light passing in front picks out (the chamfers, the worn edges), shown through a narrow leaning band. */
+    function drawSweep(t, LX, LY) {
+      for (let k = 0; k < SWEEPS.length; k++) {
+        for (const ln of P.lines) {
+          const u = (t - SWEEPS[k] - (ln.line === 1 ? 140 : 0)) / SWEEP;
+          if (u <= 0 || u >= 1) continue;
+          const e = u * u * (3 - 2 * u);
+          const bx = Math.round(lerp(-ln.bw, ln.w, e));
+          const x0 = Math.max(0, bx), x1 = Math.min(ln.w, bx + ln.bw);
+          if (x1 <= x0) continue;
+          const q = ln.work.getContext('2d');
+          q.save();
+          q.beginPath();
+          q.rect(x0, 0, x1 - x0, ln.h);
+          q.clip();
+          q.clearRect(x0, 0, x1 - x0, ln.h);
+          q.globalCompositeOperation = 'source-over';
+          for (const o of ln.os) if (o.ox + o.w > ln.x + x0 && o.ox < ln.x + x1) q.drawImage(o.spec.c, o.ox + o.spec.x - ln.x, o.oy + o.spec.y - ln.y);
+          q.globalCompositeOperation = 'destination-in';
+          q.drawImage(ln.band, bx, 0);
+          q.restore();
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.globalAlpha = Math.min(1, Math.sin(u * Math.PI) * 3);
+          const X = ln.x + LX, Y = ln.y + LY;
+          ctx.drawImage(ln.work, x0, 0, x1 - x0, ln.h, X + x0, Y, x1 - x0, ln.h);
+        }
+      }
+    }
+
+    function draw(t, k, x, y) {
+      if (t < 0 || t >= LAST + FADE) return 0;            // (after the last thud every light has died: nothing is drawn)
+      bk = k; bx = x; by0 = y;
+      need((p) => p.done);                                // whatever prime() has not made yet is made before the first frame is drawn
+      const lo = env.low();
+      const DE = 1 - smooth(LAST - 40, LAST + FADE - 10, t);   // the dust thins to nothing with the light, after the last thud
+      ST(1, 0, 0, 1, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      setCamera(t);
+
+      // the light of the pit: it breathes, flickers, rises slowly while the words hold, flares on every blow; after the
+      // pound it sinks low, flares once more as the last of the rubble settles, and dies to nothing
+      const life = smooth(0, 60, t) * (1 - 0.72 * smooth(EXIT + 150, EXIT + 800, t)) * (1 - smooth(LAST + 20, LAST + FADE - 10, t));
+      const pit = (0.5 + 0.12 * Math.sin(t * 0.0043) + 0.14 * vn(t * 0.012, 3) + 0.07 * vn(t * 0.034, 9) + 0.2 * smooth(2600, EXIT - 200, t) + sumPulse(sim.thumps, t, 230) * 0.62) * life;
+
+      // the glow that hangs in the dust over the crater: behind everything (the rocks stand dark against it)
+      const ga = Math.min(1, pit * 0.8);
+      if (ga > 0.02) {
+        const gl = P.lights.air;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = ga;
+        ctx.drawImage(gl, Math.round(cx - gl.width / 2 + ox), Math.round(gy - P.lights.airY + oy));
+      }
+      drawBerm(t, pit, false);
+      drawJets(t, DE);
+      drawSheets(t, DE, lo, false);
+      drawRocks(t, false);
+      const air = -hopAt(t) / (H * 0.075);                // 0..1: how far the block is off the ground
+      if (t < BURST) {
+        drawShadow(air * 0.8, false);
+        drawLetters(t, pit);
+      } else { need((p) => p.done); drawChunks(t); }
+      drawBerm(t, pit, true);
+      if (t < BURST) drawShadow(air * 0.8, true);
+      drawBreach(t);
+      drawSheets(t, DE, lo, true);
+      drawRocks(t, true);
+      drawChips(t, lo);
+      drawSparks(t, lo, pit);
+      if (t < 1500) drawLens(t);
+
+      // light in the lens: the streak; a bloom at the hero word; the frame blown out by the three great blows
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.imageSmoothingEnabled = false;
+      for (let i = 0; i < sim.streaks.length; i++) {
+        const s = sim.streaks[i];
+        const u = (t - s.t) / s.dur;
+        if (u < 0 || u >= 1) continue;
+        const st = P.lights.streak;
+        const w = s.w * (0.55 + 0.45 * Math.min(1, u * 5)), h = st.height * 2 * (1.3 - 0.5 * u);
+        ctx.globalAlpha = s.a * Math.pow(1 - u, 1.6) * 0.8;
+        ctx.drawImage(st, Math.round(s.x - w / 2), Math.round(s.y - h / 2), Math.round(w), Math.round(h));
+      }
+      const bl = P.bloom;
+      for (let i = 0; i < sim.blooms.length; i++) {
+        const b = sim.blooms[i];
+        const tau = t - b[0];
+        if (tau < 0 || tau > 240) continue;
+        const bw = P.bloomW;
+        ctx.globalAlpha = Math.min(1, b[1] * Math.exp(-tau / 45));
+        ctx.drawImage(bw, Math.round(b[2] - bw.width + ox), Math.round(b[3] - bw.height + oy), bw.width * 2, bw.height * 2);
+      }
+      // The exposure: white for a frame or two, then it falls off fast as light around the crater (never a veil).
+      let white = 0, fall = 0;
+      for (let i = 0; i < sim.flashes.length; i++) {
+        const f = sim.flashes[i];
+        const tau = t - f[0];
+        if (tau < 0 || tau > 200) continue;
+        const fw = f[2] * 16.6;                             // (just under that many frames, so that never one more is white)
+        if (tau < fw) white = Math.max(white, f[1]);
+        else fall = Math.max(fall, f[1] * (f[2] ? 1 : 1.3) * Math.exp(-(tau - fw) / 27));
+      }
+      if (fall > 0.02 && !white) {
+        ctx.globalAlpha = Math.min(1, fall * 1.15);
+        ctx.drawImage(bl, Math.round(cx - bl.width + ox), Math.round(gy - bl.height * 1.6 + oy), bl.width * 2, bl.height * 2);
+      }
+      ctx.imageSmoothingEnabled = true;
+      if (white > 0) {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = Math.min(1, white);
+        ctx.fillStyle = 'rgb(244,255,247)';
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      }
+
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+      ctx.imageSmoothingEnabled = true;
+      ctx.setTransform(D, 0, 0, D, 0, 0);
+      return 0;
+    }
+
+    return draw;
+  }
+
+  FX.register('gamma', { name: 'Gamma', duration: DURATION, font: FACE, create: create });
 })(typeof window !== 'undefined' ? window : this);

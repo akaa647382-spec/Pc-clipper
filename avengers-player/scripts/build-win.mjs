@@ -59,8 +59,8 @@ const RUNTIME_DIRS = ['/main', '/src'];
 const RUNTIME_FILES = ['/package.json', '/build/icon.png', '/build/icon.ico'];
 const REQUIRED_APP_FILES = [
   'main/main.js', 'main/preload.js', 'main/store.js', 'main/lastrun.js', 'main/webm.js', 'main/ntp.js', 'main/ffmpeg.js', 'main/watchdog.js',
-  'src/index.html', 'src/styles.css', 'src/core.js', 'src/subs-core.js', 'src/fonts.css', 'src/fonts/michroma.woff2', 'src/fonts/russo-one.woff2', 'src/fonts/syncopate-bold.woff2', 'src/fonts/anton.woff2', 'src/fonts/gasoek-one.woff2', 'src/textures/gamma-count-rock.jpg', 'src/fonts/black-ops-one.woff2', 'src/fonts/orbitron-black.woff2', 'src/fonts/cinzel-black.woff2',
-  'src/fx.js', 'src/fx-arc.js', 'src/fx-hotrod.js', 'src/fx-infinity.js', 'src/sfx.js', 'src/sfx-stark.js', 'src/sfx-fireworks.js', 'src/sfx-arc.js', 'src/sfx-hotrod.js', 'src/sfx-infinity.js', 'src/sfx-gamma.js', 'src/sfx-warmachine.js', 'src/sfx-tva.js', 'src/sfx-doom.js', 'src/sfx-minimal.js', 'src/sfx-count.js', 'src/fx-gamma.js', 'src/fx-warmachine.js', 'src/fx-tva.js', 'src/fx-doom.js', 'src/app.js',
+  'src/index.html', 'src/styles.css', 'src/core.js', 'src/subs-core.js', 'src/fonts.css', 'src/fonts/michroma.woff2', 'src/fonts/russo-one.woff2', 'src/fonts/syncopate-bold.woff2', 'src/fonts/gasoek-one.woff2', 'src/textures/gamma-count-rock.jpg', 'src/fonts/black-ops-one.woff2', 'src/fonts/orbitron-black.woff2', 'src/fonts/cinzel-black.woff2',
+  'src/fx.js', 'src/fx-arc.js', 'src/fx-hotrod.js', 'src/fx-infinity.js', 'src/sfx.js', 'src/sfx-stark.js', 'src/sfx-fireworks.js', 'src/sfx-arc.js', 'src/sfx-hotrod.js', 'src/sfx-infinity.js', 'src/sfx-gamma.js', 'src/sfx-warmachine.js', 'src/sfx-tva.js', 'src/sfx-doom.js', 'src/sfx-minimal.js', 'src/sfx-count.js', 'src/fx-gamma.js', 'src/fx-gamma-tex.js', 'src/fx-warmachine.js', 'src/fx-tva.js', 'src/fx-doom.js', 'src/app.js',
 ];
 
 // Files of the Electron distribution the app cannot do without. Checked after

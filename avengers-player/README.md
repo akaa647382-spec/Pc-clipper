@@ -232,8 +232,8 @@ This **Final Countdown** follows the Happy New Year animation you choose, so the
 that animation's lettering and colours, inside the panel: **Stark**: the classic one, as it always was; **Arc
 Reactor**: cyan neon that strikes on like a tube, between the arcs of a spinning reactor ring, with a shockwave;
 **Hot Rod**: slanted polished gold with a deep red edge, slamming down in sparks; **Infinity**: gold with a deep
-purple edge, as the Thanos words at midnight, condensing out of violet and gold ash with an orbiting comet; **Gamma**: lime inside a thick dark outline, with a jolt and a
-crack of lightning; **War Machine**: gunmetal with a fine red edge, scanned in as brackets lock on; **TVA**: amber,
+purple edge, as the Thanos words at midnight, condensing out of violet and gold ash with an orbiting comet; **Gamma**: numbers cut in rock, slamming onto their feet
+with a crack of green light along the ground and a kick of dust; **War Machine**: gunmetal with a fine red edge, scanned in as brackets lock on; **TVA**: amber,
 switching on like an old television inside a clock dial; **Doom**: green fire cooling to scratched steel with a green
 outline, in a turning ring; **Fireworks**: every number bursts in with coloured rays and sparks; **Minimal**: a quiet
 fade. 3, 2, 1 hit harder. With the animation **Off**, the countdown still plays, in the style of the app theme; the
@@ -279,8 +279,10 @@ lettering of its own:
 - **Infinity**, the Thanos animation (Syncopate, gold with a deep purple edge): a snap; six coloured lights collide
   into a gold blaze that forges the year, ash rises into the greeting, and at the end, perfectly balanced, half of the
   letters turn to dust, then the rest.
-- **Gamma** (Anton, lime inside a thick dark outline): a thunderclap; the year smashes down digit by digit, then
-  lightning writes the greeting one letter at a time.
+- **Gamma** (Gasoek One cut in photographed rock, lit green from below): ground zero. Something colossal lands
+  unseen and throws up a heap of rubble; the year grinds up out of it digit by digit, glowing hot, and cools to stone;
+  the greeting slams in word by word; a heartbeat builds, a second smash throws the letters up and they crack as they
+  land; a final blow breaks them into heavy pieces and the heap collapses with a last thud.
 - **War Machine** (Black Ops One, gunmetal with a fine red edge): a tactical display boots and locks each letter as it
   renders in steel, the year's counter rolls and locks, then red tracers burst into silver flak.
 - **TVA** (Orbitron, amber): an old split-flap clock flips over to the new year and HAPPY NEW YEAR types out on a
@@ -293,7 +295,7 @@ Apache 2.0), with their licences in `src/fonts`. They are chosen to feel close t
 is custom and not used.
 
 **Animation sound** (Display tab, **off by default**): each animation gets a sound of its own, made by the app itself
-(no sound files): the snap and the gold blaze for Infinity, a thunderclap for Gamma, split-flap clacks and typing for
+(no sound files): the snap and the gold blaze for Infinity, breaking rock and a heartbeat for Gamma, split-flap clacks and typing for
 TVA, the rockets of Stark and Fireworks as they fly, and so on. It is quiet and follows the app's volume and mute,
 because at midnight the film is playing its own snap. With the replay on, the midnight clip gets it too, mixed with
 the film's sound.
