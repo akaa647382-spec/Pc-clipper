@@ -1,4 +1,4 @@
-# Next steps (hand-off, updated Nov 21, 2026)
+# Next steps (hand-off, updated Nov 23, 2026)
 
 Where things stand, so the next session can carry on without the chat history.
 
@@ -25,25 +25,32 @@ Where things stand, so the next session can carry on without the chat history.
   the Final Countdown heard the instant it appears (scheduled on the audio clock, output latency taken off), a set
   per countdown look (src/sfx-count.js), 3 · 2 · 1 heavier with a build landing on midnight, 6 dB under the animation
   sound. Silenced when the countdown stops; reset when the app's clock jumps (test runs). e2e: countsound, ui, newyear.
+- **Gamma reworked** (`359e3e9`, cleanup `c2ce1fc`, sound `47b6de3`): ground zero in photographed rock (CC0 ambientCG
+  textures in `src/fx-gamma-tex.js`, Gasoek One with a redrawn Y), a rock-cut 10 · 9 · 8 countdown, and a stone sound
+  with a heartbeat matched to the frames (every hit within 5 ms). Four rounds with a strict 3-judge panel: 5.4 → 6.4
+  of 10 (10 = a Marvel trailer card); the judges' remaining notes are minor (a lime tint on the hot cracks at 11.05 s,
+  a few straight hairline cracks, debris falling below the ground line). Its first frame takes ~3.5 s cold, so the
+  app prepares it 60 s before midnight, when the style is picked and when the Display tab opens.
 - **Cinematic sound: work in progress** (`b544e30`): all 10 designs written; only Arc and Hot Rod checked. The run was
   stopped; to finish, resume workflow run `wf_a8133b35-4e8` (pixel baseline is `f133018`).
 - **Tests:** unit 143/143; e2e `ui` scenario 136/136; the crash scan of all 9 drawn animations is clean.
 
 ## Release 1.11.0
 
-- Rebuilt with everything above (cinematic animation sound, countdown sound, no RIGHT ON TIME, the New Year
-  congratulation): full e2e 861/861, unit 143/143, `tests/fx/shots.cjs --perf` (60 fps; Stark's p95 33 ms is the known
-  measurement quirk, frames identical to before), crash scan clean. `download/Avengers-Player-Setup-1.11.0.exe`,
-  93.4 MB, SHA-256 `f352c4583ccfb3b6e112fc27b9fe25b32ed7896428956fb7d1dbbf7bac0a4f71`; the packaged app's 26 files are
-  byte-identical to src/.
+- Rebuilt with everything above, including the Gamma rework: e2e 860/861 in the full run (the one miss was a 0.980 s
+  gap in the countdown sound under load, at the ±20 ms limit; the `newyear` scenario then passed twice with every gap
+  1.000 s), unit 143/143, `tests/fx/shots.cjs --perf` (60 fps; Stark's p95 33 ms is the known measurement quirk;
+  Gamma's 3.2 s first frame there is the unprimed cold start), Gamma's own check 62/62.
+  `download/Avengers-Player-Setup-1.11.0.exe`, 94.8 MB (limit 95.0 MB: little room left for more data in the app),
+  SHA-256 `e75cb7e0fcf26b208f0f7d45853d871c819b990fde53c8879eab045a4338f0e1`.
 - Not done: the install/update/launch check under Wine (Wine 9.0 crashes on every command in this container).
 - Sound review: Arc and Hot Rod had the full design check; the other animation sounds only the measured checks
   (levels, no clipping, frames identical, no doubled cues). The user judges them by ear from the demo videos.
 
 ## What is left
 
-1. The user watches the animation videos (with sound) and picks any animation to rework. A rework (with Fable 5.2)
-   replaces the current one only if it is clearly better side by side.
+1. The user watches the animation videos (with sound) and picks any other animation to rework (Gamma is done). A
+   rework (with Fable 5.2) replaces the current one only if it is clearly better side by side.
 2. itch.io: the page text is in `docs/itch-page.md` ($0 or donate, $3.99 suggested). The user takes the two Windows
    warning screenshots, creates the page and uploads.
 
