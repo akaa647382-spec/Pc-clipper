@@ -6,11 +6,11 @@
  * off as green-white light around the crater, torn by the dust it shines through, never a veil) the
  * camera is knocked down hard and a berm of broken rock is thrown up where the words will stand:
  * every rock on its own arc out of the pit, opaque from its first frame, over a bed of dust that
- * gathers under it. A few large, sharp, dark pieces come up through the bottom corners of the
- * frame, close to the lens. A low shock of dust races along the ground to both edges of the frame,
- * fans of dust and grit (lit green from below) shoot up out of the pit, rock flies under gravity, a
- * few thin sparks streak away. The rocks are dark, opaque basalt at all times: the crater's light
- * is only an underlight on their down-turned facets, and leaks up BETWEEN them.
+ * gathers under it. A low shock of dust races along the ground to both edges of the frame, rock
+ * flies under gravity, a few thin sparks fly off. There are no rays, no streak and no star: the
+ * light of a blow is a glow behind the rock and the letters, which stand dark against it. The
+ * rocks are dark, opaque basalt at all times: the crater's light is only an underlight on their
+ * down-turned facets, and leaks up BETWEEN them. The pile lies on a soft dark bed of dust.
  * The year breaks up through the rubble digit by digit: each grinds up in surges and stalls, the
  * chunks before it heaved up and aside, grit pouring off its shoulders; it comes up incandescent (a
  * dark crust broken into plates, pale heat only in the narrow cracks and along some edges, a thin
@@ -31,21 +31,19 @@
  * up it from its foot in five or six frames, white-hot at their tips, wide at the foot and a hair
  * at their ends, along the valleys of the rock, never straight. From 10 s the ground trembles. At
  * 11 s the final pound: a burst of light, the cracks blaze, the letters break along them into thick
- * pieces that go cold within a fifth of a second, come down on the rubble where they stood (their
- * feet behind the row of rock in front), bounce once and topple flat behind it; then the heap
- * itself gives way from its ends inward, every rock tumbling forward and settling flat into the
- * dust; the last of it settles with a low thud, and the light and the dust die to nothing in
- * 180 ms. Nothing is left to cut.
+ * pieces that go cold within a fifth of a second, come down on the heap where they stood (their
+ * lowest corner behind the row of rock in front) and tip over onto their sides (turning: never
+ * squashed), a pile of broken stone; then the heap gives way from its ends inward, every rock
+ * rolling over and dropping away into the pit, and takes the pieces on it with it; the last of it
+ * settles with a low thud, and the light and the dust die to nothing in 180 ms. Nothing is left
+ * to cut.
  *
  * Timeline (ms; with a four-digit year and a three-word title):
  *       0        IMPACT: the frame white for two frames, then green-white light falling off around
- *                the crater (gone by ~150), a faint lens streak
+ *                the crater, behind the rock (gone by ~150)
  *      14..310   the berm is thrown up, rock by rock, from the middle outward
  *      30        the camera is knocked down (about 15, 34, 29, 21 px on frames 3 to 6) and shaken;
- *                the shock of dust reaches both edges of the frame by ~250; fans of lit dust and
- *                grit up to half the frame high; rock, low debris, sparks
- *      40..150   four large pieces of rock enter through the bottom corners, close to the lens
- *                (gone by ~700)
+ *                the shock of dust reaches both edges of the frame by ~250; rock, low debris, sparks
  *     330..930   a digit starts every 200 ms: 310 ms grinding up through the rubble (three surges,
  *                two stalls), 90 ms hanging, 100 ms dropping
  *     830..1430  ... and each lands (the stone squashes for 2-3 frames, the camera drops ~9 px, a
@@ -55,8 +53,8 @@
  *    3000, 4350, 5250   heartbeat (lub at the beat, dub 230 ms later): the camera drops 8, 9, 10 px,
  *                the lockup swells 0.9 .. 1.2 %
  *    3500, 7000, 9100   a glint crosses the letters (900 ms each; the year 140 ms after the title)
- *    6000        SECOND SMASH: a burst of green-white light around the crater (no white frame),
- *                shock dust, fans of grit, rock; the letters are thrown up (each a little apart) ...
+ *    6000        SECOND SMASH: a burst of green-white light around the crater, behind the letters
+ *                (no white frame), shock dust, rock; the letters are thrown up (each a little apart) ...
  *    6380        ... the year crashes back (camera, rubble kicked up, dust, chips), the title 25 ms
  *                later; each letter cracks from its foot to its head in 90 ms
  *    7550, 8750, 9750, 10450   heartbeat, harder each time (camera 11, 12, 13, 14 px; the lockup
@@ -64,9 +62,10 @@
  *   10000..11000 the ground trembles, more and more
  *   11000        FINAL POUND: a burst of light, the cracks blaze (90 ms) ...
  *   11090        ... the letters break along their cracks into thick pieces; their light dies in
- *                ~0.17 s; they come down on the rubble (rumbles at ~11420 and ~11610), bounce,
- *                topple flat (all down by ~12100)
- *   11720..12120 the heap gives way, rock by rock, from its ends inward, in dust
+ *                ~0.17 s; they come down on the heap (rumbles at ~11420 and ~11610) and tip over
+ *                onto their sides (all lying by ~11800)
+ *   11720..12120 the heap gives way, rock by rock, from its ends inward, in dust, and the pieces
+ *                lying on it go with it
  *   12120        the last of it settles: a low thud (camera 15 px), a last flare of the pit ...
  *   12300        ... and light and dust have died to nothing (180 ms): nothing is drawn from here
  *   12500        end
@@ -94,7 +93,8 @@
  * surface, the letters' lights), drawn back to front over a dark bed where they lie close; rock
  * sprites are the same rocks at 16 angles. Dust is never a round billow: it is wide, low, streaky
  * sheets (dense and dark at the ground, torn into wisps above, green from below near the crater)
- * that are thrown out and roll along the ground, and narrow fans of streaks shot up out of the pit.
+ * that are thrown out and roll along the ground (behind the heap, and before it); they end unevenly
+ * at the ground, never along a level line.
  * The photographs are decoded off the main thread when the file loads and read into arrays once;
  * if a picture must be made before that, relief from noise stands in (and the scene is remade).
  *
@@ -122,14 +122,14 @@
  * grit and embers.
  *
  * Sound: one env.cue('plan', {...}, 0) at create() carries every moment (ms, x 0..1): impact (t,
- * knock: when the camera is hit), lens[] (the large rocks close to the lens: t, x, dir), digits[]
+ * knock: when the camera is hit), lens[] (empty: no rock close to the lens in this cut), digits[]
  * (rise, hang, land), words[] (land, punch, letters), accent (the hero hit), beats[] (t, dub,
  * strength 1 .. 2.15), sweeps[] (t, dur: the glints), smash (t, knock, hopLand: the year lands,
  * titleLand: the title lands, cracks[]: per letter t and dur of its cracking), tremble (t, until),
  * exit (t, knock, blaze, burst, shatters[], pieceLands[]: the two rumbles of pieces coming down,
  * crumble .. crumbleEnd: the heap giving way, thud: the last settle, dark: every light gone),
- * rockLands[], debris[] (rock thrown low past the lens: t, x, dir), jets[] (the fans of grit: at the
- * three great blows), flybys[] (empty), dust[] (dust kicked up: t, x, power), shockwaves[] (the dust
+ * rockLands[], debris[] (rock thrown low past the lens: t, x, dir), jets[] (empty: no fans of grit in
+ * this cut), flybys[] (empty), dust[] (dust kicked up: t, x, power), shockwaves[] (the dust
  * front along the ground: t, dur), fissures (t, dur: the berm coming up), cool, lastPulse (= thud),
  * gone, duration.
  */
@@ -634,6 +634,7 @@
     const ox = Math.floor(g.x0) - P;
     const gw = Math.ceil(g.x1 - g.x0) + 2 * P + 1;
     const gh = Math.ceil(size * 1.12) + 2 * P;
+    let holeD = null, holeR = 0;                      // how far a pixel is from a counter (a hole of the letter), and how much wider those were cut
     const oy = Math.round(g.cy - gh / 2);
     const n = gw * gh;
     const cv = mk(gw, gh);
@@ -793,6 +794,7 @@
         if (any > 12) {
           const dc = yield* distInside(m, gw, gh);
           const rc = size * (chr === 'D' ? 0.034 : chr === 'O' || chr === '0' ? 0.02 : 0.014);
+          holeD = dc; holeR = rc;
           for (let i = 0; i < n; i++) if (A[i] > 0 && m[i] && dc[i] < rc + 1) A[i] *= clamp(dc[i] - rc + 0.5, 0, 1);
         }
       }
@@ -961,21 +963,33 @@
         const sk = size / 300;
         lines.forEach((ln, li) => {
           const m = ln.pts.length;
+          // the walk goes from pixel to pixel (eight ways): the line itself is that path smoothed, with a slight
+          // waver of its own, and is drawn at those places between the pixels (no stair steps, no ruled runs)
+          const sxs = new Float32Array(m), sys = new Float32Array(m);
+          for (let q = 0; q < m; q++) {
+            const hw = Math.min(2, q, m - 1 - q);
+            let ax = 0, ay = 0;
+            for (let d = -hw; d <= hw; d++) { const j = ln.pts[q + d]; ax += j % gw; ay += (j / gw) | 0; }
+            const wob = hw / 2 * 2.4 * Math.max(0.6, sk), o1 = ord[ln.pts[q]] / Math.max(0.6, sk);
+            sxs[q] = ax / (2 * hw + 1) + (ns(o1 * 0.05 + 7, 3.5) * 0.7 + ns(o1 * 0.17 + 30, 5.5) * 0.3 - 0.5) * wob;
+            sys[q] = ay / (2 * hw + 1) + (ns(o1 * 0.05 + 60, 9.5) * 0.7 + ns(o1 * 0.17 + 90, 1.5) * 0.3 - 0.5) * wob;
+          }
           for (let q = 0; q < m; q++) {
             const i = ln.pts[q];
-            const x = i % gw, y = (i / gw) | 0;
+            const fx = sxs[q], fy = sys[q];
+            const x = Math.round(fx), y = Math.round(fy);
             const s = ord[i] / ordMax;
             const along = ln.cuts ? 1 : smooth(1, 0.35, (q + 1) / m);                         // a twig dies out
             const wv = 0.55 + 0.9 * ns(ord[i] * 0.045 / sk + li * 31, li * 17 + 5);
             const rad = (0.55 + (2.3 * sk + 0.5) * Math.pow(1 - s, 1.4) * (flow[i] > 1 ? 1.2 : 1)) * wv * along + (ln.cuts ? 0 : -0.2);
             if (rad <= 0.1) continue;
             const bri = smooth(0.34, 0.6, ns(ord[i] * 0.03 / sk + 90 + li * 13, li * 7 + 40)) * (0.45 + 0.55 * Math.pow(1 - s, 0.8)) * along;
-            const rr2 = Math.ceil(rad + 1);
+            const rr2 = Math.ceil(rad + 1.5);
             for (let dy = -rr2; dy <= rr2; dy++) for (let dx = -rr2; dx <= rr2; dx++) {
               const X = x + dx, Y = y + dy;
               if (X < 0 || Y < 0 || X >= gw || Y >= gh) continue;
               const j = Y * gw + X;
-              const d = Math.hypot(dx, dy);
+              const d = Math.hypot(X - fx, Y - fy);
               const v = clamp(rad - d + 0.6, 0, 1);
               if (v > major[j]) major[j] = v;
               const c = clamp(1 - d / (0.4 * rad + 0.55), 0, 1) * bri;
@@ -1204,7 +1218,9 @@
             const lit = 0.34 * ao + 1.62 * kd * (0.3 + 0.7 * ao);
             const fill = Math.max(0, by * 0.8 + ny * 0.25 - 0.05) * ao;                     // what faces down takes the crater's green
             // a cool key from above and behind: it catches the chamfer along the top of every stroke (the stone stands off a dark film)
-            const rimT = clamp(-by * 0.95 - 0.08, 0, 1) * (1 - smooth(BW[i] * 0.9 + 0.6, BW[i] * 1.5 + 2.2, Dm[i])) * (0.55 + 0.45 * ao) * (0.7 + 0.3 * smooth(0.3, 0.6, ns(X * 0.13 + 20, Y * 0.13)));
+            // (thin, and broken: it is there on this stretch of an edge and gone on the next; never round a counter)
+            const rimG = smooth(0.4, 0.62, ns(X * 0.045 + 20, Y * 0.045) * 0.7 + ns(X * 0.16 + 3, Y * 0.16 + 50) * 0.3) * (holeD ? smooth(holeR + BW[i] + 1.5, holeR + BW[i] + 4, holeD[i]) : 1);
+            const rimT = clamp(-by * 0.95 - 0.08, 0, 1) * (1 - smooth(BW[i] * 0.5 + 0.4, BW[i] * 0.95 + 1.3, Dm[i])) * (0.55 + 0.45 * ao) * rimG;
             const rough = T.rough ? tx(T.rough, T, (x + ox) * tca - (y + oy) * tsa + tu0, (x + ox) * tsa + (y + oy) * tca + tv0) / 255 : 0.6;
             const sp = Math.pow(Math.max(0, nx * HALF[0] + ny * HALF[1] + nz * HALF[2]), 46) * 0.14 * ao * (1.5 - rough);
             const edg = clamp(wear * 2.4 - 0.3, 0, 1) * (0.1 + 0.9 * kd) * smooth(0.3, 0.6, ns(X * 0.21 + 200, Y * 0.21));
@@ -1225,19 +1241,20 @@
               const rimH = (1 - smooth(BW[i] * 0.4, BW[i] * 1.0 + 1.2, Dm[i])) * smooth(0.5, 0.66, n1 * 0.6 + ns(X * 0.07 + 5, Y * 0.07 + 80) * 0.4);
               const near = Math.min(1, crW[i] * 3.2);
               const hz = smooth(0.4, 0.6, ns(X * 0.3 + 77, Y * 0.3 + 5));              // where the stone is still hot through
-              const rd1 = 1 - Math.abs(2 * ns(X * 1.1 + 300, Y * 1.1 + 21) - 1), rd2 = 1 - Math.abs(2 * ns(X * 2.4 + 11, Y * 2.4 + 310) - 1);
-              const web = Math.max(smooth(0.88, 0.98, rd1), 0.5 * smooth(0.9, 0.985, rd2)) * hz;                 // the crust is broken into plates
+              const rd1 = 1 - Math.abs(2 * ns(X * 1.1 + 300, Y * 1.1 + 21) - 1);
+              const web = smooth(0.915, 0.985, rd1) * hz * smooth(0.3, 0.55, n1);                                // the crust is broken into a few plates (in places)
               const line = Math.min(1, thin[i] * 2.2 + smooth(0.25, 0.8, cr[i]) * 0.6 * hz + web);
-              const seep = Math.max(Math.pow(near, 1.5) * 0.5 * smooth(0.25, 0.65, n2), 0.24 * smooth(0.55, 0.95, rd1) * hz);
+              const seep = Math.max(Math.pow(near, 1.5) * 0.5 * smooth(0.25, 0.65, n2), 0.12 * smooth(0.6, 0.95, rd1) * hz);
               const e2 = Math.max(line, seep);                                  // the cracks
               const e1 = Math.max(e2, rimH * (0.45 + 0.5 * n2));                 // ... and, in places, the edges
               const cm = (0.4 + 0.2 * n1) * (0.75 + 0.25 * ao);                  // the crust: the stone, darker
               for (let hI = 0; hI < 2; hI++) {
                 const e = hI ? e2 * 0.85 * smooth(0, size * 0.09, Dm[i]) : e1;
                 let hr, hg, hb2;
-                if (e < 0.35) { const u = e / 0.35; hr = 34 * u * u; hg = 92 * u; hb2 = 30 * u * u; }
-                else if (e < 0.7) { const u = (e - 0.35) / 0.35; hr = lerp(34, 186, u); hg = lerp(92, 222, u); hb2 = lerp(30, 84, u); }
-                else { const u = Math.min(1, (e - 0.7) / 0.3); hr = lerp(186, 255, u); hg = lerp(222, 255, u); hb2 = lerp(84, 206, u); }
+                // (a dim green where it only seeps, a pale yellow where it shows, near white in the core: never lime)
+                if (e < 0.35) { const u = e / 0.35; hr = 40 * u * u; hg = 78 * u; hb2 = 30 * u * u; }
+                else if (e < 0.7) { const u = (e - 0.35) / 0.35; hr = lerp(40, 222, u); hg = lerp(78, 228, u); hb2 = lerp(30, 132, u); }
+                else { const u = Math.min(1, (e - 0.7) / 0.3); hr = lerp(222, 255, u); hg = lerp(228, 255, u); hb2 = lerp(132, 228, u); }
                 const dst = hI ? hot2 : hot;
                 const km = hI ? Math.min(1, cm * 1.5) : cm;
                 dst[o] = r * km * (1 - 0.6 * e) + hr; dst[o + 1] = gg * km * (1 - 0.6 * e) + hg; dst[o + 2] = bb * km * (1 - 0.6 * e) + hb2;
@@ -1457,7 +1474,7 @@
 
   /**
    * Dust as it lies and runs along the ground: a wide, low, streaky sheet. Dense and dark at its
-   * base, torn into wisps at the top, long tapering ends; lit from the upper left and shadowed by
+   * base, torn into wisps at the top, long tapering ends, an uneven soft foot; lit from the upper left and shadowed by
    * itself, green from below near the crater. (Never a round billow: nothing here hangs in the air.)
    */
   function* sheetPixels(w, h, seed, green) {
@@ -1476,7 +1493,9 @@
         const body = smooth(top, top + 0.55, v);
         const wisp = Math.pow(ns(fx * 1.4 + 77 + wx, fy * 4.5 + wy * 2), 2.4) * smooth(top - 0.3, top + 0.25, v) * (1 - 0.6 * body);
         const d = body * clamp((n - 0.36 + 0.12 * body) * 4.2, 0, 1.15) + wisp * 0.7 * clamp((n - 0.3) * 4, 0, 1);
-        den[y * w + x] = clamp(d, 0, 1) * smooth(1, 0.82, v) * smooth(1, 0.25, Math.abs(u));
+        // it ends unevenly and softly at the ground (never along a level line), and inside its picture
+        const bot = 0.5 + 0.26 * ns(fx * 0.45 + 21, oy + 11) + 0.08 * (ns(fx * 2.1 + 5, oy + 2) - 0.5);
+        den[y * w + x] = clamp(d, 0, 1) * smooth(bot + 0.2, bot, v) * smooth(1, 0.93, v) * smooth(1, 0.25, Math.abs(u));
       }
       if ((y & 7) === 7) yield;
     }
@@ -1500,37 +1519,6 @@
         px[o + 1] = 46 + 121 * lit + 22 * under;
         px[o + 2] = 40 + 104 * lit - 3 * under;
         px[o + 3] = Math.min(0.8, Math.pow(d, 0.9) * 1.2) * 255;
-      }
-      if ((y & 7) === 7) yield;
-    }
-    return { px: px, w: w, h: h };
-  }
-
-  /**
-   * Dust and grit thrown up out of the pit by a blow: a narrow fan of streaks from a point (the
-   * bottom middle of the picture), thinning toward its tips. Drawn turned and drawn out by its flight.
-   */
-  function* jetPixels(w, h, seed) {
-    const R = mulberry(seed);
-    const ox = R() * 300, oy = R() * 300;
-    const px = new Uint8ClampedArray(w * h * 4);
-    for (let y = 0; y < h; y++) {
-      const v = 1 - (y + 0.5) / h;                            // 0 at the pit, 1 at the tips
-      const hw = 0.08 + 0.92 * Math.pow(v, 0.8);
-      for (let x = 0; x < w; x++) {
-        const uu = ((x + 0.5) / w * 2 - 1) / hw;
-        if (uu <= -1 || uu >= 1) continue;
-        const st = ns(uu * 46 + ox, v * 14 + oy) * 0.6 + ns(uu * 120 + ox, v * 30 + oy + 40) * 0.4;       // streaks along the throw
-        const gr = ns(x * 2.2 + ox, y * 0.5 + oy);
-        const d = clamp((st - 0.36 - 0.14 * v) * 5, 0, 1) * Math.pow(1 - uu * uu, 0.6) * smooth(1, 0.55, v) * smooth(0, 0.04, v) * (0.55 + 0.7 * gr);
-        if (d <= 0.004) continue;
-        const lit = 0.3 + 0.7 * ns(uu * 70 + ox + 9, v * 40 + oy);
-        const under = Math.pow(1 - v, 2.2);                    // the pit lights it from below: shafts of lit dust
-        const o = (y * w + x) * 4;
-        px[o] = 40 + 96 * lit - 8 * under;
-        px[o + 1] = 38 + 92 * lit + 78 * under;
-        px[o + 2] = 33 + 78 * lit + 12 * under;
-        px[o + 3] = Math.min(0.9, d * 1.3) * 255;
       }
       if ((y & 7) === 7) yield;
     }
@@ -1565,7 +1553,7 @@
     yield;
     out.bs = 1;
     out.boulders = [];                                 // (no rock crosses the lens in this cut)
-    // dust: 3 sheets along the ground in two lights (plain, and green from the crater), and 2 jets
+    // dust: 3 sheets along the ground in two lights (plain, and green from the crater)
     const dh = Math.max(40, Math.round(150 * S)), dw = Math.round(dh * 5.2);
     out.sheets = [];
     for (let k = 0; k < 3; k++) {
@@ -1576,13 +1564,6 @@
         yield;
       }
       out.sheets.push(pair);
-    }
-    out.jets = [];
-    out.jw = Math.max(30, Math.round(110 * S)); out.jh = Math.max(80, Math.round(300 * S));
-    for (let k = 0; k < 2; k++) {
-      const p = yield* jetPixels(out.jw, out.jh, 1500 + k * 91);
-      out.jets.push(toCanvas(p.px, p.w, p.h));
-      yield;
     }
     // a spark: a thin streak, sharp at the front, tapering away behind (drawn along its flight); no head
     {
@@ -1651,9 +1632,10 @@
    * angular outline, the photograph of basalt for its surface, lit by the letters' lights; the
    * crater's light only as an underlight on its down-turned facets), drawn from the back to the
    * front. Under the letters (and a quarter of a letter's height to either side) the pile is low:
-   * nothing stands above their feet, so nothing can read as a point between two digits. Beyond, at
-   * the shoulders, it is heaped up with a few large chunks, and thins out to single stones that lie
-   * on the ground. Between the pieces lies a dark bed of dust, and there the crater's light leaks up
+   * nothing stands above their feet, so nothing can read as a point between two digits; its top is
+   * uneven (up to the feet here, lower there). Beyond, at the shoulders, it is heaped up, chunk on
+   * chunk, and thins out to single stones that lie on the ground. Under all of it lies a soft dark
+   * bed of dust (the pile's contact shadow); between the pieces dark dust, and there the crater's light leaks up
    * (that light is a picture of its own: it pulses). Gives the part behind the letters and the part
    * in front of their feet (which hides where a digit comes up through it), the light of each, the
    * bed alone, and every rock as its own picture (they are thrown up one by one, and go one by one).
@@ -1664,12 +1646,14 @@
     const ext = Math.max(30 * S, Math.min(W * 0.17, Math.max(120 * S, span * 0.3), (0.95 * W - span) / 2));
     const mid = (x0h + x1h) / 2;
     const X0 = Math.max(0, Math.floor(x0h - ext - 50 * S)), X1 = Math.min(W, Math.ceil(x1h + ext + 50 * S));
-    const Yt = Math.max(0, Math.floor(gy - 130 * S)), Yb = Math.min(H, Math.ceil(gy + 90 * S));
+    const Yt = Math.max(0, Math.floor(gy - 130 * S)), Yb = Math.min(H, Math.ceil(gy + 128 * S));
     const pw = Math.max(1, X1 - X0), ph = Math.max(1, Yb - Yt);
     const keep = span / 2 + em * 0.27;                    // inside this, nothing rises above the feet
     const rocks = [];
-    const add = (x, y, rad, front, out) => rocks.push({ x: x, y: y, rad: Math.max(5 * S, rad), front: front, out: out,
-      seed: (R() * 1e6) | 0, ang: R() * TAU, flat: R() < 0.45, dn: clamp(Math.abs(x - mid) / (span / 2 + ext), 0, 1), j: R() });
+    // (inside the letters' span the top of the pile is uneven: it comes up to their feet here, lies lower there)
+    const dip = (x) => 24 * S * Math.pow(ns(x * 0.017 / S + 3, 7.3), 1.3);
+    const add = (x, y, rad, front, out, chunky) => rocks.push({ x: x, y: y, rad: Math.max(5 * S, rad), front: front, out: out,
+      seed: (R() * 1e6) | 0, ang: R() * TAU, flat: R() < (chunky ? 0.12 : 0.45), dn: clamp(Math.abs(x - mid) / (span / 2 + ext), 0, 1), j: R() });
     // the front: rows of rubble before the feet (their tops level with the feet under the letters)
     const row = (yc, ys, r0, r1, thin) => {
       for (let x = x0h - ext; x < x1h + ext;) {
@@ -1678,7 +1662,7 @@
         const p = (1 - smooth(0.4, 1, out)) * (1 - smooth(0.4, 1, out)) * thin + (out > 0 ? 0.05 : 0);
         if (R() < p) {
           let y = yc * S + gy + (R() - 0.5) * ys * S;
-          if (Math.abs(x - mid) < keep + rad) y = Math.max(y, gy - 5 * S + rad * 0.8);
+          if (Math.abs(x - mid) < keep + rad) y = Math.max(y, gy - 5 * S + rad * 0.8 + dip(x));
           add(x + (R() - 0.5) * rad, y, rad, true, out);
         }
         x += rad * (0.8 + R() * 0.6) * (1 + 1.6 * smooth(0.35, 1, out));
@@ -1692,29 +1676,35 @@
         const out = clamp((d - span / 2) / ext, 0, 1);
         if (o2 < 0) {
           const rad = (14 + 22 * R()) * S;
-          add(x, gy - 5 * S + rad * (0.8 + 0.3 * R()), rad, false, out);
+          add(x, gy - 5 * S + dip(x) + rad * (0.8 + 0.3 * R()), rad, false, out);
           d += rad * (0.9 + R() * 0.7);
         } else {
           const hill = smooth(0, 26 * S, o2) * (1 - smooth(0.4, 1, out));           // the heap
-          const rad = (16 + 58 * hill * (0.45 + 0.55 * R())) * (1 - 0.45 * out) * S;
-          if (R() < 0.45 + 0.55 * hill) {
-            add(x + side * rad * 0.5, gy - rad * (0.12 + 0.3 * R()), rad, false, out);
-            if (hill > 0.45 && R() < 0.7) { const r2 = rad * (0.4 + 0.3 * R()); add(x + side * rad * (0.2 + 0.6 * R()), gy - rad * 0.75 - r2 * (0.3 + 0.3 * R()), r2, false, out); }
+          // (a heap of several chunks, one on another: never one slab)
+          const rad = (16 + 44 * hill * (0.45 + 0.55 * R())) * (1 - 0.45 * out) * S;
+          if (R() < 0.5 + 0.5 * hill) {
+            add(x + side * rad * 0.5, gy - rad * (0.12 + 0.3 * R()), rad, false, out, true);
+            if (hill > 0.3 && R() < 0.85) {
+              const r2 = rad * (0.5 + 0.3 * R()), y2 = gy - rad * 0.8 - r2 * (0.3 + 0.3 * R());
+              add(x + side * rad * (0.1 + 0.6 * R()), y2, r2, false, out, true);
+              if (hill > 0.6 && R() < 0.6) { const r3 = r2 * (0.5 + 0.3 * R()); add(x + side * rad * (0.2 + 0.4 * R()), y2 - r2 * 0.6 - r3 * 0.3, r3, false, out, true); }
+            }
           }
-          d += rad * (0.6 + R() * 0.6) * (1 + 1.2 * smooth(0.5, 1, out));
+          d += rad * (0.5 + R() * 0.5) * (1 + 1.2 * smooth(0.5, 1, out));
         }
       }
     }
     row(11, 7, 7, 20, 0.9);
     row(24, 6, 22, 50, 1);
     row(36, 14, 12, 40, 0.85);
-    row(50, 24, 5, 18, 0.3);
+    row(47, 12, 15, 36, 0.7);
+    row(62, 20, 5, 16, 0.4);
     rocks.sort((a, b) => (a.front - b.front) || (a.y - b.y));
     yield;
 
     // every rock, lit: the key from the upper left, and the crater's light from below on its down-turned facets
     const pics = [];
-    const cov = new Float32Array(pw * ph);
+    const cov = new Float32Array(pw * ph), covF = new Float32Array(pw * ph);
     for (const r of rocks) {
       const sz = Math.ceil(r.rad * 2) + 4;
       const near = Math.exp(-Math.pow((r.x - mid) / (span * 0.6), 2));
@@ -1723,13 +1713,21 @@
         : { tone: 0.8 + 0.3 * r.out, green: 1.5 * near, dark: 0.5, tk: 1 / S, light: true });
       r.sz = sz; r.px0 = Math.round(r.x - X0 - sz / 2); r.py0 = Math.round(r.y - Yt - sz / 2);
       pics.push(rk);
-      for (let y = 0; y < sz; y++) { const Y = y + r.py0; if (Y < 0 || Y >= ph) continue; for (let x = 0; x < sz; x++) { const X = x + r.px0; if (X < 0 || X >= pw) continue; const a = rk.px[(y * sz + x) * 4 + 3] / 255; if (a > cov[Y * pw + X]) cov[Y * pw + X] = a; } }
+      for (let y = 0; y < sz; y++) { const Y = y + r.py0; if (Y < 0 || Y >= ph) continue; for (let x = 0; x < sz; x++) { const X = x + r.px0; if (X < 0 || X >= pw) continue; const a = rk.px[(y * sz + x) * 4 + 3] / 255; if (a > cov[Y * pw + X]) cov[Y * pw + X] = a; if (r.front && a > covF[Y * pw + X]) covF[Y * pw + X] = a; } }
       yield;
     }
     const cb = yield* blurG(cov, pw, ph, Math.max(2, Math.round(7 * S)), 2);
     yield;
+    const cf = yield* blurG(covF, pw, ph, Math.max(2, Math.round(7 * S)), 2);         // (the rubble in front alone: only it has a bed before the feet)
+    yield;
+    const cw = yield* blurG(covF, pw, ph, Math.max(3, Math.round(16 * S)), 3);        // (wide: the shadow the rubble in front stands on)
+    yield;
+    const co = yield* blurG(cov, pw, ph, Math.max(3, Math.round(13 * S)), 3);         // (the pile as a whole: the bed thins away softly toward its outline)
+    yield;
 
-    // the bed between the rocks, where they lie close: dark dust, and the crater's light coming up through it
+    // the bed between the rocks, where they lie close: dark dust, and the crater's light coming up through it; and
+    // under the pile a soft dark bed of dust on the ground (its contact shadow: it falls off softly to every side)
+    const sdy = Math.round(15 * S);
     const sB = new Uint8ClampedArray(pw * ph * 4), sF = new Uint8ClampedArray(pw * ph * 4);
     const lB = new Float32Array(pw * ph * 3), lF = new Float32Array(pw * ph * 3);
     for (let y = 0; y < ph; y++) {
@@ -1739,22 +1737,32 @@
         const inner = 1 - smooth(span * 0.46, span * 0.5 + 30 * S, Math.abs(wx - mid));
         const edge = (ns(wx * 0.06 / S + 9, 3) - 0.5) * 14 * S;
         // in front of the feet the bed is whole under the letters (a digit comes up from behind it)
-        const forced = inner * smooth(gy + 3 * S + edge * 0.6, gy + 9 * S + edge * 0.6, wy) * (1 - smooth(gy + 34 * S + edge, gy + 46 * S + edge, wy));
-        const a = Math.max(smooth(0.6, 0.78, cb[i]) * (1 - smooth(gy + 36 * S, gy + 52 * S, wy)) * smooth(gy - 14 * S + edge, gy - 4 * S + edge, wy), forced * smooth(0.3, 0.55, cb[i]));
-        const shade = a <= 0.004 ? smooth(0.2, 0.7, cb[i]) * 0.42 * smooth(gy - 4 * S, gy + 8 * S, wy) * (1 - smooth(gy + 30 * S, gy + 50 * S, wy)) : 0;      // the pile stands on its own shadow
-        if (shade > 0.01) { const o = i * 4; sF[o] = 7; sF[o + 1] = 8; sF[o + 2] = 8; sF[o + 3] = shade * 255; continue; }
-        if (a <= 0.004) continue;
+        const forced = inner * smooth(gy + 1 * S + edge * 0.6, gy + 13 * S + edge * 0.6, wy) * (1 - smooth(gy + 30 * S + edge, gy + 50 * S + edge, wy));
+        const low = smooth(0.3, 0.8, co[i]) * smooth(gy - 36 * S, gy - 2 * S, wy);                 // (it lies low: it is on the ground)
+        const back = wy < gy + 3 * S + edge * 0.5;                          // (behind the letters above this line, before their feet below it)
+        // Behind: the bed of the whole pile (the rocks of the heap are put over it: it never hides one). In front of the
+        // feet: only the bed of the rubble that lies in front (so no rock behind is ever cut along this line).
+        const aB = smooth(0.45, 0.9, cb[i]) * low;
+        const aF = back ? 0 : Math.max(smooth(0.45, 0.9, cf[i]), forced * smooth(0.3, 0.55, cb[i])) * low;
+        const shade = 0.56 * smooth(0.06, 0.7, cw[Math.max(0, y - sdy) * pw + x]);                 // (no edge of its own: it is the blurred outline of the rocks)
+        if (shade > 0.008) { const o = i * 4; sF[o] = 7; sF[o + 1] = 8; sF[o + 2] = 8; sF[o + 3] = shade * 255; }
+        if (aB <= 0.004 && aF <= 0.004) continue;
         const l = tx(TB.lum, TB, wx * 2.2 / S, wy * 2.2 / S) / 255;
         const dust = 0.5 + 0.9 * ns(wx * 0.11 / S + 40, wy * 0.3 / S);
         const glow = Math.exp(-Math.pow((wx - mid) / (span * 0.55), 2)) * Math.exp(-Math.pow((wy - gy - 4 * S) / (30 * S), 2));
-        const dst = wy < gy ? sB : sF, lt = wy < gy ? lB : lF;
-        const o = i * 4;
         const v = (10 + 40 * l) * (0.55 + 0.45 * dust) * (1 - 0.5 * glow);
-        dst[o] = v * 1.02 + 2 * glow; dst[o + 1] = v + 9 * glow; dst[o + 2] = v * 0.9 + 4 * glow; dst[o + 3] = a * 255;
-        // the light comes up in veins between the rocks, never as a sheet or a pool
         const fis = smooth(0.52, 0.8, glow * (0.3 + 1.3 * ns(wx * 0.9 / S + 70, wy * 2.4 / S + 5)));
-        const fk = a * 0.55;
-        lt[i * 3] = (6 * glow + 70 * fis * fis) * fk; lt[i * 3 + 1] = (26 * glow + 190 * fis) * fk; lt[i * 3 + 2] = (10 * glow + 64 * fis * fis) * fk;
+        for (let pass = 0; pass < 2; pass++) {
+          const a = pass ? aF : aB;
+          if (a <= 0.004) continue;
+          const dst = pass ? sF : sB, lt = pass ? lF : lB;
+          const o = i * 4;
+          const sa = dst[o + 3] / 255 * (1 - a), oa = a + sa;                                      // (over the shadow)
+          dst[o] = ((v * 1.02 + 2 * glow) * a + 7 * sa) / oa; dst[o + 1] = ((v + 9 * glow) * a + 8 * sa) / oa; dst[o + 2] = ((v * 0.9 + 4 * glow) * a + 8 * sa) / oa; dst[o + 3] = oa * 255;
+          // the light comes up in veins between the rocks, never as a sheet or a pool
+          const fk = a * 0.55;
+          lt[i * 3] = (6 * glow + 70 * fis * fis) * fk; lt[i * 3 + 1] = (26 * glow + 190 * fis) * fk; lt[i * 3 + 2] = (10 * glow + 64 * fis * fis) * fk;
+        }
       }
       if ((y & 3) === 3) yield;
     }
@@ -1781,7 +1789,7 @@
     return { x: X0, y: Yt, w: pw, h: ph, back: back, front: fr, lightB: lb, lightF: lf, bedB: bedB, bedF: bedF, rocks: list, keep: keep, mid: mid };
   }
 
-  /** Light in the air, made once: the glow of the pit with rays fanning up from it (one picture), and a lens streak. */
+  /** Light in the air, made once: the glow that hangs in the dust over the pit (one picture; no rays, no streak). */
   function* makeLights(W, H, Rc, S) {
     const out = {};
     const w = Math.ceil(Math.min(Rc * 2.3, W)), h = Math.ceil(Math.min(Rc * 1.2, H * 0.6));
@@ -1791,7 +1799,6 @@
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const dx = (x + 0.5 - w / 2) / (w / 2), dy = (by - y - 0.5) / by;
-        const rr = Math.hypot(dx * 1.15, dy);
         // a wide, low glow that hangs in the dust over the crater (wide: it is as strong in every gap between the
         // letters, never a pool in one of them), torn by the dust it lights; no rays
         const px2 = Math.sign(dx) * Math.max(0, Math.abs(dx) - 0.42) / 0.58;      // level across the middle
@@ -1799,7 +1806,6 @@
         const dustN = 0.62 + 0.76 * ns(x * 0.55 / S + 40, y * 2.2 / S + 9);
         const c = Math.pow(Math.max(0, 1 - d), 2.3) * dustN;
         const hot = Math.pow(Math.max(0, 1 - Math.hypot(px2 * 1.25, dy * (dy < 0 ? 9 : 4.2))), 2.4) * dustN;
-        void rr;
         putLight(px, (y * w + x) * 4, 24 * c + 40 * hot, 135 * c + 88 * hot, 52 * c + 38 * hot, 2.5);
       }
       if ((y & 1) === 1) yield;
@@ -1808,16 +1814,6 @@
     out.air = toCanvas(px, w, h);
     yield;
     out.airY = by;
-    {
-      const w2 = Math.ceil(W * 0.5), h2 = Math.max(8, Math.ceil(34 * S));
-      const p2 = new Uint8ClampedArray(w2 * h2 * 4);
-      for (let y = 0; y < h2; y++) for (let x = 0; x < w2; x++) {
-        const u = (x + 0.5) / w2 * 2 - 1, v = (y + 0.5) / h2 * 2 - 1;
-        const c = Math.pow(Math.max(0, 1 - Math.abs(u)), 2.6) * Math.exp(-v * v * 9) + Math.pow(Math.max(0, 1 - Math.abs(u) * 3), 2) * Math.exp(-v * v * 2.5) * 0.5;
-        putLight(p2, (y * w2 + x) * 4, 150 * c, 255 * c, 190 * c);
-      }
-      out.streak = toCanvas(p2, w2, h2);
-    }
     return out;
   }
 
@@ -1925,9 +1921,7 @@
     const thumps = [];      // [t, strength]: the light of the pit and of the cracks flares
     const pulses = [];      // [t, amount]: the whole lockup swells for a moment (a heartbeat)
     const tremors = [];     // [t, px]: the berm shudders
-    const streaks = [];     // { t, dur, x, y, w, a }
     const puffs = [];       // dust: sheets along the ground
-    const jets = [];        // dust and grit thrown up out of the pit
     const rocks = [];       // thrown rock
     const sparks = [];      // hot grit
     const chips = [];       // cold grit falling off the stone
@@ -1968,20 +1962,10 @@
         const front = (i >> 1) % 2 === 1;
         sheet(t + R() * 16, cx + dir * Rc * 0.1, dir * reach * (0.16 + 0.84 * k), {
           life: (1200 + R() * 900) * (0.7 + 0.3 * power), y: front ? gy + (50 + R() * 60) * S * hk : gy + (4 + R() * 12) * S, tau: 55 + 40 * k + R() * 16, drift: dir * (60 + R() * 70 + (front ? 60 : 0)) * S, lift: (6 + R() * 12) * S,
-          a: (front ? 0.5 : 0.7) * power * (0.8 + R() * 0.2), z: (front ? 0 : (i >> 1) % 3 === 0 ? 0 : 1) + (hk < 0.75 ? 1 : 0), green: k < 0.45, front: front
+          a: (front ? (t < 1 ? 0.34 : 0.5) : 0.7) * power * (0.8 + R() * 0.2), z: (front ? 0 : (i >> 1) % 3 === 0 ? 0 : 1) + (hk < 0.75 ? 1 : 0), green: k < 0.45, front: front
         });
       }
       shocks.push({ t: t, dur: 260 });
-    }
-    /** Dust and grit thrown up out of the pit: fans of streaks that shoot up, hang for an instant and fall back. */
-    function dustJets(t, n, power) {
-      for (let i = 0; i < n; i++) {
-        const a = ((i + 0.5) / n - 0.5) * 2.1 + (R() - 0.5) * 0.25;
-        jets.push({
-          t: t + R() * 30, life: 420 + R() * 300, x: cx + Math.sin(a) * Rc * 0.5 + (R() - 0.5) * Rc * 0.3, y: gy + 6 * S, ang: a,
-          len: H * (0.26 + 0.26 * R()) * power * (1 - 0.3 * Math.abs(a)), wd: (110 + R() * 90) * S * power, a: 0.85 + R() * 0.15, sp: i % 2
-        });
-      }
     }
     function rock(t0, x, y, vx, vy, size, front, near) {
       // Rock thrown up behind the letters comes down behind the rubble in front of them (it is not seen again); rock
@@ -2032,27 +2016,22 @@
     }
 
     const BURST0 = EXIT + BLAZE;
+    const skip = (n) => { for (let i = 0; i < n; i++) R(); };      // (what was cut from this scene drew this many random numbers: the rest stays as it was)
     /* ---- what happens when ---- */
     // The impact: the frame is white for two frames; the knock lands as it clears (frames 3 to 8).
     hit(KNOCK, 46, 150, 0.85);
     flashes.push([0, 1, 2]);
     thumps.push([0, 1.6]);
-    streaks.push({ t: 0, dur: 300, x: cx, y: gy, w: W * 1.2, a: 0.6 });
     dustFront(0, W * 0.5 + 60 * S, 14, 1);
     dustBurst(60, cx, gy, 1.5, 8, W * 0.3, 3200, true);
-    dustJets(0, 8, 1);
+    skip(56);
     rockBurst(0, cx, gy, 30, 1, 2.3);
     rockBurst(0, cx, gy, 12, 1.5, 1.5);
     debris(0, 16, 1);
     // the foot of the berm comes up out of dust
     for (let i = 0; i < 4; i++) sheet(10 + i * 30, cx + (i - 1.5) * Rc * 0.5, (i - 1.5) * Rc * 0.2, { life: 700 + R() * 300, y: gy + (62 + R() * 16) * S * hk, tau: 120, drift: (i - 1.5) * 40 * S, lift: 6 * S, a: 0.8, z: hk < 0.75 ? 2 : 1, green: true, front: true });
     sparkBurst(0, cx, gy, 34, 1, Rc * 1.2, false);
-    // near the lens: a few large pieces of rock, sharp and dark, come up through the bottom corners and are gone
-    const lens = [];
-    [[-1, 0.2, 40, 400, 0], [1, 0.16, 75, 330, 1], [-1, 0.33, 120, 210, 2], [1, 0.31, 150, 180, 3]].forEach((q, i) => {
-      const sz = q[3] * U;
-      lens.push({ t: q[2], sp: q[4], size: sz, x: cx + q[0] * (W * 0.5 - W * q[1]), y: H + sz * 0.42, vx: q[0] * (520 + R() * 380) * U, vy: -(1050 + R() * 330) * U, g: GRAV * 1.25, rot: 0, rv: 0 });
-    });
+    skip(8);
     // The digits.
     digits.forEach((g, i) => {
       const t = landAt[i];
@@ -2122,9 +2101,8 @@
     hit(SMASH + 17, 28, 150, 0.75);
     flashes.push([SMASH, 0.95, 0]);
     thumps.push([SMASH, 1.6]);
-    streaks.push({ t: SMASH, dur: 260, x: cx, y: gy, w: W * 1.3, a: 0.5 });
     dustFront(SMASH, W * 0.5, 10, 0.85);
-    dustJets(SMASH, 4, 0.75);
+    skip(28);
     rockBurst(SMASH, cx, gy, 20, 0.95, 2.2);
     debris(SMASH, 8, 0.8);
     sparkBurst(SMASH, cx, gy, 26, 0.95, Rc * 1.3, false);
@@ -2140,10 +2118,9 @@
     hit(EXIT + 17, 30, 160, 0.75);
     flashes.push([EXIT, 1, 0]);
     thumps.push([EXIT, 1.8]);
-    streaks.push({ t: EXIT, dur: 260, x: cx, y: gy, w: W * 1.3, a: 0.5 });
     hit(EXIT + BLAZE, 12, 110, 0.5);
     dustFront(EXIT, W * 0.5, 8, 0.9);
-    dustJets(EXIT, 4, 0.8);
+    skip(28);
     dustBurst(EXIT + BLAZE, cx, gy, 1, 4, W * 0.3, 1100, true);
     rockBurst(EXIT, cx, gy, 12, 0.9, 2.2);
     sparkBurst(EXIT, cx, gy, 28, 1, Rc * 1.4, false);
@@ -2172,7 +2149,7 @@
       const dir = i % 2 ? 1 : -1;
       amb.push({
         dir: dir, x0: (0.1 + R() * 0.5) * Rc, span: (front ? 1.7 : 1.1) * Rc * (0.8 + R() * 0.4), per: (front ? 3000 : 4200) * (0.8 + R() * 0.4), ph: (i * 0.29 + R() * 0.1) % 1,
-        y: front ? gy + (48 + R() * 30) * S * hk : gy + (4 + R() * 16) * S * hk, a: front ? 0.5 + R() * 0.15 : 0.7 + R() * 0.25, sp: i % 3, z: (front ? 2 : (i % 4 === 0 ? 0 : 1)) + (hk < 0.75 ? 1 : 0), green: !front && i % 2 === 0, front: front
+        y: front ? gy + (48 + R() * 30) * S * hk : gy + (4 + R() * 16) * S * hk, a: front ? 0 * R() : 0.7 + R() * 0.25 /* (none rolls in front of the rubble: a sheet there reads as a level bar across the rock) */, sp: i % 3, z: (front ? 2 : (i % 4 === 0 ? 0 : 1)) + (hk < 0.75 ? 1 : 0), green: !front && i % 2 === 0, front: front
       });
     }
     const embers = [];
@@ -2198,8 +2175,8 @@
       rubbleLands: [],
       flybys: [],
       debris: rocks.filter((r) => r.near).map((r) => ({ t: Math.round(r.t), x: X(r.x), dir: r.vx > 0 ? 1 : -1 })),
-      lens: lens.map((l) => ({ t: l.t, x: X(l.x), dir: l.vx > 0 ? 1 : -1 })),
-      jets: [0, SMASH, EXIT],
+      lens: [],
+      jets: [],
       tremble: { t: TREMBLE, until: EXIT },
       dust: dustCues,
       shockwaves: shocks,
@@ -2211,8 +2188,8 @@
       W: W, H: H, D: D, S: S, U: U, cx: cx, gy: gy, Rc: Rc, GRAV: GRAV, hasYear: hasYear, desc: desc,
       G: G, digits: digits, letters: letters, words: words, riseAt: riseAt, landAt: landAt, titleDone: titleDone,
       heroCy: heroCy, heroSize: heroSize, titleCy: titleCy, titleSize: titleSize, hx0: hx0, hx1: hx1,
-      hits: hits, flashes: flashes, blooms: blooms, thumps: thumps, pulses: pulses, tremors: tremors, streaks: streaks, puffs: puffs, jets: jets, rocks: rocks, sparks: sparks, chips: chips,
-      boulders: boulders, breach: breach, lens: lens, hk: hk, embers: embers, amb: amb, plan: plan, seed: ((sig * 4294967296) >>> 0)
+      hits: hits, flashes: flashes, blooms: blooms, thumps: thumps, pulses: pulses, tremors: tremors, puffs: puffs, rocks: rocks, sparks: sparks, chips: chips,
+      boulders: boulders, breach: breach, hk: hk, embers: embers, amb: amb, plan: plan, seed: ((sig * 4294967296) >>> 0)
     };
   }
 
@@ -2245,9 +2222,9 @@
     P.real = TEX.real;
     yield;
     P.lights = yield* makeLights(W, H, sim.Rc, S);
-    [P.lights.air, P.lights.streak].forEach(touch);
+    touch(P.lights.air);
     P.sp = yield* makeSprites(S);
-    // dust sheets at three sizes (always drawn exactly as a picture is, never scaled), and the jets
+    // dust sheets at three sizes (always drawn exactly as a picture is, never scaled)
     P.sheet = [];
     for (const pair of P.sp.sheets) {
       const two = [];
@@ -2259,20 +2236,10 @@
       }
       P.sheet.push(two);
     }
-    P.sp.jets.forEach(touch);
     yield;
-    // near the lens: three large, sharp pieces of dark rock (seen from their shadow side: the crater is behind them)
-    P.lens = [];
-    for (let k = 0; k < 4; k++) {
-      const sz = Math.max(24, Math.round([400, 330, 210, 180][k] * U));
-      const px = (yield* rockPixels(sz, rockShape(4400 + k * 131, k === 1), k * 1.9, { tone: 0.5, green: 0.9, dark: 0.8, tk: 0.45 / S })).px;
-      const c = toCanvas(px, sz, sz);
-      touch(c);
-      P.lens.push({ c: c, sz: sz });
-      yield;
-    }
     // the burst of light at a great blow: green-white, falling off from the crater; the dust it shines through tears
-    // it into layers and shafts, so it is never a clean oval (half size, drawn doubled; dithered, so it never bands)
+    // it into layers, and it reaches further here and less there, so it is never a clean oval: no rays, no star
+    // (half size, drawn doubled; dithered, so it never bands). It is drawn behind the rock and the letters.
     {
       const bw = Math.ceil(W / 2), bh = Math.ceil(H * 0.84 / 2);
       const px = new Uint8ClampedArray(bw * bh * 4);
@@ -2280,14 +2247,12 @@
       for (let y = 0; y < bh; y++) {
         for (let x = 0; x < bw; x++) {
           const dx = (x + 0.5 - bw / 2) / (bw / 2), dy = (y + 0.5 - bh * 0.8) / (bh * 0.8);
-          const ang = Math.atan2(dx, -dy + 0.02);
-          const reach = 0.56 + 0.36 * ns(ang * 110 + 40, 7) + 0.14 * ns(ang * 420 + 9, 77);                  // it reaches further here, less there
+          const reach = 0.58 + 0.34 * ns(x * f * 0.0065 + 40, y * f * 0.009 + 7);                             // it reaches further here, less there
           const c0 = Math.max(0, 1 - Math.hypot(dx * 1.02, dy * (dy > 0 ? 4.6 : 1.04)) / reach);
           const lay = 0.5 + 0.8 * Math.pow(ns(x * f * 0.14 + 300, y * f * 1.5 + 50) * 0.65 + ns(x * f * 0.5 + 20, y * f * 3.4 + 9) * 0.35, 1.3);   // layers of dust across it
-          const shaft = 0.8 + 0.4 * ns(ang * 260 + 5, 30 + c0 * 14);
           const core = Math.pow(c0, 3.2);
           const win = smooth(0, 0.12, x / bw) * smooth(0, 0.12, 1 - x / bw) * smooth(0, 0.14, y / bh) * smooth(0, 0.05, 1 - y / bh);                 // (it ends inside its picture)
-          const c = Math.pow(c0, 1.45) * lerp(lay * shaft, 1, core) * win + (hash2(x, y, 5) - 0.5) * 0.006;
+          const c = Math.pow(c0, 1.45) * lerp(lay, 1, core) * win + (hash2(x, y, 5) - 0.5) * 0.006;
           if (c <= 0) continue;
           putLight(px, (y * bw + x) * 4, 236 * Math.pow(c, 1.35) + 90 * core, 318 * c + 40 * core, 246 * Math.pow(c, 1.22) + 80 * core, 1.2);
         }
@@ -2462,26 +2427,42 @@
         let dx = wx - cx, dy = wy - (gy + 60 * S);
         const dl = Math.hypot(dx, dy) || 1;
         dx /= dl; dy /= dl;
-        // Thrown low: heavy. It comes down on the rubble at the feet of the letters (its foot behind the row of rock
-        // in front), bounces once, lies for a moment and topples flat behind that row. A big piece does not turn in
-        // the air. Its blur is short and along the way it is really going when it is fast.
+        // Thrown low: heavy, turning slowly. It comes down on the rubble at the feet of the letters, inside the heap
+        // (its lowest corner behind the row of rock in front), and tips over until it lies on its side, bedding
+        // itself in; it goes when the rock under it goes. Its blur is short and along the way it is really going
+        // when it is fast.
+        const g = P.ground;
         const sp = (240 + RF() * 420) * U;
-        const vx = dx * sp * 0.85 + (RF() - 0.5) * 150 * U, vy = dy * sp * 0.3 - (40 + RF() * 130) * U;
-        const om = pc.w * pc.h > 0.05 * sim.heroSize * sim.heroSize ? 0 : (RF() - 0.5) * 1.3;
+        let vx = dx * sp * 0.85 + (RF() - 0.5) * 150 * U;
+        let vy = dy * sp * 0.3 - (40 + RF() * 130) * U;
+        const big = pc.w * pc.h > 0.05 * sim.heroSize * sim.heroSize;
+        const om = big ? 0 : (RF() - 0.5) * 2.8;                         // (a big piece does not turn in the air: it is put on whole pixels, a plain copy)
+        // (An upright piece of a letter of the title is half a letter. So that no row of them ever stands on the heap as
+        // a word, each is thrown up a little more or less (they come down one after another, not together) and goes
+        // over at once and fast when it lands.)
+        const lean = om === 0 && o.line === 0 && o.size < 0.7 * sim.heroSize && pc.h > pc.w * 0.8;
+        if (lean) vy -= RF() * 300 * U;
         const G2 = sim.GRAV * 1.3;
         const delay = RF() * 60;
-        const foot = pc.h - pc.my;
-        const yRest = gy + (10 + RF() * 16) * S * sim.hk - foot * 0.9;
-        const t1 = (-vy + Math.sqrt(vy * vy + 2 * G2 * Math.max(0, yRest - wy))) / G2;
-        const vy2 = -(vy + G2 * t1) * (0.15 + RF() * 0.1), t2 = 2 * -vy2 / G2;
-        const tip = Math.min(delay + (t1 + t2) * 1000 + 30 + RF() * 70, LAST - EXIT - BLAZE - 175 - RF() * 50);
+        const gyl = gy + (10 + RF() * 16) * S * sim.hk;                  // where its lowest corner comes to rest
+        const low = (a) => { const s = Math.sin(a), q = Math.cos(a); return Math.max(-s * pc.mx, s * (pc.w - pc.mx)) + Math.max(-q * pc.my, q * (pc.h - pc.my)); };
+        let t1 = 0;
+        while (t1 < 1.5 && wy + vy * t1 + 0.5 * G2 * t1 * t1 + low(om * t1) < gyl) t1 += 0.004;
+        const lim = g.keep + 0.3 * (g.w / 2 - g.keep);                   // it lands on the heap, never beside it
+        let lx = wx + vx * t1;
+        if (Math.abs(lx - g.mid) > lim) { lx = g.mid + Math.sign(lx - g.mid) * lim * (0.72 + 0.28 * RF()); vx = (lx - wx) / Math.max(0.05, t1); }
+        const out = Math.abs(lx - g.mid) / lim;
+        const dir = out > 0.55 ? -Math.sign(lx - g.mid) : (RF() < 0.75 ? (vx >= 0 ? 1 : -1) : (vx >= 0 ? -1 : 1));      // (at the ends of the heap it falls inward)
+        const a1 = om * t1;
+        const aT = pc.h > pc.w * 0.8 ? dir * (Math.PI / 2 + (RF() - 0.5) * 0.6) : dir * (0.12 + RF() * 0.3);
         const ts = Math.max(0, (11 * 120 * U - Math.abs(vy)) / G2), l = Math.hypot(vx, vy + G2 * ts) || 1, an = om * ts;
         const co = Math.cos(an), si = Math.sin(an);
         const d1 = [(vx * co + (vy + G2 * ts) * si) / l, (-vx * si + (vy + G2 * ts) * co) / l];
         const b1 = yield* smearPx(pc.px, pc.w, pc.h, d1[0] * 5 * U, d1[1] * 5 * U, 0);
         P.chunks.push({
           k: o.k, c: c, l: toCanvas(pc.lp, pc.w, pc.h), b1: b1, w: pc.w, h: pc.h, mx: pc.mx, my: pc.my, x: wx, y: wy,
-          vx: vx, vy: vy, om: om, delay: delay, yRest: yRest, t1: t1, t2: t2, vy2: vy2, tip: tip, lean: (RF() - 0.5) * 0.5
+          vx: vx, vy: vy, om: om, delay: delay, t1: t1, a1: a1, aT: aT, lx: lx, gyl: gyl, roll: dir * (pc.h > pc.w * 0.8 ? 0.3 * pc.h : 0.06 * pc.w), T: (150 + 170 * Math.sqrt(Math.max(pc.w, pc.h) / sim.heroSize) + RF() * 40) * (lean ? 0.55 : 1), lean: lean,
+          sink: Math.min((0.06 + 0.14 * RF()) * Math.min(pc.w, pc.h), 16 * S * sim.hk), dn: clamp((Math.abs(lx - g.mid) + 0.25 * Math.max(pc.w, pc.h)) / (g.w / 2), 0, 1), j: RF(), j2: RF()      /* (its outer end: it goes when the rock under that end goes) */
         });
         yield;
       }
@@ -2645,7 +2626,7 @@
      * The berm, behind the letters or in front of their feet. While it stands it is one picture. At the
      * impact every rock is thrown up out of the pit on its own arc (opaque from its first frame: it
      * grows and turns as it comes, it never fades in) over a bed of dust that gathers under it; at the
-     * end every rock tumbles forward and settles flat into the dust, from the ends of the heap inward.
+     * end every rock rolls over and drops away into the pit, from the ends of the heap inward.
      */
     function drawBerm(t, pit, front) {
       const g = P.ground;
@@ -2658,7 +2639,7 @@
       } else {
         const rising = t < REVEAL;
         const bed = front ? g.bedF : g.bedB;
-        const ba = rising ? smooth(20, 190, t) : 1 - smooth(CRUMBLE + SINK[0] * 0.35, LAST - 30, t);
+        const ba = rising ? smooth(210, REVEAL, t) : 1 - smooth(CRUMBLE - 140, CRUMBLE + 70, t);      // (the bed has gone before the first rock goes: it is never left alone)
         if (ba > 0.02) { ctx.globalAlpha = ba; ctx.drawImage(bed.c, X + bed.x, Y + bed.y); ctx.globalAlpha = 1; }
         const mxl = g.mid - g.x, pyl = gy - g.y + 10 * S * sim.hk, hs = S * sim.hk;
         for (let i = 0; i < g.rocks.length; i++) {
@@ -2684,11 +2665,12 @@
             const q = sinkQ(r.dn, r.j, r.j2, t);
             if (q >= 1) continue;
             if (q <= 0) { ctx.drawImage(r.c, X + r.x, Y + r.y); continue; }
-            const an = (r.j - 0.5) * 1.7 * q, ky = 1 - Math.pow(q, 1.4), kx = 1 - 0.25 * q;
-            const c = Math.cos(an), sn = Math.sin(an);
+            // it rolls over and drops away into the pit (it turns and gets smaller as a whole: never flattened)
+            const an = (r.j - 0.5) * 2.4 * q, k = 1 - Math.pow(q, 1.5);
+            const c = Math.cos(an) * k, sn = Math.sin(an) * k;
             ctx.imageSmoothingEnabled = false;
-            ST(c * kx, sn * kx, -sn * ky, c * ky, X + r.x + h2 + (r.j3 - 0.5) * 14 * hs * q, Y + r.y + r.sz * 0.8 + (5 * hs + 0.16 * r.sz) * q * q);
-            ctx.drawImage(r.c, -h2, -r.sz * 0.8);
+            ST(c, sn, -sn, c, X + r.x + h2 + (r.j3 - 0.5) * 14 * hs * q, Y + r.y + h2 + (8 * hs + 0.3 * r.sz) * q * q);
+            ctx.drawImage(r.c, -h2, -h2);
             ST(1, 0, 0, 1, 0, 0);
           }
         }
@@ -2742,27 +2724,6 @@
         ctx.drawImage(pic, Math.round(p.x + p.dx * (1 - Math.exp(-tau / p.tau)) + p.drift * tau * 0.001 - pic.width / 2) + px, Math.round(p.y - p.lift * u - pic.height) + py);
       }
     }
-    /** Dust and grit thrown up out of the pit: each fan shoots out, is drawn out by its flight, sags and thins. */
-    function drawJets(t, DE) {
-      ctx.globalCompositeOperation = 'source-over';
-      const jw = P.sp.jw, jh = P.sp.jh;
-      for (let i = 0; i < sim.jets.length; i++) {
-        const j = sim.jets[i];
-        const tau = t - j.t;
-        if (tau < 0 || tau >= j.life) continue;
-        const u = tau / j.life, ts = tau / 1000;
-        const grow = 1 - Math.exp(-tau / 75);
-        const a = j.a * Math.min(1, tau / 25) * Math.pow(1 - u, 1.3) * DE;
-        if (a < 0.015) continue;
-        const kx = j.wd * (0.45 + 0.4 * grow + 0.5 * u) / jw, ky = j.len * (0.2 + 0.8 * grow) / jh;
-        const c = Math.cos(j.ang), s = Math.sin(j.ang);
-        ctx.globalAlpha = a;
-        ST(c * kx, s * kx, -s * ky, c * ky, j.x + ox, j.y + 0.5 * GRAV * 0.3 * ts * ts + oy);
-        ctx.drawImage(P.sp.jets[j.sp], -jw / 2, -jh);
-      }
-      ST(1, 0, 0, 1, 0, 0);
-    }
-
     function drawRocks(t, front) {
       ctx.globalCompositeOperation = 'source-over';
       const sp = P.sp;
@@ -3033,67 +2994,68 @@
     }
 
     /**
-     * The pieces of the letters after the pound: thrown low, they come down on the rubble where the
-     * letters stood (each with its foot behind the row of rock in front), bounce once, lie for a
-     * moment and topple flat behind that row. Sharp; a short blur along its flight when a piece is fast.
+     * The pieces of the letters after the pound: thrown low and turning slowly, they come down on the
+     * heap where the letters stood (each with its foot behind the row of rock in front), tip over about
+     * the corner they landed on until they lie on their side, bedded in, and go down with the rock
+     * under them when the heap gives way. Never squashed; a short blur along its flight when a piece is fast.
      */
     function drawChunks(t) {
       const G2 = GRAV * 1.3;                                            // heavy: thrown low, they drop fast
+      const hs = S * sim.hk;
+      ctx.imageSmoothingEnabled = true;
       for (let i = 0; i < P.chunks.length; i++) {
         const c = P.chunks[i];
+        const q = t >= CRUMBLE - 15 ? sinkQ(c.dn, c.j * 0.5, c.j2, t + 15) : 0;         // the rock under it goes: so does it
+        if (q >= 1) continue;
         const tb = t - BURST - c.delay;
         const ts = Math.max(0, tb) / 1000;
-        const q = (t - BURST - c.tip) / 170;                            // toppling
-        if (q >= 1) continue;
-        let x, y, vy = 0, an;
-        if (ts < c.t1) { x = c.x + c.vx * ts; vy = c.vy + G2 * ts; y = c.y + c.vy * ts + 0.5 * G2 * ts * ts; an = c.om * ts; }
-        else {
-          const t2 = Math.min(ts - c.t1, c.t2);
-          x = c.x + c.vx * c.t1 + c.vx * 0.3 * t2; y = c.yRest + c.vy2 * t2 + 0.5 * G2 * t2 * t2; an = c.om * (c.t1 + 0.3 * t2);
-          if (ts - c.t1 < c.t2) vy = c.vy2 + G2 * t2;
+        const px = -c.mx, py = -c.my;
+        let x, y, an, fast = false, lowE = 0, rest = false;
+        if (ts < c.t1) {
+          const vy = c.vy + G2 * ts;
+          x = c.x + c.vx * ts + ox; y = c.y + c.vy * ts + 0.5 * G2 * ts * ts + oy; an = c.om * ts;
+          fast = Math.hypot(c.vx, vy) >= 13 * 120 * U;                  // (the blur of a 1/120 s exposure is 13 px or more)
+        } else {
+          const u = Math.min(1, (ts - c.t1) * 1000 / c.T), e = c.lean ? Math.pow(u, 1.2) : u * u;   // it goes over faster and faster, and stops dead (half a letter of the title: at once)
+          an = lerp(c.a1, c.aT, e);
+          // (its lowest corner stays on the ground as it turns)
+          const s = Math.sin(an), q2 = Math.cos(an);
+          rest = u >= 1;
+          lowE = Math.max(-s * c.mx, s * (c.w - c.mx)) + Math.max(-q2 * c.my, q2 * (c.h - c.my));
+          x = c.lx + c.roll * e + ox; y = c.gyl + c.sink * e - lowE + oy + gty;
         }
-        const sp = ts < c.t1 ? Math.hypot(c.vx, vy) / 120 : 0;          // the blur of a 1/120 s exposure, px
+        let k = 1;
+        // (it goes down with the rock under it: its foot drops into the pit, it never shrinks where it lies)
+        if (q > 0) { k = 1 - Math.pow(q, 1.5); y += lowE * (1 - k) + (16 * hs + 0.25 * Math.min(c.w, c.h)) * q * q; an += (c.j - 0.5) * 0.5 * q; }
         ctx.globalCompositeOperation = 'source-over';
         ctx.globalAlpha = 1;
-        if (q > 0) {
-          // it goes over onto its back: seen from the front it gets lower and lower about its foot
-          const ky = 1 - Math.pow(q, 1.6), foot = c.h - c.my;
-          const co = Math.cos(an), si = Math.sin(an);
-          ctx.imageSmoothingEnabled = true;
-          ST(co, si * ky, -si + c.lean * q, co * ky, x + ox, y + foot * 0.9 + oy + gty);
-          ctx.drawImage(c.c, -c.mx, -c.my - foot * 0.9);
+        if (rest && q <= 0 && tb > 200) {
+          // lying still: its picture as it lies is made once (turned, filtered) and then only copied (this is most of the exit's cost)
+          if (!c.rest) {
+            const co = Math.cos(an), si = Math.sin(an);
+            const xs = [-c.mx, c.w - c.mx], ys = [-c.my, c.h - c.my];
+            let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+            for (const X of xs) for (const Y of ys) { const rx = co * X - si * Y, ry = si * X + co * Y; x0 = Math.min(x0, rx); x1 = Math.max(x1, rx); y0 = Math.min(y0, ry); y1 = Math.max(y1, ry); }
+            const bx = Math.ceil(-x0) + 1, by = Math.ceil(-y0) + 1;
+            const cv = mk(Math.ceil(x1) + bx + 1, Math.ceil(y1) + by + 1), g2 = cv.getContext('2d');
+            g2.setTransform(co, si, -si, co, bx, by);
+            g2.drawImage(c.c, px, py);
+            c.rest = { c: cv, bx: bx, by: by };
+          }
+          ST(1, 0, 0, 1, 0, 0);
+          ctx.drawImage(c.rest.c, Math.round(x - c.rest.bx), Math.round(y - c.rest.by));
           continue;
         }
-        // a big piece does not turn: it is put on whole pixels (a plain copy); a small one turns
-        let px = -c.mx, py = -c.my;
-        if (c.om) { const co = Math.cos(an), si = Math.sin(an); ST(co, si, -si, co, x + ox, y + oy); }
-        else { ST(1, 0, 0, 1, 0, 0); px = Math.round(x - c.mx) + ox; py = Math.round(y - c.my) + oy; }
-        ctx.imageSmoothingEnabled = tb > 0;
-        if (sp < 13 * U) ctx.drawImage(c.c, px, py);
-        else ctx.drawImage(c.b1.c, px - c.b1.px, py - c.b1.py);          // a short blur along its flight
+        if (an === 0 && k === 1) ST(1, 0, 0, 1, Math.round(x - c.mx) + c.mx, Math.round(y - c.my) + c.my);
+        else { const co = Math.cos(an) * k, si = Math.sin(an) * k; ST(co, si, -si, co, x, y); }
+        if (fast) ctx.drawImage(c.b1.c, px - c.b1.px, py - c.b1.py);    // a short blur along its flight
+        else ctx.drawImage(c.c, px, py);
         const glow = 1 - smooth(20, 170, tb);                           // the light in its cracks dies: it is cold rock that falls
         if (glow > 0.03) {
           ctx.globalCompositeOperation = 'lighter';
           ctx.globalAlpha = glow;
           ctx.drawImage(c.l, px, py);
         }
-      }
-      ctx.imageSmoothingEnabled = true;
-      ST(1, 0, 0, 1, 0, 0);
-    }
-
-    /** Near the lens: large pieces of rock, sharp and dark, thrown up through the bottom corners of the frame at the impact. */
-    function drawLens(t) {
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.globalAlpha = 1;
-      for (let i = 0; i < sim.lens.length; i++) {
-        const l = sim.lens[i];
-        const tau = (t - l.t) / 1000;
-        if (tau < 0 || tau > 1.4) continue;
-        const x = l.x + l.vx * tau, y = l.y + l.vy * tau + 0.5 * l.g * tau * tau;
-        if (y - l.size * 0.6 > H || x + l.size * 0.6 < 0 || x - l.size * 0.6 > W) continue;
-        const p = P.lens[l.sp];
-        ctx.drawImage(p.c, Math.round(x - p.sz / 2 + ox * 1.5), Math.round(y - p.sz / 2 + oy * 1.5));      // (a plain copy on whole pixels: sharp)
       }
       ST(1, 0, 0, 1, 0, 0);
     }
@@ -3181,9 +3143,27 @@
         ctx.globalAlpha = ga;
         ctx.drawImage(gl, Math.round(cx - gl.width / 2 + ox), Math.round(gy - P.lights.airY + oy));
       }
+      // The exposure at a great blow: white for a frame or two (the impact only), then it falls off fast as light
+      // around the crater, behind the rock, the dust and the letters (they stand dark against it: never a veil).
+      let white = 0, fall = 0;
+      for (let i = 0; i < sim.flashes.length; i++) {
+        const f = sim.flashes[i];
+        const tau = t - f[0];
+        if (tau < 0 || tau > 200) continue;
+        const fw = f[2] * 16.6;                             // (just under that many frames, so that never one more is white)
+        if (tau < fw) white = Math.max(white, f[1]);
+        else fall = Math.max(fall, f[1] * (f[2] ? 1 : 1.3) * Math.exp(-(tau - fw) / 27));
+      }
+      if (fall > 0.02 && !white) {
+        const bl = P.bloom;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.imageSmoothingEnabled = false;
+        ctx.globalAlpha = Math.min(1, fall * 1.15);
+        ctx.drawImage(bl, Math.round(cx - bl.width + ox), Math.round(gy - bl.height * 1.6 + oy), bl.width * 2, bl.height * 2);
+        ctx.imageSmoothingEnabled = true;
+      }
+      drawSheets(t, DE, lo, false);                       // (the dust behind rolls behind the heap: the rock stands solid before it)
       drawBerm(t, pit, false);
-      drawJets(t, DE);
-      drawSheets(t, DE, lo, false);
       drawRocks(t, false);
       const air = -hopAt(t) / (H * 0.075);                // 0..1: how far the block is off the ground
       if (t < BURST) {
@@ -3197,21 +3177,10 @@
       drawRocks(t, true);
       drawChips(t, lo);
       drawSparks(t, lo, pit);
-      if (t < 1500) drawLens(t);
 
-      // light in the lens: the streak; a bloom at the hero word; the frame blown out by the three great blows
+      // light in the lens: a bloom at the hero word
       ctx.globalCompositeOperation = 'lighter';
       ctx.imageSmoothingEnabled = false;
-      for (let i = 0; i < sim.streaks.length; i++) {
-        const s = sim.streaks[i];
-        const u = (t - s.t) / s.dur;
-        if (u < 0 || u >= 1) continue;
-        const st = P.lights.streak;
-        const w = s.w * (0.55 + 0.45 * Math.min(1, u * 5)), h = st.height * 2 * (1.3 - 0.5 * u);
-        ctx.globalAlpha = s.a * Math.pow(1 - u, 1.6) * 0.8;
-        ctx.drawImage(st, Math.round(s.x - w / 2), Math.round(s.y - h / 2), Math.round(w), Math.round(h));
-      }
-      const bl = P.bloom;
       for (let i = 0; i < sim.blooms.length; i++) {
         const b = sim.blooms[i];
         const tau = t - b[0];
@@ -3219,20 +3188,6 @@
         const bw = P.bloomW;
         ctx.globalAlpha = Math.min(1, b[1] * Math.exp(-tau / 45));
         ctx.drawImage(bw, Math.round(b[2] - bw.width + ox), Math.round(b[3] - bw.height + oy), bw.width * 2, bw.height * 2);
-      }
-      // The exposure: white for a frame or two, then it falls off fast as light around the crater (never a veil).
-      let white = 0, fall = 0;
-      for (let i = 0; i < sim.flashes.length; i++) {
-        const f = sim.flashes[i];
-        const tau = t - f[0];
-        if (tau < 0 || tau > 200) continue;
-        const fw = f[2] * 16.6;                             // (just under that many frames, so that never one more is white)
-        if (tau < fw) white = Math.max(white, f[1]);
-        else fall = Math.max(fall, f[1] * (f[2] ? 1 : 1.3) * Math.exp(-(tau - fw) / 27));
-      }
-      if (fall > 0.02 && !white) {
-        ctx.globalAlpha = Math.min(1, fall * 1.15);
-        ctx.drawImage(bl, Math.round(cx - bl.width + ox), Math.round(gy - bl.height * 1.6 + oy), bl.width * 2, bl.height * 2);
       }
       ctx.imageSmoothingEnabled = true;
       if (white > 0) {
